@@ -1,0 +1,208 @@
+[
+  {
+    "id": "champions-core",
+    "name": "Technical Champions Core",
+    "keywords": [
+      "observability",
+      "monitoring",
+      "telemetry",
+      "reliability"
+    ],
+    "titleIncludes": [
+      "SRE",
+      "Platform",
+      "Infrastructure",
+      "DevOps",
+      "Reliability",
+      "Observability"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "staff",
+      "principal",
+      "vp"
+    ],
+    "maxCandidates": 12,
+    "minimumRelevantHits": 2,
+    "listSegment": "champions"
+  },
+  {
+    "id": "decision-makers",
+    "name": "Decision Makers",
+    "keywords": [
+      "platform engineering",
+      "infrastructure",
+      "cloud operations"
+    ],
+    "titleIncludes": [
+      "Head of",
+      "Director",
+      "VP",
+      "Vice President",
+      "CTO"
+    ],
+    "titleExcludes": [
+      "Student",
+      "Intern"
+    ],
+    "seniorityTargets": [
+      "director",
+      "vp",
+      "head"
+    ],
+    "maxCandidates": 8,
+    "minimumRelevantHits": 1,
+    "listSegment": "decision-makers"
+  },
+  {
+    "id": "account-platform-sweep",
+    "name": "Account Platform Sweep",
+    "keywords": [
+      "platform"
+    ],
+    "titleIncludes": [
+      "Platform",
+      "Architecture",
+      "Architect",
+      "Enterprise Architecture",
+      "Digital Product"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "principal",
+      "lead"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "account-platform"
+  },
+  {
+    "id": "account-security-sweep",
+    "name": "Account Security And Infrastructure Sweep",
+    "keywords": [
+      "security"
+    ],
+    "titleIncludes": [
+      "Security",
+      "Infrastructure",
+      "Technology",
+      "SAP",
+      "Engineer"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "senior",
+      "lead"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "account-security"
+  },
+  {
+    "id": "account-cloud-sweep",
+    "name": "Account Cloud And Delivery Sweep",
+    "keywords": [
+      "cloud"
+    ],
+    "titleIncludes": [
+      "Cloud",
+      "DevOps",
+      "Software",
+      "Engineering",
+      "Development"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "senior",
+      "lead"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "account-cloud"
+  },
+  {
+    "id": "account-architecture-sweep",
+    "name": "Account Architecture Sweep",
+    "keywords": [
+      "architect"
+    ],
+    "titleIncludes": [
+      "Architect",
+      "Architecture",
+      "Enterprise Architecture",
+      "System Engineer"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "principal",
+      "lead"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "account-architecture"
+  },
+  {
+    "id": "account-data-sweep",
+    "name": "Account Data And Analytics Sweep",
+    "keywords": [
+      "data"
+    ],
+    "titleIncludes": [
+      "Data",
+      "Analytics",
+      "Information Technology",
+      "Data Science",
+      "Engineer"
+    ],
+    "titleExcludes": [
+      "Recruiter",
+      "Sales",
+      "Marketing"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "senior",
+      "lead"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "account-data"
+  }
+]

@@ -1,0 +1,18 @@
+Proprietary Internal Evaluation License
+
+Copyright (c) 2026 Daniel Datsenko. All rights reserved.
+
+This repository is provided for internal evaluation, testing, and supervised
+operator workflows only. No license is granted to copy, redistribute,
+sublicense, sell, host as a service, or use this software commercially without
+prior written permission from the copyright holder.
+
+You may view and run the software only if you have been explicitly authorized
+by the copyright holder or by the organization evaluating this tool.
+
+This software is provided "as is", without warranty of any kind. The copyright
+holder is not liable for any claim, damage, account restriction, data loss, or
+other liability arising from use of this software.
+
+Third-party components included in this repository remain governed by their
+own license terms. See THIRD_PARTY_NOTICES.md.

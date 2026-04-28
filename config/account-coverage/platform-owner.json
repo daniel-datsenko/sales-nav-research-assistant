@@ -1,0 +1,28 @@
+{
+  "version": "1.0.0",
+  "name": "platform_owner_coverage_v1",
+  "broadCrawl": {
+    "enabled": true
+  },
+  "sweeps": [
+    { "id": "platform", "keywords": ["platform"] },
+    { "id": "architecture", "keywords": ["architecture"] },
+    { "id": "cloud", "keywords": ["cloud"] },
+    { "id": "infrastructure", "keywords": ["infrastructure"] },
+    { "id": "devops", "keywords": ["devops"] },
+    { "id": "observability", "keywords": ["observability"] },
+    { "id": "reliability", "keywords": ["reliability"] }
+  ],
+  "bucketRules": {
+    "directObservabilityRoleFamilies": [
+      "site_reliability",
+      "platform_engineering",
+      "devops",
+      "infrastructure"
+    ],
+    "adjacentRoleFamilies": [
+      "software_engineering",
+      "executive_engineering"
+    ]
+  }
+}

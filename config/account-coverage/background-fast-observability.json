@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "name": "background_fast_observability_coverage_v1",
+  "broadCrawl": {
+    "enabled": true
+  },
+  "sweeps": [
+    { "id": "platform", "keywords": ["platform"] },
+    { "id": "infrastructure", "keywords": ["infrastructure"] },
+    { "id": "devops", "keywords": ["devops"] },
+    { "id": "observability", "keywords": ["observability"] }
+  ],
+  "bucketRules": {
+    "directObservabilityRoleFamilies": [
+      "site_reliability",
+      "platform_engineering",
+      "devops",
+      "infrastructure"
+    ],
+    "adjacentRoleFamilies": [
+      "software_engineering",
+      "security",
+      "data",
+      "executive_engineering"
+    ]
+  }
+}

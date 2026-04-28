@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "name": "lean_observability_coverage_v1",
+  "broadCrawl": {
+    "enabled": true
+  },
+  "sweeps": [
+    { "id": "architecture", "keywords": ["architecture"] },
+    { "id": "platform", "keywords": ["platform"] },
+    { "id": "security", "keywords": ["security"] },
+    { "id": "cloud", "keywords": ["cloud"] },
+    { "id": "devops", "keywords": ["devops"] },
+    { "id": "engineering", "keywords": ["engineering"] },
+    { "id": "technology", "keywords": ["technology"] },
+    { "id": "data", "keywords": ["data"] },
+    { "id": "infrastructure", "keywords": ["infrastructure"] }
+  ],
+  "bucketRules": {
+    "directObservabilityRoleFamilies": [
+      "site_reliability",
+      "platform_engineering",
+      "devops",
+      "infrastructure"
+    ],
+    "adjacentRoleFamilies": [
+      "software_engineering",
+      "security",
+      "data",
+      "executive_engineering"
+    ]
+  }
+}

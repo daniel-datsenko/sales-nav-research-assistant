@@ -1,0 +1,204 @@
+{
+  "version": "1.0.0",
+  "accounts": {
+    "example-lists-first": {
+      "accountSearchAliases": [
+        "Example Lists First Account",
+        "Example Public Broadcaster"
+      ],
+      "companyFilterAliases": [
+        "Example Lists First Account",
+        "Example Public Broadcaster"
+      ]
+    },
+    "example-manual-review": {
+      "accountSearchAliases": [
+        "Example Manual Review Account",
+        "Example Manual Review Account EU",
+        "example-manual-review.test"
+      ],
+      "companyFilterAliases": [
+        "Example Manual Review Account",
+        "Example Manual Review Account EU",
+        "example-manual-review.test"
+      ]
+    },
+    "example-connect-eligible": {
+      "accountSearchAliases": [
+        "Example Connect Eligible Account"
+      ],
+      "companyFilterAliases": [
+        "Example Connect Eligible Account"
+      ]
+    },
+    "exorg": {
+      "accountSearchAliases": [
+        "EXORG",
+        "Example Industry Association",
+        "Example Industry Association EXORG"
+      ],
+      "companyFilterAliases": [
+        "Example Industry Association",
+        "EXORG"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Industry Association",
+          "targetType": "brand",
+          "territoryFit": "likely",
+          "evidence": ["alias"]
+        }
+      ],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "EXORG is commonly used in calling lists, while Sales Navigator usually needs the full organization name."
+    },
+    "example-media-group-germany": {
+      "accountSearchAliases": [
+        "Example Media Germany",
+        "Example Media Group",
+        "Example Media Group"
+      ],
+      "companyFilterAliases": [
+        "Example Media Germany",
+        "Example Media Group",
+        "Example Media Group"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-media-germany"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Media Germany",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/example-media-germany",
+          "targetType": "brand",
+          "territoryFit": "likely",
+          "evidence": ["alias", "linkedin_url"]
+        }
+      ],
+      "domains": ["example-media.test"],
+      "parentAliases": ["Example Media Group"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "LinkedIn public company page resolves the Salesforce-style account name to Example Media Germany."
+    },
+    "example-logistics-switzerland": {
+      "accountSearchAliases": [
+        "Example Logistics",
+        "Example Logistics Group",
+        "Example Logistics Switzerland",
+        "Example Logistics Switzerland"
+      ],
+      "companyFilterAliases": [
+        "Example Logistics",
+        "Example Logistics Group",
+        "Example Logistics Switzerland",
+        "Example Logistics Switzerland"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-logistics",
+        "https://ch.linkedin.com/company/example-logistics"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Logistics",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/example-logistics",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["alias", "linkedin_url"]
+        }
+      ],
+      "domains": ["example-logistics.test"],
+      "parentAliases": ["Example Logistics Group"],
+      "subsidiaryAliases": ["Example Logistics Switzerland", "Example Logistics Switzerland"],
+      "territoryCountries": ["Switzerland"],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "LinkedIn public company page resolves the Swiss territory name to the global Example Logistics company page."
+    },
+    "example-broadcast-studio": {
+      "accountSearchAliases": [
+        "Example Broadcaster",
+        "Example Broadcast Studio",
+        "Example Broadcast News"
+      ],
+      "companyFilterAliases": [
+        "Example Broadcaster",
+        "Example Broadcast Studio",
+        "Example Broadcast News"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Broadcaster",
+          "targetType": "parent",
+          "territoryFit": "unclear",
+          "evidence": ["alias", "parent_subsidiary"]
+        },
+        {
+          "linkedinName": "Example Broadcast Studio",
+          "targetType": "subsidiary",
+          "territoryFit": "unclear",
+          "evidence": ["alias"]
+        }
+      ],
+      "parentAliases": ["Example Broadcaster"],
+      "subsidiaryAliases": ["Example Broadcast Studio", "Example Broadcast News"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "needs_manual_company_review",
+      "resolutionNotes": "Timed-out reference account; keep parent/broadcast aliases available for supervised retry instead of treating the timeout as zero-lead evidence."
+    },
+    "example-mobility-bus": {
+      "accountSearchAliases": [
+        "Example Mobility GmbH",
+        "Example Mobility",
+        "Example Mobility Bus"
+      ],
+      "companyFilterAliases": [
+        "Example Mobility GmbH",
+        "Example Mobility"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-mobility"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Mobility GmbH",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/example-mobility",
+          "targetType": "parent",
+          "territoryFit": "exact",
+          "evidence": ["alias", "post_run_manual_validation"]
+        }
+      ],
+      "domains": ["example-mobility.test"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Post-run validation showed Sales Navigator partial matches can select Example Mobility France SARL; use the German Example Mobility entity for territory research."
+    },
+    "example-mobility-se": {
+      "accountSearchAliases": [
+        "Example Mobility GmbH",
+        "Example Mobility SE",
+        "Example Mobility"
+      ],
+      "companyFilterAliases": [
+        "Example Mobility GmbH",
+        "Example Mobility"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-mobility"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Mobility GmbH",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/example-mobility",
+          "targetType": "parent",
+          "territoryFit": "exact",
+          "evidence": ["alias", "post_run_manual_validation"]
+        }
+      ],
+      "domains": ["example-mobility.test"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Avoid homonym matches such as unrelated broadband companies; route Example Mobility SE research to the Example Mobility LinkedIn company target."
+    }
+  }
+}

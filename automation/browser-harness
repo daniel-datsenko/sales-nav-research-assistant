@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV_BIN="$ROOT_DIR/vendor/browser-harness/.venv/bin"
+HARNESS_BIN="$VENV_BIN/browser-harness"
+
+if [[ ! -x "$HARNESS_BIN" ]]; then
+  echo "browser-harness local install not found at $HARNESS_BIN" >&2
+  exit 1
+fi
+
+export PATH="$VENV_BIN:$PATH"
+exec "$HARNESS_BIN" "$@"

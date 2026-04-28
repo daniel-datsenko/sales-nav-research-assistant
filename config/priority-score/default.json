@@ -1,0 +1,113 @@
+{
+  "version": "1.0.0",
+  "name": "priority_score_v1",
+  "weights": {
+    "historicalWinRate": 0.35,
+    "historicalAmountWeight": 0.15,
+    "hiddenInfluencerPresence": 0.2,
+    "conversation_intelligenceKeywordFit": 0.15,
+    "roleCoverageFit": 0.15
+  },
+  "roleFamilyMap": {
+    "site_reliability": [
+      "sre",
+      "site reliability",
+      "reliability"
+    ],
+    "architecture": [
+      "architect",
+      "architecture",
+      "enterprise architecture",
+      "system"
+    ],
+    "platform": [
+      "platform"
+    ],
+    "devops": [
+      "devops"
+    ],
+    "infrastructure": [
+      "infrastructure"
+    ],
+    "security": [
+      "security"
+    ],
+    "cloud": [
+      "cloud"
+    ],
+    "engineering": [
+      "engineering",
+      "engineer",
+      "software"
+    ],
+    "data": [
+      "data",
+      "analytics"
+    ],
+    "it_technology": [
+      "technology",
+      " it ",
+      "sap"
+    ]
+  },
+  "ignoredRoleFamilies": [
+    "other",
+    "unknown"
+  ],
+  "buyerGroupRoles": {
+    "technical_champion": [
+      "site_reliability",
+      "devops",
+      "infrastructure",
+      "engineering",
+      "cloud"
+    ],
+    "platform_owner": [
+      "architecture",
+      "platform",
+      "infrastructure",
+      "it_technology"
+    ],
+    "management_sponsor": [
+      "architecture",
+      "platform",
+      "engineering",
+      "it_technology",
+      "security"
+    ],
+    "economic_buyer": [
+      "it_technology",
+      "security",
+      "platform",
+      "engineering"
+    ]
+  },
+  "conversation_intelligencePriorityKeywords": [
+    "observability",
+    "monitoring",
+    "observability-platform",
+    "prometheus",
+    "opentelemetry",
+    "migration",
+    "pricing",
+    "evaluation",
+    "datadog",
+    "splunk",
+    "new relic",
+    "incident",
+    "slo",
+    "platform"
+  ],
+  "scoreBands": {
+    "core": 70,
+    "secondary": 45,
+    "exploratory": 20
+  },
+  "decisioning": {
+    "coreApprovalFloor": 52,
+    "coreSaveFloor": 28,
+    "secondarySaveFloor": 30,
+    "missingRoleApprovalFloor": 50,
+    "missingRoleSaveFloor": 26
+  }
+}

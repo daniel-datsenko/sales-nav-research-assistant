@@ -1,0 +1,159 @@
+{
+  "name": "background_territory_runner_v1",
+  "version": "1.0.0",
+  "owner": {
+    "name": "Example SDR",
+    "email": null
+  },
+  "territoryIntake": {
+    "source": "bigquery",
+    "ownerMatchFields": [
+      "owner_name",
+      "owner_email"
+    ],
+    "stalePriorityField": "last_activity_at"
+  },
+  "staleAccountPolicy": {
+    "activityLookbackDays": 60,
+    "activityTypes": [
+      "meeting",
+      "call",
+      "task"
+    ],
+    "prioritizeOldestFirst": true
+  },
+  "connectPolicy": {
+    "defaultBudgetMode": "assist",
+    "allowBackgroundConnects": false,
+    "availableBudgetModes": [
+      "assist",
+      "balanced",
+      "full-auto"
+    ]
+  },
+  "seedExpansion": {
+    "leadLists": true,
+    "accountLists": true
+  },
+  "geoFocus": {
+    "description": "Default background focus for a supervised SDR pilot territory.",
+    "strictInclude": true,
+    "preferredLocationKeywords": [
+      "germany",
+      "deutschland",
+      "berlin",
+      "hamburg",
+      "munich",
+      "muenchen",
+      "greater munich metropolitan area",
+      "cologne",
+      "cologne bonn region",
+      "frankfurt",
+      "stuttgart",
+      "baden-württemberg",
+      "bavaria",
+      "austria",
+      "österreich",
+      "vienna",
+      "switzerland",
+      "schweiz",
+      "zurich",
+      "zürich",
+      "poland",
+      "polen",
+      "warsaw",
+      "krakow",
+      "kraków",
+      "czech republic",
+      "czechia",
+      "tschechien",
+      "prague",
+      "praha",
+      "slovakia",
+      "slowakei",
+      "bratislava",
+      "hungary",
+      "ungarn",
+      "budapest",
+      "romania",
+      "rumänien",
+      "bucharest",
+      "bulgaria",
+      "bulgarien",
+      "sofia",
+      "slovenia",
+      "slowenien",
+      "ljubljana",
+      "croatia",
+      "kroatien",
+      "zagreb",
+      "serbia",
+      "serbien",
+      "belgrade",
+      "lithuania",
+      "litauen",
+      "vilnius",
+      "latvia",
+      "lettland",
+      "riga",
+      "estonia",
+      "estland",
+      "tallinn"
+    ],
+    "excludedLocationKeywords": []
+  },
+  "coverageCache": {
+    "enabled": true,
+    "maxAgeDays": 7,
+    "reuseEmptyArtifacts": false
+  },
+  "productiveAccountRules": {
+    "minListCandidates": 2,
+    "minCandidateCount": 5,
+    "productiveRatio": 0.2
+  },
+  "listCandidateSelection": {
+    "description": "Day-list quality gate. Research can stay broad, but default list candidates should be core platform/infra/DevOps/observability personas rather than logistics, generic security, or data-adjacent roles.",
+    "includeBuckets": ["direct_observability"],
+    "minScore": 35,
+    "excludeRoleFamilies": ["security", "data"],
+    "excludeTitleKeywords": [
+      "logistics",
+      "transport",
+      "supply chain",
+      "warehouse",
+      "fleet",
+      "procurement",
+      "buyer",
+      "project manager",
+      "cost manager",
+      "information security",
+      "security manager",
+      "compliance",
+      "qa",
+      "quality assurance",
+      "data analyst",
+      "business analyst",
+      "professor",
+      "dean",
+      "faculty",
+      "department for",
+      "urban planning",
+      "building technology",
+      "research assistant",
+      "student",
+      "lecturer",
+      "academic"
+    ]
+  },
+  "retryPolicy": {
+    "sparseAccountCooldownDays": 2,
+    "noisyAccountCooldownDays": 7,
+    "saveButtonMissingThreshold": 2,
+    "saveButtonMissingCooldownDays": 7
+  },
+  "subsidiaryExpansion": {
+    "enabled": true,
+    "maxDepth": 2
+  }
+}

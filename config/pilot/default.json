@@ -1,0 +1,83 @@
+{
+  "mode": "lists-first",
+  "description": "First SDR pilot wave stays list-first by default. Connects are only allowed for accounts that have already passed visible mutation validation.",
+  "geoFocus": {
+    "description": "Default supervised pilot geo focus. Adjust for the operator territory before live use.",
+    "strictInclude": true,
+    "preferredLocationKeywords": [
+      "germany",
+      "deutschland",
+      "berlin",
+      "hamburg",
+      "munich",
+      "muenchen",
+      "greater munich metropolitan area",
+      "cologne",
+      "cologne bonn region",
+      "frankfurt",
+      "stuttgart",
+      "baden-württemberg",
+      "bavaria",
+      "austria",
+      "österreich",
+      "vienna",
+      "switzerland",
+      "schweiz",
+      "zurich",
+      "zürich",
+      "poland",
+      "polen",
+      "warsaw",
+      "krakow",
+      "kraków",
+      "czech republic",
+      "czechia",
+      "tschechien",
+      "prague",
+      "praha",
+      "slovakia",
+      "slowakei",
+      "bratislava",
+      "hungary",
+      "ungarn",
+      "budapest",
+      "romania",
+      "rumänien",
+      "bucharest",
+      "bulgaria",
+      "bulgarien",
+      "sofia",
+      "slovenia",
+      "slowenien",
+      "ljubljana",
+      "croatia",
+      "kroatien",
+      "zagreb",
+      "serbia",
+      "serbien",
+      "belgrade",
+      "lithuania",
+      "litauen",
+      "vilnius",
+      "latvia",
+      "lettland",
+      "riga",
+      "estonia",
+      "estland",
+      "tallinn"
+    ],
+    "excludedLocationKeywords": []
+  },
+  "connectPolicy": {
+    "eligibleAccounts": [
+      "Example Connect Eligible Account"
+    ],
+    "listsFirstOnlyAccounts": {
+      "Example Lists First Account": "connect variation not yet verified; keep as lists-first account"
+    },
+    "manualReviewAccounts": {
+      "Example Manual Review Account": "visible-action connect path is not yet fully live-confirmed; keep first send supervised.",
+      "Example Overflow Account": "overflow-only connect surfaces require supervised review before connect release."
+    }
+  }
+}

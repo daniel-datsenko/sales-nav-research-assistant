@@ -1,0 +1,64 @@
+{
+  "territory": {
+    "territoryId": "terr-emea-obs-01",
+    "territoryName": "EMEA Observability Named Accounts",
+    "ownerId": "sdr-001",
+    "ownerName": "Example SDR",
+    "ownerEmail": "sdr@example.com",
+    "region": "EMEA",
+    "syncedAt": "2026-04-17T09:00:00.000Z"
+  },
+  "accounts": [
+    {
+      "accountId": "acc-001",
+      "name": "Acme Cloud",
+      "website": "https://acme.example",
+      "country": "Germany",
+      "region": "DACH",
+      "priority": 10,
+      "salesNav": {
+        "accountUrl": "https://www.linkedin.com/sales/company/123456",
+        "peopleSearchUrl": "https://www.linkedin.com/sales/search/people?companyIncluded=Acme%20Cloud"
+      },
+      "signals": {
+        "employeeCount": 3500,
+        "subsidiary": false,
+        "industry": "Software"
+      },
+      "subsidiaries": [
+        {
+          "accountId": "acc-001-de",
+          "name": "Acme Cloud Germany",
+          "website": "https://de.acme.example",
+          "country": "Germany",
+          "region": "DACH",
+          "signals": {
+            "subsidiary": true,
+            "parentName": "Acme Cloud",
+            "industry": "Software"
+          },
+          "salesNav": {
+            "peopleSearchUrl": "https://www.linkedin.com/sales/search/people?companyIncluded=Acme%20Cloud%20Germany"
+          }
+        }
+      ]
+    },
+    {
+      "accountId": "acc-002",
+      "name": "Nordic Fintech Group",
+      "website": "https://nfg.example",
+      "country": "Sweden",
+      "region": "Nordics",
+      "priority": 8,
+      "salesNav": {
+        "accountUrl": "https://www.linkedin.com/sales/company/654321",
+        "peopleSearchUrl": "https://www.linkedin.com/sales/search/people?companyIncluded=Nordic%20Fintech%20Group"
+      },
+      "signals": {
+        "employeeCount": 1200,
+        "subsidiary": false,
+        "industry": "Financial Services"
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sales Navigator Review Dashboard</title>
+    <link rel="stylesheet" href="/dashboard.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">LinkedIn Sales Navigator Automation</p>
+          <h1>Review Dashboard</h1>
+          <p class="subtitle">
+            Review candidates, keep an eye on quota pacing, and spot recovery issues before they slow the workflow down.
+          </p>
+        </div>
+        <div id="budget" class="budget-card"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Runs</h2>
+          <button id="refreshButton" class="ghost">Refresh</button>
+        </div>
+        <div id="runs" class="runs-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Mode Lab</h2>
+          <p>Pick a prospecting mode and preview its search angle before the next run.</p>
+        </div>
+        <div id="modeLab" class="mode-lab"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Priority Model</h2>
+          <p>See which candidates are core, secondary, or exploratory based on historical win patterns.</p>
+        </div>
+        <div id="prioritySummary" class="priority-summary"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Candidate Queue</h2>
+          <p>Review evidence, list-save state, and approve only the strongest people for connects.</p>
+        </div>
+        <div id="candidates" class="candidate-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Account Coverage</h2>
+          <p>See where buying-group coverage is thin, and which roles are still missing per account.</p>
+        </div>
+        <div id="coverage" class="coverage-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Approval Queue</h2>
+          <p>People already queued for manual connect decisions.</p>
+        </div>
+        <div id="approvals" class="approval-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Run Accounts</h2>
+          <p>Failed or review-required accounts can be re-queued for the next resume run.</p>
+        </div>
+        <div id="runAccounts" class="run-account-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Recovery Events</h2>
+          <p>UI drift, interruptions, and errors that need attention.</p>
+        </div>
+        <div id="recovery" class="recovery-list"></div>
+      </section>
+    </main>
+    <script src="/dashboard.js" type="module"></script>
+  </body>
+</html>

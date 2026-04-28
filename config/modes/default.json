@@ -1,0 +1,147 @@
+[
+  {
+    "id": "account-mode",
+    "name": "Account Mode",
+    "description": "Run one named account end-to-end, create or reuse one list, and gather the best technical and buying-side stakeholders for that company.",
+    "goal": "Account coverage with high precision",
+    "searchTemplateIds": [
+      "champions-core",
+      "account-platform-sweep",
+      "account-security-sweep",
+      "account-cloud-sweep",
+      "account-architecture-sweep",
+      "account-data-sweep",
+      "decision-makers"
+    ],
+    "titleBias": [
+      "engineering",
+      "architect",
+      "architecture",
+      "platform",
+      "infrastructure",
+      "cloud",
+      "security",
+      "technology",
+      "it"
+    ],
+    "savePolicy": "save_best_fit",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "borderline_and_hidden"
+  },
+  {
+    "id": "territory-sweep",
+    "name": "Territory Sweep",
+    "description": "Traverse all accounts in an SDR or AE territory, find relevant personas account-first, and build or update lists in batches.",
+    "goal": "Scaled territory coverage",
+    "searchTemplateIds": [
+      "champions-core",
+      "decision-makers",
+      "account-platform-sweep",
+      "account-security-sweep"
+    ],
+    "titleBias": [
+      "platform",
+      "engineering",
+      "director",
+      "head",
+      "manager"
+    ],
+    "savePolicy": "save_ranked_batches",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "top_ranked_only"
+  },
+  {
+    "id": "platform-owner-mode",
+    "name": "Platform Owner Mode",
+    "description": "Prioritize people likely to own internal platforms, infrastructure, cloud operations, and architecture standards.",
+    "goal": "Find technical platform owners",
+    "searchTemplateIds": [
+      "champions-core",
+      "account-platform-sweep",
+      "account-cloud-sweep",
+      "account-architecture-sweep"
+    ],
+    "titleBias": [
+      "platform",
+      "architect",
+      "architecture",
+      "cloud",
+      "infrastructure",
+      "software",
+      "system"
+    ],
+    "savePolicy": "save_best_fit",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "aggressive"
+  },
+  {
+    "id": "technical-champion-mode",
+    "name": "Technical Champion Mode",
+    "description": "Bias toward hands-on or near-hands-on operators who will care about observability day to day and can create internal pull.",
+    "goal": "Find hands-on champions and evaluators",
+    "searchTemplateIds": [
+      "champions-core",
+      "account-cloud-sweep",
+      "account-security-sweep",
+      "account-data-sweep"
+    ],
+    "titleBias": [
+      "sre",
+      "devops",
+      "engineer",
+      "infrastructure",
+      "cloud",
+      "data",
+      "system"
+    ],
+    "savePolicy": "save_best_fit",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "aggressive"
+  },
+  {
+    "id": "executive-buyer-mode",
+    "name": "Executive Buyer Mode",
+    "description": "Bias toward directors, heads, VPs, and C-level technical leaders who can sponsor or sign off on platform decisions.",
+    "goal": "Find economic and organizational buyers",
+    "searchTemplateIds": [
+      "decision-makers",
+      "account-platform-sweep",
+      "account-architecture-sweep"
+    ],
+    "titleBias": [
+      "director",
+      "head",
+      "vp",
+      "chief",
+      "cto",
+      "technology",
+      "engineering"
+    ],
+    "savePolicy": "save_top_tier",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "borderline_and_hidden"
+  },
+  {
+    "id": "hidden-influencer-mode",
+    "name": "Hidden Influencer Mode",
+    "description": "Recover people who do not look perfect by title but show technical ownership in profile text, meetings, or Conversation Intelligence conversation signals.",
+    "goal": "Recover invisible but relevant stakeholders",
+    "searchTemplateIds": [
+      "account-platform-sweep",
+      "account-architecture-sweep",
+      "account-security-sweep",
+      "account-data-sweep"
+    ],
+    "titleBias": [
+      "architecture",
+      "system",
+      "technology",
+      "analytics",
+      "operations",
+      "sap"
+    ],
+    "savePolicy": "save_after_review",
+    "connectPolicy": "approval_only",
+    "deepProfileReview": "mandatory"
+  }
+]

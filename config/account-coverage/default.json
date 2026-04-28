@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "name": "full_account_coverage_v1",
+  "broadCrawl": {
+    "enabled": true
+  },
+  "sweeps": [
+    { "id": "architecture", "keywords": ["architecture"] },
+    { "id": "security", "keywords": ["security"] },
+    { "id": "cloud", "keywords": ["cloud"] },
+    { "id": "data", "keywords": ["data"] },
+    { "id": "infrastructure", "keywords": ["infrastructure"] },
+    { "id": "platform", "keywords": ["platform"] },
+    { "id": "engineering", "keywords": ["engineering"] },
+    { "id": "software", "keywords": ["software"] },
+    { "id": "devops", "keywords": ["devops"] },
+    { "id": "technology", "keywords": ["technology"] },
+    { "id": "it", "keywords": ["it"] },
+    { "id": "system", "keywords": ["system"] },
+    { "id": "integration", "keywords": ["integration"] },
+    { "id": "operations", "keywords": ["operations"] },
+    { "id": "reliability", "keywords": ["reliability"] },
+    { "id": "monitoring", "keywords": ["monitoring"] }
+  ],
+  "bucketRules": {
+    "directObservabilityRoleFamilies": [
+      "site_reliability",
+      "platform_engineering",
+      "devops",
+      "infrastructure"
+    ],
+    "adjacentRoleFamilies": [
+      "software_engineering",
+      "security",
+      "data",
+      "executive_engineering"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  osascript \
+    -e 'tell application "Google Chrome" to activate' \
+    -e 'tell application "Google Chrome" to open location "chrome://inspect/#remote-debugging"'
+  echo "Opened chrome://inspect/#remote-debugging in Google Chrome."
+  echo "If Chrome shows the remote-debugging checkbox, tick it once and click Allow."
+  exit 0
+fi
+
+echo "Open this URL in your normal Chrome profile: chrome://inspect/#remote-debugging"

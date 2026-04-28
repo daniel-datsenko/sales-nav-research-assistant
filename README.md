@@ -49,6 +49,12 @@ Still guarded:
 
 ## Quick Start
 
+Run the local readiness check first:
+
+```bash
+npm run doctor
+```
+
 Install dependencies:
 
 ```bash
@@ -88,6 +94,22 @@ cp .env.example .env
 ```
 
 Only fill in values on your own machine or runner. Do not commit `.env`, browser sessions, cookies, storage state, or runtime artifacts.
+
+## First Run In An Agent
+
+If you open this repo in Codex, Cursor, Claude Code, or a similar agent, the first step should be a local readiness check:
+
+```bash
+npm run doctor
+```
+
+If dependencies or login are missing, that is normal. Dry-safe research can still be prepared after install, but real Sales Navigator list writes require a visible authenticated browser session via:
+
+```bash
+npm run bootstrap-session -- --driver=playwright --wait-minutes=10
+```
+
+See [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AGENTS.md), and [CLAUDE.md](CLAUDE.md) for agent-specific startup guidance.
 
 ## Common Workflows
 

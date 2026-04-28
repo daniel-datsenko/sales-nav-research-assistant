@@ -57,6 +57,7 @@ function parseCliArgs(argv) {
       'max-age-hours': { type: 'string' },
       'skip-session-check': { type: 'boolean' },
       checklist: { type: 'boolean' },
+      json: { type: 'boolean' },
       source: { type: 'string' },
       driver: { type: 'string' },
       snapshot: { type: 'string' },

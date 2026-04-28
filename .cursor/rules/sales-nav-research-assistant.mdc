@@ -1,0 +1,12 @@
+---
+description: First-run guidance for Sales Navigator Research Assistant
+alwaysApply: true
+---
+
+When this repo is opened in Cursor, first help the operator understand local readiness:
+
+1. Run `npm run doctor`.
+2. If dependencies are missing, offer `npm install`, `npm test`, and `npm run test:release-readiness`.
+3. If LinkedIn/Sales Navigator is not logged in, explain that dry-safe research can still run, but live Sales Navigator list writes require `npm run bootstrap-session -- --driver=playwright --wait-minutes=10`.
+
+Do not run `--live-save`, `--live-connect`, or background connect commands unless the operator explicitly asks for that live action.

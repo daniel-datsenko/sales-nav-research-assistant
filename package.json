@@ -10,6 +10,8 @@
     "run-territory": "node src/cli.js run-territory",
     "resume-run": "node src/cli.js resume-run",
     "serve-review-dashboard": "node src/cli.js serve-review-dashboard",
+    "doctor": "node src/cli.js doctor",
+    "print-first-run-onboarding": "node src/cli.js print-first-run-onboarding",
     "check-driver-session": "node src/cli.js check-driver-session",
     "bootstrap-browser-harness": "automation/bootstrap-browser-harness",
     "bootstrap-session": "node src/cli.js bootstrap-session",

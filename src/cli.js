@@ -116,6 +116,7 @@ const {
   updateCompanyResolutionRetryCheckpoint,
   writeCompanyResolutionRetryCheckpoint,
 } = require('./core/company-resolution-retry');
+const { buildFirstRunChecklist, renderFirstRunOnboarding } = require('./core/first-run');
 
 async function main() {
   const logger = createLogger('cli');
@@ -145,6 +146,10 @@ async function main() {
         break;
       case 'check-driver-session':
         await handleCheckDriverSession(values, logger);
+        break;
+      case 'doctor':
+      case 'print-first-run-onboarding':
+        await handleFirstRunOnboarding(values);
         break;
       case 'bootstrap-session':
         await handleBootstrapSession(values, logger);
@@ -400,6 +405,16 @@ async function handleCheckDriverSession(values, logger) {
   } finally {
     await driver.close().catch(() => {});
   }
+}
+
+async function handleFirstRunOnboarding(values) {
+  const asJson = getBoolean(values, 'json');
+  const checklist = buildFirstRunChecklist();
+  if (asJson) {
+    console.log(JSON.stringify(checklist, null, 2));
+    return;
+  }
+  console.log(renderFirstRunOnboarding(checklist));
 }
 
 async function handleBootstrapSession(values, logger) {
@@ -3449,6 +3464,8 @@ Usage:
   node src/cli.js run-territory [--territory-id=terr-emea-obs-01] [--driver=mock|playwright|browser-harness|hybrid] [--mode=technical-champion-mode] [--dry-run]
   node src/cli.js resume-run --run-id=<run-id>
   node src/cli.js serve-review-dashboard [--port=4310] [--host=127.0.0.1]
+  node src/cli.js doctor [--json]
+  node src/cli.js print-first-run-onboarding [--json]
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]

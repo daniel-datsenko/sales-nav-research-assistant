@@ -185,6 +185,19 @@ npm run fast-list-import -- \
   --list-name="Example Lead List"
 ```
 
+### Retry Only Failed List Saves
+
+If a live save run hit a temporary UI/rate-limit problem, retry only the failed rows instead of reprocessing the whole source:
+
+```bash
+node src/cli.js retry-failed-fast-list-import \
+  --artifact="/absolute/path/to/failed-fast-import-artifact.json" \
+  --driver=playwright \
+  --live-save
+```
+
+The retry command includes rows with `failed_runtime`, `failed_rate_limit`, `failed_network`, `failed_ui_state`, and `skipped_rate_limit_cooldown`.
+
 ### Live Save A Safe Resolved List
 
 Only run this intentionally after reviewing the dry plan:

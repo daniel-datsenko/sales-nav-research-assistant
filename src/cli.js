@@ -71,6 +71,7 @@ const {
 const {
   fastResolveLeads,
   loadCoverageImportPlan,
+  loadFailedFastListImportPlan,
   loadFastListImportSources,
   saveFastListImport,
   writeFastListImportArtifact,
@@ -187,6 +188,9 @@ async function main() {
         break;
       case 'fast-list-import':
         await handleFastListImport(values, logger);
+        break;
+      case 'retry-failed-fast-list-import':
+        await handleRetryFailedFastListImport(values, logger);
         break;
       case 'import-coverage':
         await handleImportCoverage(values, logger);
@@ -678,6 +682,86 @@ async function handleFastListImport(values, logger) {
     logger.info(`Failed: ${artifact.failed}`);
   }
   logger.info(`Artifact: ${artifactPath}`);
+  logger.info(`Report: ${reportPath}`);
+}
+
+async function handleRetryFailedFastListImport(values, logger) {
+  const artifactPath = getString(values, 'artifact', 'source');
+  if (!artifactPath) {
+    throw new Error('retry-failed-fast-list-import requires --artifact=<fast-list-import-artifact.json>');
+  }
+  if (getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects')) {
+    throw new Error('retry-failed-fast-list-import never sends connects and refuses live-connect/background-connect flags');
+  }
+
+  const driverName = getString(values, 'driver') || 'playwright';
+  const liveSave = getBoolean(values, 'live-save');
+  const listName = getString(values, 'list-name');
+  const maxRetries = Number(getString(values, 'max-retries') || 1);
+  const importPlan = loadFailedFastListImportPlan(artifactPath, { listName });
+  const runId = `retry-failed-fast-list-import-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  let artifact = null;
+
+  if (!liveSave) {
+    artifact = await saveFastListImport({
+      importPlan,
+      liveSave: false,
+      maxRetries,
+      runId,
+    });
+  } else {
+    const driver = createDriver(driverName, buildDriverOptions(values, { dryRun: false }, {
+      sessionMode: 'persistent',
+      headless: true,
+      recoveryMode: 'screenshot-only',
+    }));
+
+    try {
+      await driver.openSession({
+        runId,
+        territoryId: 'retry-failed-fast-list-import',
+        dryRun: false,
+        weeklyCap: 140,
+      });
+      const health = await driver.checkSessionHealth();
+      if (!health.ok) {
+        throw new Error(`Driver session is not ready: ${health.state}`);
+      }
+      await driver.ensureList(importPlan.listName, {
+        runId,
+        accountKey: 'retry-failed-fast-list-import',
+        dryRun: false,
+      });
+      const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      artifact = await saveFastListImport({
+        driver,
+        importPlan,
+        liveSave: true,
+        allowListCreate: getBoolean(values, 'allow-list-create'),
+        maxRetries,
+        runId,
+        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        onProgress(row) {
+          logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
+        },
+      });
+    } finally {
+      await driver.close().catch(() => {});
+    }
+  }
+
+  const { artifactPath: outputArtifactPath, reportPath } = writeFastListImportArtifact(artifact, getString(values, 'output') || null);
+  logger.info(`List: ${artifact.listName}`);
+  logger.info(`Retry source: ${artifact.retrySourceArtifact}`);
+  logger.info(`Live save: ${artifact.liveSave ? 'yes' : 'no'}`);
+  logger.info(`Retry leads: ${artifact.uniqueLeads}`);
+  logger.info(`Confirmed saved this run: ${artifact.confirmedSaved ?? artifact.saved ?? 0}`);
+  logger.info(`Already in list: ${artifact.alreadySaved ?? 0}${artifact.snapshotSkipped ? ` (${artifact.snapshotSkipped} skipped by snapshot preflight)` : ''}`);
+  logger.info(`Failed: ${artifact.failed ?? 0}`);
+  if (artifact.nextAction) {
+    logger.info(`Next action: ${artifact.nextAction}`);
+  }
+  logger.info(`Artifact: ${outputArtifactPath}`);
   logger.info(`Report: ${reportPath}`);
 }
 
@@ -3491,6 +3575,7 @@ Usage:
   node src/cli.js test-list-save --driver=playwright|browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." --list-name="Territory List" --live-save
   node src/cli.js fast-resolve-leads --source=/path/to/leads.md [--driver=playwright] [--search-timeout-ms=8000]
   node src/cli.js fast-list-import --source=/path/to/leads.md[,/path/to/coverage.json] [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
+  node src/cli.js retry-failed-fast-list-import --artifact=/path/to/failed-fast-import.json [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
   node src/cli.js import-coverage --accounts=example-marketplace-a,example-saas-marketplace,olx-group [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
   node src/cli.js test-connect --driver=browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"] --live-connect
   node src/cli.js inspect-connect-surface --driver=playwright --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"]

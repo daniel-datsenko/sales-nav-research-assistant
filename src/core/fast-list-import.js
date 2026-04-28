@@ -31,6 +31,13 @@ const {
 const FAST_IMPORT_ARTIFACTS_DIR = path.join(ARTIFACTS_DIR, 'fast-import');
 const LEARNED_LEAD_RESOLUTION_SUGGESTIONS_PATH = path.join(FAST_IMPORT_ARTIFACTS_DIR, 'learned-lead-resolution-suggestions.json');
 const DEFAULT_ACCOUNT_ALIASES_PATH = resolveProjectPath('config', 'account-aliases', 'default.json');
+const RETRYABLE_FAST_IMPORT_STATUSES = new Set([
+  'failed_runtime',
+  'failed_rate_limit',
+  'failed_network',
+  'failed_ui_state',
+  'skipped_rate_limit_cooldown',
+]);
 
 function deriveListNameFromSource(sourcePath) {
   return path.basename(String(sourcePath || 'fast-list-import'), path.extname(String(sourcePath || '')));
@@ -785,6 +792,53 @@ function loadFastListImportSources(sourcePaths, options = {}) {
     sourcePaths: plans.map((plan) => plan.sourcePath),
     leads: plans.flatMap((plan) => plan.leads || []),
   });
+}
+
+function loadFailedFastListImportPlan(artifactPath, {
+  listName = null,
+  retryStatuses = RETRYABLE_FAST_IMPORT_STATUSES,
+} = {}) {
+  const absolutePath = path.isAbsolute(artifactPath) ? artifactPath : path.resolve(artifactPath);
+  const artifact = readJson(absolutePath);
+  const rows = Array.isArray(artifact.results)
+    ? artifact.results
+    : Array.isArray(artifact.leads)
+      ? artifact.leads
+      : [];
+  const retryableStatuses = retryStatuses instanceof Set
+    ? retryStatuses
+    : new Set(Array.isArray(retryStatuses) ? retryStatuses : RETRYABLE_FAST_IMPORT_STATUSES);
+  const leads = rows
+    .filter((row) => retryableStatuses.has(row.status))
+    .filter((row) => row.salesNavigatorUrl && /linkedin\.com\/sales\/lead\//i.test(row.salesNavigatorUrl))
+    .map((row) => ({
+      ...row,
+      resolutionStatus: 'resolved',
+      retrySourceStatus: row.status,
+      retrySourceFailureCategory: row.failureCategory || null,
+      retrySourceArtifact: absolutePath,
+      status: undefined,
+      attempt: undefined,
+      note: undefined,
+      failureCategory: undefined,
+      saveRecoveryPath: undefined,
+      nextAction: undefined,
+    }));
+
+  return {
+    listName: listName || artifact.listName || artifact.leadListName || 'Retry Failed Fast Import',
+    sourcePath: absolutePath,
+    sourceType: 'retry_failed_fast_import',
+    generatedAt: new Date().toISOString(),
+    detectedRows: rows.length,
+    uniqueLeads: leads.length,
+    resolvedLeads: leads.length,
+    unresolvedLeads: 0,
+    liveConnect: false,
+    retrySourceArtifact: absolutePath,
+    retryableStatuses: Array.from(retryableStatuses),
+    leads,
+  };
 }
 
 function coverageArtifactPathForAccount(account, coverageDir = COVERAGE_ARTIFACTS_DIR) {
@@ -1720,6 +1774,7 @@ module.exports = {
   loadCoverageLeadIndex,
   loadFastListImportSource,
   loadFastListImportSources,
+  loadFailedFastListImportPlan,
   parseMarkdownLeadRows,
   renderFastResolveMarkdown,
   renderFastListImportMarkdown,

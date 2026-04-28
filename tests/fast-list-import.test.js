@@ -13,6 +13,7 @@ const {
   isRetryableSaveError,
   inferFullNameFromLinkedInSlug,
   loadCoverageImportPlan,
+  loadFailedFastListImportPlan,
   loadFastListImportSource,
   loadFastListImportSources,
   parseMarkdownLeadRows,
@@ -209,6 +210,59 @@ test('loadCoverageImportPlan builds a list import plan from account coverage art
   assert.equal(plan.sourceType, 'coverage_artifacts');
   assert.equal(plan.detectedRows, 1);
   assert.equal(plan.leads[0].fullName, 'Vera Platform');
+});
+
+test('loadFailedFastListImportPlan builds a retry-only plan from failed save rows', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const artifactPath = path.join(os.tmpdir(), `failed-fast-import-${Date.now()}.json`);
+  fs.writeFileSync(artifactPath, JSON.stringify({
+    listName: 'Retry Target List',
+    results: [
+      {
+        accountName: 'Example Marketplace A',
+        fullName: 'Saved Lead',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/saved',
+        resolutionStatus: 'resolved',
+        status: 'saved',
+      },
+      {
+        accountName: 'Example Marketplace A',
+        fullName: 'Rate Limited Lead',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/rate-limited',
+        resolutionStatus: 'resolved',
+        status: 'failed_rate_limit',
+        failureCategory: 'rate_limit',
+        note: 'Too many requests',
+      },
+      {
+        accountName: 'Example SaaS Marketplace',
+        fullName: 'Cooldown Lead',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/cooldown',
+        resolutionStatus: 'resolved',
+        status: 'skipped_rate_limit_cooldown',
+      },
+      {
+        accountName: 'Example SaaS Marketplace',
+        fullName: 'Manual Lead',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/manual',
+        resolutionStatus: 'resolved',
+        status: 'manual_review',
+      },
+    ],
+  }));
+
+  const plan = loadFailedFastListImportPlan(artifactPath);
+
+  assert.equal(plan.listName, 'Retry Target List');
+  assert.equal(plan.sourceType, 'retry_failed_fast_import');
+  assert.equal(plan.detectedRows, 4);
+  assert.equal(plan.uniqueLeads, 2);
+  assert.deepEqual(plan.leads.map((lead) => lead.fullName), ['Rate Limited Lead', 'Cooldown Lead']);
+  assert.deepEqual(plan.leads.map((lead) => lead.retrySourceStatus), ['failed_rate_limit', 'skipped_rate_limit_cooldown']);
+  assert.equal(plan.leads[0].status, undefined);
+  assert.equal(plan.leads[0].resolutionStatus, 'resolved');
 });
 
 test('saveFastListImport plans without live-save and never requires a driver', async () => {

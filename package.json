@@ -20,6 +20,7 @@
     "test-list-save": "node src/cli.js test-list-save",
     "fast-resolve-leads": "node src/cli.js fast-resolve-leads",
     "fast-list-import": "node src/cli.js fast-list-import",
+    "retry-failed-fast-list-import": "node src/cli.js retry-failed-fast-list-import",
     "import-coverage": "node src/cli.js import-coverage",
     "send-approved-connects": "node src/cli.js send-approved-connects",
     "reconcile-state": "node src/cli.js reconcile-state",

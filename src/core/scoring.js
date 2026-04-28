@@ -5,6 +5,8 @@ function normalizeText(value) {
 function detectRoleFamily(candidate) {
   const text = normalizeText(`${candidate.title} ${candidate.headline || ''}`);
 
+  if (/\b(chief information officer|chief technology officer|cio|cto)\b/.test(text)) return 'executive_engineering';
+  if (/microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text)) return 'platform_engineering';
   if (/site reliability|sre/.test(text)) return 'site_reliability';
   if (/system owner|it product owner/.test(text)) return 'platform_engineering';
   if (/security architect|security engineer|cyber security|cybersecurity|information security/.test(text)) return 'security';
@@ -28,6 +30,7 @@ function detectRoleFamily(candidate) {
 function detectSeniority(candidate) {
   const text = normalizeText(candidate.title);
 
+  if (/\b(chief information officer|chief technology officer|cio|cto)\b/.test(text)) return 'vp';
   if (/vice president|\bvp\b/.test(text)) return 'vp';
   if (/director/.test(text)) return 'director';
   if (/head/.test(text)) return 'head';

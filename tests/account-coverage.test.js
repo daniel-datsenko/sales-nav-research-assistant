@@ -261,6 +261,124 @@ test('selectCoverageListCandidates excludes out-of-network profiles from list ta
   assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Reachable Platform']);
 });
 
+test('selectCoverageListCandidates always keeps direct observability below the score gate', () => {
+  const selected = selectCoverageListCandidates({
+    candidates: [
+      {
+        fullName: 'Low Score DevOps',
+        title: 'DevOps Engineer',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'devops',
+        seniority: 'individual_contributor',
+        score: 12,
+        scoreBreakdown: { components: { roleScore: 18, seniorityScore: 8, exclusionPenalty: -14 } },
+      },
+      {
+        fullName: 'Adjacent Analyst',
+        title: 'Data Analyst',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'data',
+        seniority: 'individual_contributor',
+        score: 80,
+      },
+    ],
+  }, { minScore: 50 });
+
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Low Score DevOps']);
+  assert.equal(selected[0].listSelectionReason, 'direct_observability_always_include');
+  assert.deepEqual(selected[0].topScoreComponents.slice(0, 2), [
+    { component: 'roleScore', value: 18 },
+    { component: 'exclusionPenalty', value: -14 },
+  ]);
+});
+
+test('selectCoverageListCandidates force-includes CIO CTO and microservices builders', () => {
+  const selected = selectCoverageListCandidates({
+    candidates: [
+      {
+        fullName: 'Company CIO',
+        title: 'CIO',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'unknown',
+        seniority: 'unknown',
+        score: 0,
+      },
+      {
+        fullName: 'Microservices Lead',
+        title: 'Senior Microservices Developer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'software_engineering',
+        seniority: 'senior',
+        score: 10,
+      },
+    ],
+  }, { minScore: 50 });
+
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Microservices Lead', 'Company CIO']);
+  assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
+    'microservices_observability_path',
+    'executive_cto_cio_always_include',
+  ]);
+});
+
+test('selectCoverageListCandidates narrows technical adjacent to ICP-positive subclasses', () => {
+  const selected = selectCoverageListCandidates({
+    candidates: [
+      {
+        fullName: 'VP Cloud',
+        title: 'VP Cloud Engineering',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'vp',
+        score: 30,
+      },
+      {
+        fullName: 'Head Cloud AI',
+        title: 'Head of Cloud & AI',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'platform_engineering',
+        seniority: 'head',
+        score: 22,
+      },
+      {
+        fullName: 'Principal Data AI',
+        title: 'Principal Data & AI Transformation',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'data',
+        seniority: 'principal',
+        score: 18,
+      },
+      {
+        fullName: 'BI Analyst',
+        title: 'Senior BI Analyst',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'data',
+        seniority: 'senior',
+        score: 90,
+      },
+      {
+        fullName: 'Security Manager',
+        title: 'Information Security Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'security',
+        seniority: 'manager',
+        score: 90,
+      },
+    ],
+  }, { minScore: 50 });
+
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), [
+    'VP Cloud',
+    'Head Cloud AI',
+    'Principal Data AI',
+  ]);
+  assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
+    'technical_adjacent_senior_platform_leader',
+    'technical_adjacent_senior_platform_leader',
+    'technical_adjacent_ai_cloud_compound',
+  ]);
+});
+
 test('classifyReviewedCoverageBucket can promote signal-rich reviewed candidates', () => {
   const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
   const bucket = classifyReviewedCoverageBucket({

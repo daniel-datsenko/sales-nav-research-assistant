@@ -124,6 +124,43 @@ test('scoreCandidate recognizes VP technology and business IT as executive engin
   assert.ok(vpBusinessIt.score >= icpConfig.saveToListThreshold);
 });
 
+test('scoreCandidate recognizes CIO and CTO titles as executive engineering', () => {
+  const cio = scoreCandidate({
+    title: 'Chief Information Officer',
+    headline: 'Owns technology strategy and enterprise platforms',
+  }, icpConfig);
+  const shortCto = scoreCandidate({
+    title: 'CTO',
+    headline: 'Leads engineering, cloud platform and architecture',
+  }, icpConfig);
+  const ciso = scoreCandidate({
+    title: 'CISO',
+    headline: 'Owns security and risk',
+  }, icpConfig);
+
+  assert.equal(cio.roleFamily, 'executive_engineering');
+  assert.equal(shortCto.roleFamily, 'executive_engineering');
+  assert.equal(cio.seniority, 'vp');
+  assert.equal(shortCto.seniority, 'vp');
+  assert.notEqual(ciso.roleFamily, 'executive_engineering');
+});
+
+test('scoreCandidate recognizes microservices builders as platform engineering', () => {
+  const developer = scoreCandidate({
+    title: 'Senior Microservices Developer',
+    headline: 'Builds distributed backend services',
+  }, icpConfig);
+  const architect = scoreCandidate({
+    title: 'Microservices Architect',
+    headline: 'Owns service architecture and production reliability',
+  }, icpConfig);
+
+  assert.equal(developer.roleFamily, 'platform_engineering');
+  assert.equal(architect.roleFamily, 'platform_engineering');
+  assert.equal(developer.eligible, true);
+  assert.equal(architect.eligible, true);
+});
+
 test('scoreCandidate keeps security and data compound titles out of platform engineering', () => {
   const cyberSecurityArchitect = scoreCandidate({
     title: 'Cyber Security Architect',

@@ -737,22 +737,177 @@ async function waitForInterSweepDelay(driver, delayMs) {
   });
 }
 
-function selectCoverageListCandidates(result, options = {}) {
+function normalizeSelectionText(value) {
+  return String(value || '').toLowerCase();
+}
+
+function hasExecutiveTechnologyTitle(candidate) {
+  const text = normalizeSelectionText(`${candidate.title || ''} ${candidate.headline || ''}`);
+  return /\b(chief information officer|chief technology officer|cio|cto)\b/.test(text);
+}
+
+function hasMicroservicesObservabilityTitle(candidate) {
+  const text = normalizeSelectionText(candidate.title || '');
+  return /microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text);
+}
+
+function isManagerOrAbove(seniority) {
+  return new Set(['manager', 'head', 'director', 'vp', 'principal']).has(String(seniority || '').toLowerCase());
+}
+
+function isSeniorPlatformLeader(candidate) {
+  const seniority = String(candidate.seniority || '').toLowerCase();
+  const roleFamily = String(candidate.roleFamily || '').toLowerCase();
+  return new Set(['vp', 'director', 'head', 'principal']).has(seniority)
+    && new Set([
+      'platform_engineering',
+      'executive_engineering',
+      'devops',
+      'site_reliability',
+      'infrastructure',
+    ]).has(roleFamily);
+}
+
+function getHardExclusionReason(candidate, options = {}) {
+  const title = normalizeSelectionText(candidate.title || '');
+  const roleFamily = String(candidate.roleFamily || '').toLowerCase();
+  const excludeRoleFamilies = new Set((options.excludeRoleFamilies || []).map((value) => String(value || '').toLowerCase()));
+  const excludeTitleKeywords = (options.excludeTitleKeywords || []).map((value) => String(value || '').toLowerCase().trim()).filter(Boolean);
+
+  if (candidate.outOfNetwork) {
+    return 'out_of_network';
+  }
+  if (excludeRoleFamilies.has(roleFamily)) {
+    return 'operator_excluded_role_family';
+  }
+  if (excludeTitleKeywords.some((keyword) => title.includes(keyword))) {
+    return 'operator_excluded_title_keyword';
+  }
+  if (/\b(hr|human resources|privacy|controlling|einkauf|procurement|finance|financial)\b/.test(title)) {
+    return 'non_icp_business_function';
+  }
+  if (
+    roleFamily === 'data'
+    && (/\b(bi|business intelligence|analyst)\b/.test(title) || (/\banalytics\b/.test(title) && !/\b(ai|cloud|platform)\b/.test(title)))
+  ) {
+    return 'data_analytics_not_observability';
+  }
+  if (roleFamily === 'security' && !/\b(vp|vice president|head of security)\b/.test(title)) {
+    return 'security_path_not_primary_icp';
+  }
+  return null;
+}
+
+function summarizeTopScoreComponents(scoreBreakdown, limit = 3) {
+  const components = scoreBreakdown?.components || {};
+  return Object.entries(components)
+    .filter(([, value]) => Number(value) !== 0)
+    .map(([component, value]) => ({ component, value: Number(value) }))
+    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))
+    .slice(0, limit);
+}
+
+function classifyCoverageListSelection(candidate, options = {}) {
+  const hardExclusionReason = getHardExclusionReason(candidate, options);
+  if (hardExclusionReason) {
+    return {
+      selected: false,
+      reason: hardExclusionReason,
+      rank: 0,
+    };
+  }
+
   const includeBuckets = new Set(options.includeBuckets || ['direct_observability', 'technical_adjacent']);
   const minScore = Number.isFinite(Number(options.minScore))
     ? Number(options.minScore)
     : 25;
-  const excludeRoleFamilies = new Set((options.excludeRoleFamilies || []).map((value) => String(value || '').toLowerCase()));
-  const excludeTitleKeywords = (options.excludeTitleKeywords || []).map((value) => String(value || '').toLowerCase().trim()).filter(Boolean);
+  const title = normalizeSelectionText(candidate.title || '');
+  const seniority = String(candidate.seniority || '').toLowerCase();
+  const roleFamily = String(candidate.roleFamily || '').toLowerCase();
 
+  if (candidate.coverageBucket === 'direct_observability') {
+    return {
+      selected: true,
+      reason: 'direct_observability_always_include',
+      rank: 90,
+    };
+  }
+  if (hasExecutiveTechnologyTitle(candidate)) {
+    return {
+      selected: true,
+      reason: 'executive_cto_cio_always_include',
+      rank: 85,
+    };
+  }
+  if (hasMicroservicesObservabilityTitle(candidate)) {
+    return {
+      selected: true,
+      reason: 'microservices_observability_path',
+      rank: 86,
+    };
+  }
+
+  if (candidate.coverageBucket === 'technical_adjacent') {
+    if (isSeniorPlatformLeader(candidate)) {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_senior_platform_leader',
+        rank: 80,
+      };
+    }
+    if (/\b(data\s*&\s*ai|ai\s*&\s*cloud|cloud\s*&\s*ai|analytics\s*&\s*cloud|ai\/ml)\b/.test(title)) {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_ai_cloud_compound',
+        rank: 70,
+      };
+    }
+    if (/\b(cloud|ai|platform)\b/.test(title) && isManagerOrAbove(seniority)) {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_cloud_ai_platform_leader',
+        rank: 75,
+      };
+    }
+  }
+
+  if (
+    includeBuckets.has(candidate.coverageBucket)
+    && Number(candidate.score || 0) >= minScore
+    && roleFamily !== 'unknown'
+  ) {
+    return {
+      selected: true,
+      reason: 'score_threshold',
+      rank: 40,
+    };
+  }
+
+  return {
+    selected: false,
+    reason: includeBuckets.has(candidate.coverageBucket) ? 'below_icp_selection_threshold' : 'bucket_not_included',
+    rank: 0,
+  };
+}
+
+function selectCoverageListCandidates(result, options = {}) {
   return (result?.candidates || [])
-    .filter((candidate) =>
-      includeBuckets.has(candidate.coverageBucket)
-      && !candidate.outOfNetwork
-      && Number(candidate.score || 0) >= minScore
-      && !excludeRoleFamilies.has(String(candidate.roleFamily || '').toLowerCase())
-      && !excludeTitleKeywords.some((keyword) => String(candidate.title || '').toLowerCase().includes(keyword)))
+    .map((candidate) => {
+      const selection = classifyCoverageListSelection(candidate, options);
+      return {
+        ...candidate,
+        listSelectionReason: selection.reason,
+        listSelectionRank: selection.rank,
+        topScoreComponents: summarizeTopScoreComponents(candidate.scoreBreakdown),
+        selectedForList: selection.selected,
+      };
+    })
+    .filter((candidate) => candidate.selectedForList)
     .sort((left, right) => {
+      const rankDiff = (right.listSelectionRank || 0) - (left.listSelectionRank || 0);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
       const rightPriority = right.priorityModel?.priorityScore || 0;
       const leftPriority = left.priorityModel?.priorityScore || 0;
       if (rightPriority !== leftPriority) {

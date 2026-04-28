@@ -69,11 +69,16 @@ function renderCoverageReviewMarkdown(coverageArtifact) {
 }
 
 function renderCandidateBullet(candidate) {
+  const topScoreComponents = candidate.topScoreComponents || summarizeTopScoreComponents(candidate.scoreBreakdown);
   const parts = [
     `- **${candidate.fullName || 'Unknown'}**`,
     candidate.title || 'Unknown title',
     candidate.company || null,
     Number.isFinite(candidate.score) ? `score ${candidate.score}` : null,
+    topScoreComponents.length ? `top score signals ${formatScoreComponents(topScoreComponents)}` : null,
+    candidate.listSelectionReason ? `selection ${candidate.listSelectionReason}` : null,
+    candidate.coverageBucket ? `bucket ${candidate.coverageBucket}` : null,
+    formatBucketReason(candidate),
     candidate.sweeps?.length ? `found via ${candidate.sweeps.join(', ')}` : null,
   ].filter(Boolean);
 
@@ -84,6 +89,29 @@ function renderCandidateBullet(candidate) {
   }
 
   return parts.join(' | ');
+}
+
+function summarizeTopScoreComponents(scoreBreakdown, limit = 3) {
+  const components = scoreBreakdown?.components || {};
+  return Object.entries(components)
+    .filter(([, value]) => Number(value) !== 0)
+    .map(([component, value]) => ({ component, value: Number(value) }))
+    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))
+    .slice(0, limit);
+}
+
+function formatScoreComponents(components) {
+  return components
+    .map(({ component, value }) => `${value > 0 ? '+' : ''}${value} ${component}`)
+    .join(', ');
+}
+
+function formatBucketReason(candidate) {
+  const details = [
+    candidate.roleFamily ? `roleFamily=${candidate.roleFamily}` : null,
+    candidate.seniority ? `seniority=${candidate.seniority}` : null,
+  ].filter(Boolean);
+  return details.length ? `bucket reason ${details.join(', ')}` : null;
 }
 
 module.exports = {

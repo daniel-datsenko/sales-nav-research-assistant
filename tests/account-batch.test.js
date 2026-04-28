@@ -9,9 +9,11 @@ const {
   buildAccountBatchReportPath,
   buildAccountBatchListName,
   deriveConnectOperatorGuidance,
+  formatAccountBatchDuration,
   limitBatchCandidates,
   parseAccountNames,
   renderAccountBatchReportMarkdown,
+  renderAccountBatchListNameTemplate,
 } = require('../src/core/account-batch');
 const { ACCOUNT_BATCH_ARTIFACTS_DIR } = require('../src/lib/paths');
 
@@ -34,6 +36,18 @@ test('buildAccountBatchListName prefixes deterministic list names when requested
     buildAccountBatchListName('Marc O\'Polo SE', 'MVP'),
     'MVP - Marc O\'Polo SE',
   );
+});
+
+test('renderAccountBatchListNameTemplate resolves batch placeholders for consolidated lists', () => {
+  assert.equal(
+    renderAccountBatchListNameTemplate('Research {date} {start_time}-{end_time} ({duration}) {accounts}', {
+      accountNames: ['Vinted', 'DocPlanner', 'OLX Group'],
+      startedAt: '2026-04-28T10:27:00.000Z',
+      endedAt: '2026-04-28T10:34:31.000Z',
+    }),
+    'Research 2026-04-28 1027-1034 (7m 31s) Vinted, DocPlanner +1',
+  );
+  assert.equal(formatAccountBatchDuration('2026-04-28T10:27:00.000Z', '2026-04-28T10:34:00.000Z'), '7m');
 });
 
 test('buildAccountBatchArtifactPath writes into the account batch artifacts directory', () => {
@@ -91,6 +105,8 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
     driver: 'playwright',
     liveSave: true,
     liveConnect: false,
+    consolidatedListName: 'Research Consolidated',
+    listNameTemplate: 'Research {date}',
     maxListSavesPerAccount: 3,
     accountNames: ['Example Connect Eligible Account'],
     results: [
@@ -111,6 +127,8 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
   });
 
   assert.match(markdown, /Account Batch Report/);
+  assert.match(markdown, /Consolidated list: `Research Consolidated`/);
+  assert.match(markdown, /List name template: `Research \{date\}`/);
   assert.match(markdown, /Max list saves per account: `3`/);
   assert.match(markdown, /Selected for live save: `3`/);
   assert.match(markdown, /Philipp Weidinger: `saved`/);

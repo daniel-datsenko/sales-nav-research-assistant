@@ -15,6 +15,8 @@ function parseCliArgs(argv) {
       accounts: { type: 'string' },
       'account-list': { type: 'string' },
       'list-prefix': { type: 'string' },
+      'consolidate-list-name': { type: 'string' },
+      'list-name-template': { type: 'string' },
       'pilot-config': { type: 'string' },
       'coverage-config': { type: 'string' },
       artifact: { type: 'string' },

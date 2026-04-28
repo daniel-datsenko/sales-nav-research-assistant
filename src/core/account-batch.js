@@ -20,6 +20,62 @@ function buildAccountBatchListName(accountName, listPrefix = null) {
   return `${normalizedPrefix} - ${normalizedAccount}`;
 }
 
+function formatAccountBatchDuration(startedAt, endedAt) {
+  const start = new Date(startedAt).getTime();
+  const end = new Date(endedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return '0m';
+  }
+  const totalSeconds = Math.round((end - start) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function formatIsoDateTimeParts(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: '',
+      startTime: '',
+      endTime: '',
+    };
+  }
+  return {
+    date: date.toISOString().slice(0, 10),
+    startTime: date.toISOString().slice(11, 16).replace(':', ''),
+    endTime: date.toISOString().slice(11, 16).replace(':', ''),
+  };
+}
+
+function renderAccountBatchListNameTemplate(template, {
+  accountNames = [],
+  startedAt = new Date().toISOString(),
+  endedAt = startedAt,
+} = {}) {
+  const rawTemplate = String(template || '').trim();
+  if (!rawTemplate) {
+    return null;
+  }
+  const startParts = formatIsoDateTimeParts(startedAt);
+  const endParts = formatIsoDateTimeParts(endedAt);
+  const accounts = (accountNames || []).map((name) => String(name || '').trim()).filter(Boolean);
+  const accountLabel = accounts.length <= 2
+    ? accounts.join(', ')
+    : `${accounts.slice(0, 2).join(', ')} +${accounts.length - 2}`;
+  return rawTemplate
+    .replace(/\{date\}/g, startParts.date)
+    .replace(/\{start_time\}/g, startParts.startTime)
+    .replace(/\{end_time\}/g, endParts.endTime)
+    .replace(/\{duration\}/g, formatAccountBatchDuration(startedAt, endedAt))
+    .replace(/\{accounts\}/g, accountLabel)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function buildAccountBatchArtifactPath(label = 'account-batch') {
   const slug = String(label || 'account-batch')
     .toLowerCase()
@@ -115,10 +171,11 @@ function summarizeBatchResult(result) {
   const saveResults = result.saveResults
     || (result.status ? [{ fullName: result.fullName || 'Unknown lead', status: result.status, note: result.note || null }] : []);
   const connectResults = result.connectResults || [];
+  const failedSaveStatuses = new Set(['failed', 'failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state']);
   return {
     saveAttemptCount: saveResults.length,
-    saveSuccessCount: saveResults.filter((item) => item.status === 'saved').length,
-    saveFailureCount: saveResults.filter((item) => item.status === 'failed').length,
+    saveSuccessCount: saveResults.filter((item) => ['saved', 'already_saved', 'results_row_fallback_saved'].includes(item.status)).length,
+    saveFailureCount: saveResults.filter((item) => failedSaveStatuses.has(item.status)).length,
     connectAttemptCount: connectResults.length,
     connectSentCount: connectResults.filter((item) => item.status === 'sent').length,
     connectFailureCount: connectResults.filter((item) => item.status === 'failed').length,
@@ -214,6 +271,12 @@ function renderAccountBatchReportMarkdown(payload) {
   lines.push(`- Driver: \`${payload.driver}\``);
   lines.push(`- Live save: \`${payload.liveSave ? 'yes' : 'no'}\``);
   lines.push(`- Live connect: \`${payload.liveConnect ? 'yes' : 'no'}\``);
+  if (payload.consolidatedListName) {
+    lines.push(`- Consolidated list: \`${payload.consolidatedListName}\``);
+  }
+  if (payload.listNameTemplate) {
+    lines.push(`- List name template: \`${payload.listNameTemplate}\``);
+  }
   if (payload.maxListSavesPerAccount) {
     lines.push(`- Max list saves per account: \`${payload.maxListSavesPerAccount}\``);
   }
@@ -329,9 +392,11 @@ module.exports = {
   buildAccountBatchArtifactPath,
   buildAccountBatchReportPath,
   buildAccountBatchListName,
+  formatAccountBatchDuration,
   limitBatchCandidates,
   parseAccountNames,
   renderAccountBatchReportMarkdown,
+  renderAccountBatchListNameTemplate,
   deriveConnectOperatorGuidance,
   writeAccountBatchArtifact,
   writeAccountBatchReport,

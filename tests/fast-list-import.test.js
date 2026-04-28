@@ -326,6 +326,65 @@ test('saveFastListImport skips already-saved leads from a preflight snapshot', a
   assert.equal(result.results[0].saveRecoveryPath, 'snapshot_preflight');
 });
 
+test('saveFastListImport stops after rate-limit failure instead of burning remaining saves', async () => {
+  let attempts = 0;
+  const progress = [];
+  let waitedMs = 0;
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        attempts += 1;
+        if (attempts === 1) {
+          return { status: 'saved', selectionMode: 'existing_list' };
+        }
+        throw new Error('LinkedIn says Too many requests. Please wait before trying again.');
+      },
+    },
+    liveSave: true,
+    maxRetries: 0,
+    rateLimitBackoffMs: 250,
+    wait(ms) {
+      waitedMs += ms;
+    },
+    onProgress(row) {
+      progress.push(row.status);
+    },
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Nora Platform',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+          resolutionStatus: 'resolved',
+        },
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Rate Limited Lead',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/456',
+          resolutionStatus: 'resolved',
+        },
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Skipped Lead',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/789',
+          resolutionStatus: 'resolved',
+        },
+      ],
+    },
+  });
+
+  assert.equal(attempts, 2);
+  assert.equal(waitedMs, 250);
+  assert.deepEqual(progress, ['saved', 'failed_rate_limit', 'skipped_rate_limit_cooldown']);
+  assert.equal(result.status, 'completed_with_followup');
+  assert.equal(result.failed, 1);
+  assert.equal(result.rateLimitSkipped, 1);
+  assert.equal(result.nextAction, 'wait_10_min_and_retry_failed');
+  assert.equal(result.failureBreakdown.rate_limit, 1);
+  assert.equal(result.failureBreakdown.rate_limit_cooldown, 1);
+});
+
 test('saveFastListImport aborts when the target list is missing and creation is disabled', async () => {
   let attempts = 0;
   await assert.rejects(
@@ -407,9 +466,46 @@ test('normalizeSaveResult maps results-row fallback into an explicit final statu
 });
 
 test('classifySaveFailure keeps UI recovery exhaustion separate from runtime failures', () => {
-  assert.equal(classifySaveFailure('Current company filter toggle not found').status, 'manual_review');
-  assert.equal(classifySaveFailure('Current company filter toggle not found').failureCategory, 'save_ui_manual_review');
+  assert.equal(classifySaveFailure('Current company filter toggle not found').status, 'failed_ui_state');
+  assert.equal(classifySaveFailure('Current company filter toggle not found').failureCategory, 'save_ui_state');
+  assert.equal(classifySaveFailure('Too many requests, try again later').status, 'failed_rate_limit');
+  assert.equal(classifySaveFailure('net::ERR_CONNECTION_RESET').status, 'failed_network');
   assert.equal(classifySaveFailure('Target closed while saving').status, 'failed_runtime');
+});
+
+test('renderFastListImportMarkdown shows failure breakdown and next action', () => {
+  const markdown = renderFastListImportMarkdown({
+    generatedAt: '2026-04-28T12:00:00Z',
+    listName: 'Calling List',
+    status: 'completed_with_followup',
+    liveSave: true,
+    resolvedLeads: 2,
+    unresolvedLeads: 0,
+    confirmedSaved: 1,
+    alreadySaved: 0,
+    snapshotSkipped: 0,
+    rateLimitSkipped: 1,
+    failed: 1,
+    nextAction: 'wait_10_min_and_retry_failed',
+    failureBreakdown: {
+      rate_limit: 1,
+      rate_limit_cooldown: 1,
+    },
+    results: [
+      {
+        accountName: 'Example Network Co',
+        fullName: 'Nora Platform',
+        status: 'failed_rate_limit',
+        failureCategory: 'rate_limit',
+        note: 'Too many requests',
+        nextAction: 'wait_10_min_and_retry_failed',
+      },
+    ],
+  });
+
+  assert.match(markdown, /Rate-limit cooldown skips: `1`/);
+  assert.match(markdown, /Next action: `wait_10_min_and_retry_failed`/);
+  assert.match(markdown, /Failure breakdown: `rate_limit=1, rate_limit_cooldown=1`/);
 });
 
 test('extractPublicLinkedInSlug reads public profile slugs', () => {

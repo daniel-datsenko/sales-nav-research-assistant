@@ -1255,7 +1255,7 @@ function buildFastResolveArtifact(payload) {
 }
 
 function isRetryableSaveError(note) {
-  return /lead detail did not render|spinner shell|lead page stuck|timeout|current company filter/i.test(String(note || ''));
+  return /lead detail did not render|spinner shell|lead page stuck|timeout|current company filter|too many requests|rate.?limit|throttl|429/i.test(String(note || ''));
 }
 
 function isMissingListCreationDisabledError(note) {
@@ -1281,10 +1281,23 @@ function buildExistingLeadUrlSet(existingLeadUrls = []) {
   return new Set((existingLeadUrls || []).map(normalizeLeadUrl).filter(Boolean));
 }
 
-async function saveFastListImport({ driver, importPlan, liveSave = false, allowListCreate = false, maxRetries = 1, runId = 'fast-list-import', onProgress = null, existingLeadUrls = [] }) {
+async function saveFastListImport({
+  driver,
+  importPlan,
+  liveSave = false,
+  allowListCreate = false,
+  maxRetries = 1,
+  runId = 'fast-list-import',
+  onProgress = null,
+  existingLeadUrls = [],
+  stopOnRateLimit = true,
+  wait = null,
+  rateLimitBackoffMs = 0,
+} = {}) {
   const results = [];
   const listInfo = { listName: importPlan.listName, externalRef: null };
   const existingLeadUrlSet = buildExistingLeadUrlSet(existingLeadUrls);
+  let rateLimitStop = null;
 
   if (!liveSave) {
     return {
@@ -1306,6 +1319,25 @@ async function saveFastListImport({ driver, importPlan, liveSave = false, allowL
         status: 'unresolved',
         note: 'missing_sales_nav_url',
       });
+      continue;
+    }
+
+    if (rateLimitStop) {
+      const row = {
+        ...lead,
+        status: 'skipped_rate_limit_cooldown',
+        failureCategory: 'rate_limit_cooldown',
+        saveRecoveryPath: 'rate_limit_guard',
+        selectionMode: null,
+        attempt: 0,
+        note: 'Skipped after rate-limit detection to avoid burning additional Sales Navigator save attempts.',
+        nextAction: 'wait_10_min_and_retry_failed',
+        triggeredBy: rateLimitStop.fullName || null,
+      };
+      results.push(row);
+      if (typeof onProgress === 'function') {
+        onProgress(row);
+      }
       continue;
     }
 
@@ -1382,10 +1414,20 @@ async function saveFastListImport({ driver, importPlan, liveSave = false, allowL
             selectionMode: null,
             attempt,
             note: lastNote,
+            nextAction: failure.nextAction,
           };
           results.push(row);
           if (typeof onProgress === 'function') {
             onProgress(row);
+          }
+          if (stopOnRateLimit && failure.status === 'failed_rate_limit') {
+            rateLimitStop = {
+              fullName: lead.fullName,
+              note: lastNote,
+            };
+            if (typeof wait === 'function' && Number(rateLimitBackoffMs) > 0) {
+              await wait(Number(rateLimitBackoffMs));
+            }
           }
           break;
         }
@@ -1413,39 +1455,110 @@ function normalizeSaveResult(saveResult = {}) {
 
 function classifySaveFailure(note) {
   const message = String(note || '');
+  if (/too many requests|rate.?limit|throttl|429|please wait before trying again|try again later/i.test(message)) {
+    return {
+      status: 'failed_rate_limit',
+      failureCategory: 'rate_limit',
+      recoveryPath: 'rate_limit_guard',
+      nextAction: 'wait_10_min_and_retry_failed',
+    };
+  }
+  if (/network|net::|econnreset|econnrefused|etimedout|socket|navigation.*failed/i.test(message)) {
+    return {
+      status: 'failed_network',
+      failureCategory: 'network_failure',
+      recoveryPath: 'network_or_navigation_failure',
+      nextAction: 'retry_after_short_cooldown',
+    };
+  }
   if (/target closed|browser.*closed|econn|transport|session state|not authenticated/i.test(message)) {
     return {
       status: 'failed_runtime',
       failureCategory: 'runtime_failure',
       recoveryPath: 'runtime_or_session_failure',
+      nextAction: 'rebootstrap_session_then_retry_failed',
+    };
+  }
+  if (/selector|button|modal|toast|overlay|current company filter|save button|lead detail did not render|spinner shell|lead page stuck|timeout/i.test(message)) {
+    return {
+      status: 'failed_ui_state',
+      failureCategory: isRetryableSaveError(message) ? 'save_ui_state' : 'save_selector_miss',
+      recoveryPath: 'save_ui_recovery_exhausted',
+      nextAction: 'retry_after_ui_cooldown_or_open_bug',
     };
   }
   return {
     status: 'manual_review',
     failureCategory: isRetryableSaveError(message) ? 'save_ui_manual_review' : 'manual_review',
     recoveryPath: 'save_recovery_exhausted',
+    nextAction: 'manual_review_before_retry',
   };
 }
 
 function buildFastListImportResult(payload) {
   const results = payload.results || [];
-  const failed = results.filter((row) => row.status === 'failed_runtime').length;
+  const failedStatuses = new Set(['failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state']);
+  const failed = results.filter((row) => failedStatuses.has(row.status)).length;
   const unresolved = results.filter((row) => row.status === 'unresolved').length;
   const manualReview = results.filter((row) => row.status === 'manual_review').length;
   const confirmedSaved = results.filter((row) => ['saved', 'results_row_fallback_saved'].includes(row.status)).length;
   const alreadySaved = results.filter((row) => row.status === 'already_saved').length;
   const snapshotSkipped = results.filter((row) => row.status === 'already_saved' && row.saveRecoveryPath === 'snapshot_preflight').length;
+  const rateLimitSkipped = results.filter((row) => row.status === 'skipped_rate_limit_cooldown').length;
+  const failureBreakdown = summarizeSaveFailureBreakdown(results);
   return {
     ...payload,
-    status: failed || unresolved || manualReview ? 'completed_with_followup' : 'completed',
+    status: failed || unresolved || manualReview || rateLimitSkipped ? 'completed_with_followup' : 'completed',
     saved: confirmedSaved,
     confirmedSaved,
     alreadySaved,
     snapshotSkipped,
+    rateLimitSkipped,
     failed,
     unresolved,
     manualReview,
+    failureBreakdown,
+    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, rateLimitSkipped, failureBreakdown }),
   };
+}
+
+function summarizeSaveFailureBreakdown(results = []) {
+  return (results || []).reduce((summary, row) => {
+    const key = row.failureCategory || (
+      row.status === 'unresolved'
+        ? 'unresolved'
+        : row.status === 'skipped_rate_limit_cooldown'
+          ? 'rate_limit_cooldown'
+          : null
+    );
+    if (!key) {
+      return summary;
+    }
+    summary[key] = (summary[key] || 0) + 1;
+    return summary;
+  }, {});
+}
+
+function deriveFastListImportNextAction({ failed, unresolved, manualReview, rateLimitSkipped, failureBreakdown }) {
+  if (failureBreakdown?.rate_limit || rateLimitSkipped) {
+    return 'wait_10_min_and_retry_failed';
+  }
+  if (failureBreakdown?.runtime_failure) {
+    return 'rebootstrap_session_then_retry_failed';
+  }
+  if (failureBreakdown?.network_failure) {
+    return 'retry_after_short_cooldown';
+  }
+  if (failureBreakdown?.save_ui_state || failureBreakdown?.save_selector_miss) {
+    return 'retry_after_ui_cooldown_or_open_bug';
+  }
+  if (manualReview || unresolved) {
+    return 'review_unresolved_or_manual_rows';
+  }
+  if (failed) {
+    return 'inspect_failed_rows';
+  }
+  return 'no_action';
 }
 
 function buildFastListImportArtifactPath(label = 'fast-list-import') {
@@ -1481,13 +1594,21 @@ function renderFastListImportMarkdown(artifact) {
     lines.push(`- Confirmed saved this run: \`${artifact.confirmedSaved ?? artifact.saved ?? 0}\``);
     lines.push(`- Already in list: \`${artifact.alreadySaved ?? 0}\``);
     lines.push(`- Snapshot preflight skips: \`${artifact.snapshotSkipped ?? 0}\``);
+    lines.push(`- Rate-limit cooldown skips: \`${artifact.rateLimitSkipped ?? 0}\``);
     lines.push(`- Failed: \`${artifact.failed ?? 0}\``);
+    lines.push(`- Next action: \`${artifact.nextAction || 'no_action'}\``);
+    if (artifact.failureBreakdown && Object.keys(artifact.failureBreakdown).length > 0) {
+      lines.push(`- Failure breakdown: \`${Object.entries(artifact.failureBreakdown).map(([key, value]) => `${key}=${value}`).join(', ')}\``);
+    }
   }
   lines.push('');
   lines.push(`| # | Account | Name | Status | Attempt | Evidence | Note |`);
   lines.push(`|---:|---|---|---|---:|---|---|`);
   for (const [index, row] of (artifact.results || artifact.leads || []).entries()) {
-    lines.push(`| ${index + 1} | ${escapeMarkdown(row.accountName)} | ${escapeMarkdown(row.fullName)} | ${escapeMarkdown(row.status || row.resolutionStatus)} | ${row.attempt || ''} | ${escapeMarkdown(row.resolutionEvidence)} | ${escapeMarkdown(row.note)} |`);
+    const note = [row.note, row.nextAction ? `next=${row.nextAction}` : null]
+      .filter(Boolean)
+      .join(' | ');
+    lines.push(`| ${index + 1} | ${escapeMarkdown(row.accountName)} | ${escapeMarkdown(row.fullName)} | ${escapeMarkdown(row.status || row.resolutionStatus)} | ${row.attempt || ''} | ${escapeMarkdown(row.resolutionEvidence || row.failureCategory)} | ${escapeMarkdown(note)} |`);
   }
   return `${lines.join('\n').trim()}\n`;
 }

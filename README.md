@@ -133,6 +133,28 @@ npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 npm run run-background-territory-loop -- --driver=playwright --limit=1
 ```
 
+### Research Several Accounts Into One List
+
+Use `--consolidate-list-name` when you want one shared Sales Navigator list instead of one list per account:
+
+```bash
+node src/cli.js run-account-batch \
+  --account-names="Example Marketplace A, Example SaaS Marketplace, Example Mobility Co" \
+  --driver=playwright \
+  --consolidate-list-name="Research 2026-04-28 Example Batch" \
+  --live-save
+```
+
+Or let the tool generate a consistent name:
+
+```bash
+node src/cli.js run-account-batch \
+  --account-names="Example Marketplace A, Example SaaS Marketplace, Example Mobility Co" \
+  --list-name-template="Research {date} {start_time} ({accounts})" \
+  --driver=playwright \
+  --live-save
+```
+
 ### Resolve A Difficult Company
 
 ```bash

@@ -64,6 +64,7 @@ const {
   buildAccountBatchListName,
   limitBatchCandidates,
   parseAccountNames,
+  renderAccountBatchListNameTemplate,
   writeAccountBatchArtifact,
   writeAccountBatchReport,
 } = require('./core/account-batch');
@@ -2859,6 +2860,7 @@ async function handleAutoresearchMvp(values, logger) {
 }
 
 async function handleRunAccountBatch(repository, values, logger) {
+  const batchStartedAt = new Date().toISOString();
   const explicitNames = parseAccountNames(getString(values, 'account-names'));
   const singleName = getString(values, 'account-name');
   const accountNames = explicitNames.length > 0
@@ -2869,6 +2871,14 @@ async function handleRunAccountBatch(repository, values, logger) {
   }
 
   const listPrefix = getString(values, 'list-prefix');
+  const explicitConsolidatedListName = getString(values, 'consolidate-list-name');
+  const listNameTemplate = getString(values, 'list-name-template');
+  const templateConsolidatedListName = renderAccountBatchListNameTemplate(listNameTemplate, {
+    accountNames,
+    startedAt: batchStartedAt,
+    endedAt: batchStartedAt,
+  });
+  const consolidatedListName = explicitConsolidatedListName || templateConsolidatedListName || null;
   const liveSave = getBoolean(values, 'liveSave', 'live-save');
   const liveConnect = getBoolean(values, 'liveConnect', 'live-connect');
   const pilotConfig = getString(values, 'pilot-config') ? loadPilotConfig(getString(values, 'pilot-config')) : null;
@@ -2921,7 +2931,7 @@ async function handleRunAccountBatch(repository, values, logger) {
 
     const results = [];
     for (const accountName of accountNames) {
-      const listName = buildAccountBatchListName(accountName, listPrefix);
+      const listName = consolidatedListName || buildAccountBatchListName(accountName, listPrefix);
       const coverageRun = await runAccountCoverageWorkflow({
         driver,
         accountName,
@@ -3047,10 +3057,12 @@ async function handleRunAccountBatch(repository, values, logger) {
     }
 
     const artifactPayload = {
-      label: listPrefix || 'account-batch',
+      label: consolidatedListName || listPrefix || 'account-batch',
       generatedAt: new Date().toISOString(),
       driver: driverName,
       accountNames,
+      consolidatedListName,
+      listNameTemplate: listNameTemplate || null,
       liveSave,
       liveConnect,
       maxListSavesPerAccount: Number.isFinite(maxListSavesPerAccount) && maxListSavesPerAccount > 0 ? maxListSavesPerAccount : null,
@@ -3499,7 +3511,7 @@ Usage:
   node src/cli.js build-background-territory-queue [--owner-name="Example SDR"] [--stale-days=60] [--seed-dataset=project.dataset|--seed-file=runtime/seeds/accounts.json] [--budget-mode=assist] [--no-subsidiaries]
   node src/cli.js run-background-territory-loop [--queue-artifact=runtime/artifacts/background-runner/example-operator-territory-queue.json] [--driver=hybrid] [--limit=3] [--speed-profile=balanced] [--reuse-sweep-cache] [--live-save] [--account-timeout-ms=180000]
   node src/cli.js autoresearch-mvp [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
-  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--live-save] [--live-connect]
+  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect
 `);

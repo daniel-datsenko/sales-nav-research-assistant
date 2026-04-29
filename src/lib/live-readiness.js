@@ -5,8 +5,33 @@ function isSalesNavigatorLeadUrl(value) {
   if (!value || typeof value !== 'string') {
     return false;
   }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
 
-  return /^https:\/\/www\.linkedin\.com\/sales\/lead\/[^?\s]+/i.test(value.trim());
+  let parsed;
+  try {
+    const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed.replace(/^\/+/, '')}`;
+    parsed = new URL(candidate);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) {
+    return false;
+  }
+
+  const path = parsed.pathname.replace(/\/+$/, '');
+  const match = path.match(/^\/sales\/lead\/([^/]+)$/i);
+  return Boolean(match && match[1] && match[1].trim());
 }
 
 function inspectSalesforceSecretModel({ sourceMode = 'auto', sourcePath = null, env = process.env }) {

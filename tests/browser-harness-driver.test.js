@@ -109,6 +109,59 @@ test('browser harness driver retries a transient close-frame transport failure o
   assert.equal(health.state, 'authenticated');
 });
 
+test('browser harness saveCandidateToList rejects non-Sales-Navigator URLs before invoking the mutation harness', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: true,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      assert.fail('commandRunner must not run a mutation command when the candidate URL fails validation');
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: false });
+
+  await assert.rejects(
+    () => driver.saveCandidateToList(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/in/someone',
+        profileUrl: 'https://www.linkedin.com/in/someone',
+      },
+      { listName: 'Existing Test List' },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
+test('browser harness sendConnect rejects non-Sales-Navigator URLs before invoking the mutation harness', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: true,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      assert.fail('commandRunner must not run a mutation command when the candidate URL fails validation');
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: false });
+
+  await assert.rejects(
+    () => driver.sendConnect(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/search/results/people/foo',
+        profileUrl: 'https://www.linkedin.com/search/results/people/foo',
+      },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
 test('browser harness candidate collection has no implicit 8-result ceiling', async () => {
   class ManyCandidateHarnessDriver extends BrowserHarnessSalesNavigatorDriver {
     runHarnessJson() {

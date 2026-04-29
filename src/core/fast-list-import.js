@@ -27,6 +27,7 @@ const {
   finishRunTimings,
   timePhase,
 } = require('./speed-telemetry');
+const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
 
 const FAST_IMPORT_ARTIFACTS_DIR = path.join(ARTIFACTS_DIR, 'fast-import');
 const LEARNED_LEAD_RESOLUTION_SUGGESTIONS_PATH = path.join(FAST_IMPORT_ARTIFACTS_DIR, 'learned-lead-resolution-suggestions.json');
@@ -338,7 +339,7 @@ function scoreFastResolveCandidate(lead, candidate, aliasTerms = []) {
     .slice(0, 5);
   const titleMatch = expectedTitleTokens.some((token) => title.includes(token));
   const locationMatch = expectedLocationTokens.some((token) => candidateLocation.includes(token));
-  const hasSalesNavigatorUrl = /linkedin\.com\/sales\/lead\//i.test(candidate?.salesNavigatorUrl || candidate?.profileUrl || '');
+  const hasSalesNavigatorUrl = isSalesNavigatorLeadUrl(candidate?.salesNavigatorUrl || candidate?.profileUrl || '');
   const additionalSignals = [
     slugMatch,
     titleMatch,
@@ -546,7 +547,7 @@ function parseMarkdownLeadRows(markdown) {
       score: Number(row.score) || null,
       tier: Number(row.tier) || null,
       publicLinkedInUrl,
-      salesNavigatorUrl: /linkedin\.com\/sales\/lead\//i.test(publicLinkedInUrl) ? publicLinkedInUrl : null,
+      salesNavigatorUrl: isSalesNavigatorLeadUrl(publicLinkedInUrl) ? publicLinkedInUrl : null,
       location: row.standort || row.location || '',
       source: row.quelle || row.source || '',
     });
@@ -571,7 +572,7 @@ function dedupeLeads(leads) {
       ...lead,
       accountName: lead.accountName || lead.company || '',
       fullName: lead.fullName || lead.name || '',
-      salesNavigatorUrl: lead.salesNavigatorUrl || (/linkedin\.com\/sales\/lead\//i.test(lead.profileUrl || '') ? lead.profileUrl : null),
+      salesNavigatorUrl: lead.salesNavigatorUrl || (isSalesNavigatorLeadUrl(lead.profileUrl || '') ? lead.profileUrl : null),
       publicLinkedInUrl: lead.publicLinkedInUrl || lead.profileUrl || null,
     });
   }
@@ -604,7 +605,7 @@ function loadCoverageLeadIndex(coverageDir = COVERAGE_ARTIFACTS_DIR) {
       ];
       for (const candidate of candidates) {
         const url = candidate.salesNavigatorUrl || candidate.profileUrl;
-        if (!url || !/linkedin\.com\/sales\/lead\//i.test(url)) {
+        if (!url || !isSalesNavigatorLeadUrl(url)) {
           continue;
         }
         const nameKey = normalizeLookupValue(candidate.fullName || candidate.name);
@@ -634,7 +635,7 @@ function loadCoverageLeadIndex(coverageDir = COVERAGE_ARTIFACTS_DIR) {
 
 function resolveLeadsWithCoverage(leads, coverageIndex = loadCoverageLeadIndex()) {
   return dedupeLeads(leads).map((lead) => {
-    if (lead.salesNavigatorUrl && /linkedin\.com\/sales\/lead\//i.test(lead.salesNavigatorUrl)) {
+    if (lead.salesNavigatorUrl && isSalesNavigatorLeadUrl(lead.salesNavigatorUrl)) {
       return {
         ...lead,
         resolutionStatus: 'resolved',
@@ -702,7 +703,7 @@ function normalizeImportRowsFromParsedArtifact(parsed = {}, options = {}) {
       title: row.title || row.titel || '',
       score: normalizeImportScore(row.score),
       coverageBucket: row.coverageBucket || null,
-      salesNavigatorUrl: row.salesNavigatorUrl || (/linkedin\.com\/sales\/lead\//i.test(row.profileUrl || '') ? row.profileUrl : null),
+      salesNavigatorUrl: row.salesNavigatorUrl || (isSalesNavigatorLeadUrl(row.profileUrl || '') ? row.profileUrl : null),
       publicLinkedInUrl: row.publicLinkedInUrl || row.profileUrl || null,
       location: row.location || row.standort || '',
     }))
@@ -810,7 +811,7 @@ function loadFailedFastListImportPlan(artifactPath, {
     : new Set(Array.isArray(retryStatuses) ? retryStatuses : RETRYABLE_FAST_IMPORT_STATUSES);
   const leads = rows
     .filter((row) => retryableStatuses.has(row.status))
-    .filter((row) => row.salesNavigatorUrl && /linkedin\.com\/sales\/lead\//i.test(row.salesNavigatorUrl))
+    .filter((row) => row.salesNavigatorUrl && isSalesNavigatorLeadUrl(row.salesNavigatorUrl))
     .map((row) => ({
       ...row,
       resolutionStatus: 'resolved',

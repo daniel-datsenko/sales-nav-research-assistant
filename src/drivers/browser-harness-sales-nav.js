@@ -2,6 +2,7 @@ const { spawnSync } = require('node:child_process');
 const { DriverAdapter } = require('./driver-adapter');
 const { buildCompanyFilterTargets } = require('./playwright-sales-nav');
 const { limitCandidatesByTemplate, normalizeCandidateLimit } = require('../core/candidate-limits');
+const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const COMPANY_SEARCH_URL = 'https://www.linkedin.com/sales/search/company';
@@ -242,7 +243,7 @@ wait_for_load()
     }
 
     const targetUrl = candidate.salesNavigatorUrl || candidate.profileUrl;
-    if (!targetUrl || !/linkedin\.com\/sales\/lead\//i.test(targetUrl)) {
+    if (!targetUrl || !isSalesNavigatorLeadUrl(targetUrl)) {
       throw new Error(`Candidate ${candidate.fullName || 'unknown'} does not point to a Sales Navigator lead URL`);
     }
 
@@ -493,6 +494,9 @@ wait(${Math.max(1, this.options.settleMs / 300)})
     const targetUrl = candidate.salesNavigatorUrl || candidate.profileUrl;
     if (!targetUrl) {
       throw new Error(`Candidate ${candidate.fullName || 'unknown'} has no profile URL`);
+    }
+    if (!isSalesNavigatorLeadUrl(targetUrl)) {
+      throw new Error(`Candidate ${candidate.fullName || 'unknown'} does not point to a Sales Navigator lead URL`);
     }
     const shouldFlushCache = this.connectAttemptCount > 0
       && this.options.connectCacheFlushEvery > 0

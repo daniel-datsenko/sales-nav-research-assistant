@@ -49,6 +49,17 @@ test('parseMarkdownLeadRows extracts lead rows and LinkedIn URLs', () => {
   assert.equal(rows[0].publicLinkedInUrl, 'https://linkedin.com/in/thorsten');
 });
 
+test('parseMarkdownLeadRows classifies Sales Navigator lead URLs including query strings', () => {
+  const rows = parseMarkdownLeadRows(`
+| # | Name | LinkedIn |
+|---|---|---|
+| 1 | Lead One | [SN](https://www.linkedin.com/sales/lead/abc123?_ntb=1) |
+`);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].salesNavigatorUrl, 'https://www.linkedin.com/sales/lead/abc123?_ntb=1');
+});
+
 test('resolveLeadsWithCoverage fills Sales Nav URLs by account and normalized name', () => {
   const coverageIndex = {
     byNameAndAccount: new Map([

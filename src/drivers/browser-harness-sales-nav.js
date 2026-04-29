@@ -83,22 +83,32 @@ wait_for_load()
   async openPeopleSearch(account) {
     const targetUrl = account.salesNav?.peopleSearchUrl || PEOPLE_SEARCH_URL;
     const filterTargets = buildCompanyFilterTargets(account);
+    if (filterTargets.length === 0) {
+      throw new Error(`No company filter targets available for people search scope verification for ${account.name || 'unknown account'}`);
+    }
     const targetList = pyStringArray(filterTargets);
 
-    this.runHarness(`
+    const scopeCheck = this.runHarnessJson(`
+import json
 new_tab(${pyString(targetUrl)})
 wait_for_load()
 targets = ${targetList}
+scoped = True
 if targets:
-    js(${pyString(`
+    scoped = bool(js(${pyString(`
 (() => {
   const normalize = (value) => (value || '').toLowerCase().replace(/\\s+/g, ' ').trim();
   const targets = ${JSON.stringify(filterTargets)}.map(normalize).filter(Boolean);
   const text = normalize(document.body ? document.body.innerText : '');
   return targets.some((target) => text.includes(target));
 })()
-`)})
+`)}))
+print(json.dumps({"scoped": scoped, "targets": targets}))
 `);
+
+    if (!scopeCheck?.scoped) {
+      throw new Error(`Unable to scope people search to account filter for ${account.name || 'unknown account'}`);
+    }
   }
 
   async applySearchTemplate(template) {

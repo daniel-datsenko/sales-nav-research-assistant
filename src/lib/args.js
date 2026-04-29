@@ -56,6 +56,7 @@ function parseCliArgs(argv) {
       'speed-profile': { type: 'string' },
       'research-concurrency': { type: 'string' },
       'reuse-sweep-cache': { type: 'boolean' },
+      'adaptive-sweep-pruning': { type: 'boolean' },
       'max-age-hours': { type: 'string' },
       'skip-session-check': { type: 'boolean' },
       checklist: { type: 'boolean' },

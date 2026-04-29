@@ -70,12 +70,14 @@ const {
 } = require('./core/account-batch');
 const {
   fastResolveLeads,
+  buildMutationReviewArtifact,
   loadCoverageImportPlan,
   loadFailedFastListImportPlan,
   loadFastListImportSources,
   saveFastListImport,
   writeFastListImportArtifact,
   writeFastResolveArtifact,
+  writeMutationReviewArtifact,
 } = require('./core/fast-list-import');
 const {
   loadPersonaModes,
@@ -654,6 +656,14 @@ async function handleFastListImport(values, logger) {
         dryRun: false,
       });
       const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const mutationReview = buildMutationReviewArtifact({
+        command: 'fast-list-import',
+        importPlan,
+        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+      });
+      const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
+      logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
+      logger.info(`Mutation review report: ${mutationReviewPaths.reportPath}`);
       artifact = await saveFastListImport({
         driver,
         importPlan,
@@ -733,6 +743,14 @@ async function handleRetryFailedFastListImport(values, logger) {
         dryRun: false,
       });
       const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const mutationReview = buildMutationReviewArtifact({
+        command: 'retry-failed-fast-list-import',
+        importPlan,
+        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+      });
+      const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
+      logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
+      logger.info(`Mutation review report: ${mutationReviewPaths.reportPath}`);
       artifact = await saveFastListImport({
         driver,
         importPlan,
@@ -819,6 +837,14 @@ async function handleImportCoverage(values, logger) {
         dryRun: false,
       });
       const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const mutationReview = buildMutationReviewArtifact({
+        command: 'import-coverage',
+        importPlan,
+        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+      });
+      const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
+      logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
+      logger.info(`Mutation review report: ${mutationReviewPaths.reportPath}`);
       artifact = await saveFastListImport({
         driver,
         importPlan,

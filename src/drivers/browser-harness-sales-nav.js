@@ -2,6 +2,7 @@ const { spawnSync } = require('node:child_process');
 const { DriverAdapter } = require('./driver-adapter');
 const { buildCompanyFilterTargets } = require('./playwright-sales-nav');
 const { limitCandidatesByTemplate, normalizeCandidateLimit } = require('../core/candidate-limits');
+const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const COMPANY_SEARCH_URL = 'https://www.linkedin.com/sales/search/company';
@@ -82,22 +83,32 @@ wait_for_load()
   async openPeopleSearch(account) {
     const targetUrl = account.salesNav?.peopleSearchUrl || PEOPLE_SEARCH_URL;
     const filterTargets = buildCompanyFilterTargets(account);
+    if (filterTargets.length === 0) {
+      throw new Error(`No company filter targets available for people search scope verification for ${account.name || 'unknown account'}`);
+    }
     const targetList = pyStringArray(filterTargets);
 
-    this.runHarness(`
+    const scopeCheck = this.runHarnessJson(`
+import json
 new_tab(${pyString(targetUrl)})
 wait_for_load()
 targets = ${targetList}
+scoped = True
 if targets:
-    js(${pyString(`
+    scoped = bool(js(${pyString(`
 (() => {
   const normalize = (value) => (value || '').toLowerCase().replace(/\\s+/g, ' ').trim();
   const targets = ${JSON.stringify(filterTargets)}.map(normalize).filter(Boolean);
   const text = normalize(document.body ? document.body.innerText : '');
   return targets.some((target) => text.includes(target));
 })()
-`)})
+`)}))
+print(json.dumps({"scoped": scoped, "targets": targets}))
 `);
+
+    if (!scopeCheck?.scoped) {
+      throw new Error(`Unable to scope people search to account filter for ${account.name || 'unknown account'}`);
+    }
   }
 
   async applySearchTemplate(template) {
@@ -242,7 +253,7 @@ wait_for_load()
     }
 
     const targetUrl = candidate.salesNavigatorUrl || candidate.profileUrl;
-    if (!targetUrl || !/linkedin\.com\/sales\/lead\//i.test(targetUrl)) {
+    if (!targetUrl || !isSalesNavigatorLeadUrl(targetUrl)) {
       throw new Error(`Candidate ${candidate.fullName || 'unknown'} does not point to a Sales Navigator lead URL`);
     }
 
@@ -493,6 +504,9 @@ wait(${Math.max(1, this.options.settleMs / 300)})
     const targetUrl = candidate.salesNavigatorUrl || candidate.profileUrl;
     if (!targetUrl) {
       throw new Error(`Candidate ${candidate.fullName || 'unknown'} has no profile URL`);
+    }
+    if (!isSalesNavigatorLeadUrl(targetUrl)) {
+      throw new Error(`Candidate ${candidate.fullName || 'unknown'} does not point to a Sales Navigator lead URL`);
     }
     const shouldFlushCache = this.connectAttemptCount > 0
       && this.options.connectCacheFlushEvery > 0

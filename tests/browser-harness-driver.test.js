@@ -109,6 +109,107 @@ test('browser harness driver retries a transient close-frame transport failure o
   assert.equal(health.state, 'authenticated');
 });
 
+test('browser harness saveCandidateToList rejects non-Sales-Navigator URLs before invoking the mutation harness', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: true,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      assert.fail('commandRunner must not run a mutation command when the candidate URL fails validation');
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: false });
+
+  await assert.rejects(
+    () => driver.saveCandidateToList(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/in/someone',
+        profileUrl: 'https://www.linkedin.com/in/someone',
+      },
+      { listName: 'Existing Test List' },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
+test('browser harness sendConnect rejects non-Sales-Navigator URLs before invoking the mutation harness', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: true,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      assert.fail('commandRunner must not run a mutation command when the candidate URL fails validation');
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: false });
+
+  await assert.rejects(
+    () => driver.sendConnect(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/search/results/people/foo',
+        profileUrl: 'https://www.linkedin.com/search/results/people/foo',
+      },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
+test('browser harness openPeopleSearch fails closed when company scope cannot be verified', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: false,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      return {
+        status: 0,
+        stdout: `${JSON.stringify({ scoped: false, targets: ['Example Scoped Co'] })}\n`,
+        stderr: '',
+      };
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: true });
+
+  await assert.rejects(
+    () => driver.openPeopleSearch({
+      name: 'Example Scoped Co',
+      salesNav: { peopleSearchUrl: 'https://www.linkedin.com/sales/search/people' },
+    }),
+    /Unable to scope people search to account filter for Example Scoped Co/,
+  );
+});
+
+test('browser harness openPeopleSearch fails closed when no company targets are available', async () => {
+  const driver = new BrowserHarnessSalesNavigatorDriver({
+    allowMutations: false,
+    commandRunner({ args }) {
+      if (args?.[0] === '--help') {
+        return { status: 0, stdout: 'help', stderr: '' };
+      }
+      assert.fail('commandRunner must not navigate an unscoped people search when no company targets exist');
+    },
+  });
+
+  await driver.openSession({ runId: 'test', dryRun: true });
+
+  await assert.rejects(
+    () => driver.openPeopleSearch({
+      name: '',
+      salesNav: { peopleSearchUrl: 'https://www.linkedin.com/sales/search/people' },
+    }),
+    /No company filter targets available for people search scope verification/,
+  );
+});
+
 test('browser harness candidate collection has no implicit 8-result ceiling', async () => {
   class ManyCandidateHarnessDriver extends BrowserHarnessSalesNavigatorDriver {
     runHarnessJson() {

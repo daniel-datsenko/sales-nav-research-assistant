@@ -13,8 +13,19 @@ const {
 
 test('recognizes Sales Navigator lead URLs', () => {
   assert.equal(isSalesNavigatorLeadUrl('https://www.linkedin.com/sales/lead/ACwAAAZ123,NAME_SEARCH,abc'), true);
+  assert.equal(
+    isSalesNavigatorLeadUrl('https://www.linkedin.com/sales/lead/foo-bar?_ntb=1&trk=people-guest_'),
+    true,
+  );
+  assert.equal(isSalesNavigatorLeadUrl('https://de.linkedin.com/sales/lead/regional-lead'), true);
   assert.equal(isSalesNavigatorLeadUrl('https://www.linkedin.com/in/someone'), false);
+  assert.equal(isSalesNavigatorLeadUrl('https://www.linkedin.com/sales/search/people?keywords=a'), false);
+  assert.equal(isSalesNavigatorLeadUrl('https://www.linkedin.com/sales/company/12345'), false);
+  assert.equal(isSalesNavigatorLeadUrl('https://evil.example/phishing/www.linkedin.com/sales/lead/x'), false);
+  assert.equal(isSalesNavigatorLeadUrl('not a url'), false);
   assert.equal(isSalesNavigatorLeadUrl(''), false);
+  assert.equal(isSalesNavigatorLeadUrl(null), false);
+  assert.equal(isSalesNavigatorLeadUrl('http://www.linkedin.com/sales/lead/plain-http'), false);
 });
 
 test('flags file-based Salesforce secrets as blockers', () => {

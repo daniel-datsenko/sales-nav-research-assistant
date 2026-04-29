@@ -26,6 +26,9 @@ const {
   normalizeSaveResult,
   appendCompanyAliasConfigEntry,
   writeLearnedLeadResolutionSuggestions,
+  buildMutationReviewArtifact,
+  renderMutationReviewMarkdown,
+  writeMutationReviewArtifact,
 } = require('../src/core/fast-list-import');
 
 test('deriveListNameFromSource uses the source filename stem', () => {
@@ -47,6 +50,17 @@ test('parseMarkdownLeadRows extracts lead rows and LinkedIn URLs', () => {
   assert.equal(rows[0].accountName, 'Example Audio Co');
   assert.equal(rows[0].fullName, 'Taylor Cloud');
   assert.equal(rows[0].publicLinkedInUrl, 'https://linkedin.com/in/thorsten');
+});
+
+test('parseMarkdownLeadRows classifies Sales Navigator lead URLs including query strings', () => {
+  const rows = parseMarkdownLeadRows(`
+| # | Name | LinkedIn |
+|---|---|---|
+| 1 | Lead One | [SN](https://www.linkedin.com/sales/lead/abc123?_ntb=1) |
+`);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].salesNavigatorUrl, 'https://www.linkedin.com/sales/lead/abc123?_ntb=1');
 });
 
 test('resolveLeadsWithCoverage fills Sales Nav URLs by account and normalized name', () => {
@@ -380,6 +394,108 @@ test('saveFastListImport skips already-saved leads from a preflight snapshot', a
   assert.equal(result.results[0].saveRecoveryPath, 'snapshot_preflight');
 });
 
+test('saveFastListImport does not save mutation-review excluded rows', async () => {
+  let attempts = 0;
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        attempts += 1;
+        throw new Error('manual review rows must not be passed to the driver');
+      },
+    },
+    liveSave: true,
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Manual Review Lead',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/manual',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'manual_review',
+          identityResolution: { needsManualReview: true, confidence: 0.62 },
+        },
+      ],
+    },
+  });
+
+  assert.equal(attempts, 0);
+  assert.equal(result.status, 'completed_with_followup');
+  assert.equal(result.manualReview, 1);
+  assert.equal(result.results[0].status, 'manual_review');
+  assert.equal(result.results[0].note, 'manual_review');
+});
+
+test('saveFastListImport marks non-manual mutation-review exclusions as follow-up', async () => {
+  let attempts = 0;
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        attempts += 1;
+        throw new Error('alias retry rows must not be passed to the driver');
+      },
+    },
+    liveSave: true,
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Alias Retry Lead',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/alias',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'needs_company_alias_retry',
+        },
+      ],
+    },
+  });
+
+  assert.equal(attempts, 0);
+  assert.equal(result.status, 'completed_with_followup');
+  assert.equal(result.mutationReviewExcluded, 1);
+  assert.equal(result.nextAction, 'review_unresolved_or_manual_rows');
+  assert.equal(result.results[0].status, 'needs_company_alias_retry');
+  assert.equal(result.results[0].saveRecoveryPath, 'mutation_review_exclusion');
+});
+
+test('saveFastListImport skips duplicate Sales Navigator URLs after the first live save attempt', async () => {
+  const savedUrls = [];
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList(candidate) {
+        savedUrls.push(candidate.salesNavigatorUrl);
+        return { status: 'saved', selectionMode: 'existing_list' };
+      },
+    },
+    liveSave: true,
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Nora Platform',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Nora Duplicate',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123?tracking=1',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(savedUrls, ['https://www.linkedin.com/sales/lead/123']);
+  assert.equal(result.confirmedSaved, 1);
+  assert.equal(result.alreadySaved, 1);
+  assert.equal(result.results[1].status, 'already_saved');
+  assert.equal(result.results[1].saveRecoveryPath, 'in_run_duplicate_preflight');
+});
+
 test('saveFastListImport stops after rate-limit failure instead of burning remaining saves', async () => {
   let attempts = 0;
   const progress = [];
@@ -691,6 +807,35 @@ test('bucketFastResolveLead emits resolved_safe_to_save only for safe matches', 
   assert.equal(bucketed.resolutionStatus, 'resolved');
 });
 
+test('bucketFastResolveLead blocks manual-review identity from resolved_safe_to_save', () => {
+  const bucketed = bucketFastResolveLead({
+    fullName: 'T. Smith',
+    accountName: 'Example Account',
+    identityResolution: {
+      needsManualReview: true,
+      confidence: 0.35,
+      evidence: ['truncated_name_without_slug'],
+    },
+  }, [{
+    candidate: {
+      fullName: 'T. Smith',
+      company: 'Example Account',
+      salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/manual-identity',
+    },
+    score: 100,
+    exactName: true,
+    slugMatch: false,
+    companyMatch: true,
+    titleMatch: true,
+    additionalSignals: 3,
+  }], ['Example Account']);
+
+  assert.notEqual(bucketed.resolutionBucket, 'resolved_safe_to_save');
+  assert.equal(bucketed.resolutionStatus, 'unresolved');
+  assert.equal(bucketed.salesNavigatorUrl, null);
+  assert.equal(bucketed.resolutionEvidence, 'identity_manual_review');
+});
+
 test('bucketFastResolveLead sends same-name wrong-company matches to alias retry', () => {
   const bucketed = bucketFastResolveLead({
     fullName: 'Peter Cloud',
@@ -882,6 +1027,71 @@ test('fastResolveLeads resolves multiple same-company leads from one grouped com
   assert.equal(artifact.bucketCounts.resolved_safe_to_save, 3);
   assert.equal(artifact.resolutionPathCounts.grouped_company_pool, 3);
   assert.equal(artifact.leads.every((lead) => lead.resolutionPath === 'grouped_company_pool'), true);
+});
+
+test('fastResolveLeads keeps grouped rows collision-safe when source row ids repeat', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const sourcePath = path.join(os.tmpdir(), `fast-resolve-collision-${Date.now()}.json`);
+  fs.writeFileSync(sourcePath, JSON.stringify({
+    listName: 'Collision Test',
+    leads: [
+      {
+        row: 1,
+        accountName: 'Example Observability Co',
+        fullName: 'Alex Platform',
+        title: 'Platform Engineer',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/alex-platform',
+      },
+      {
+        row: 1,
+        accountName: 'Example Observability Co',
+        fullName: 'Riley SRE',
+        title: 'SRE Manager',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/riley-sre',
+      },
+    ],
+  }));
+  const driver = {
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates(account, template) {
+      if (template.id !== 'fast-resolve-company-pool') {
+        return [];
+      }
+      return [
+        {
+          fullName: 'Alex Platform',
+          title: 'Platform Engineer',
+          company: 'Example Observability Co',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/alex-platform',
+        },
+        {
+          fullName: 'Riley SRE',
+          title: 'SRE Manager',
+          company: 'Example Observability Co',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/riley-sre',
+        },
+      ];
+    },
+  };
+
+  const artifact = await fastResolveLeads({
+    driver,
+    sourcePath,
+    searchTimeoutMs: 8000,
+  });
+
+  assert.equal(artifact.bucketCounts.resolved_safe_to_save, 2);
+  assert.equal(artifact.leads.filter((lead) => ['Alex Platform', 'Riley SRE'].includes(lead.fullName)).length, 2);
+  assert.deepEqual(
+    artifact.leads.map((lead) => lead.salesNavigatorUrl).sort(),
+    [
+      'https://www.linkedin.com/sales/lead/alex-platform',
+      'https://www.linkedin.com/sales/lead/riley-sre',
+    ],
+  );
 });
 
 test('fastResolveLeads uses slug name fallback and guarded name-only company retry', async () => {
@@ -1107,4 +1317,131 @@ test('writeLearnedLeadResolutionSuggestions writes suggest-only runtime learning
   const parsed = JSON.parse(fs.readFileSync(written, 'utf8'));
   assert.equal(parsed.suggestions.length, 1);
   assert.equal(parsed.suggestions[0].disposition, 'suggest_only');
+});
+
+test('buildMutationReviewArtifact summarizes intended adds, skips, exclusions, and duplicate warnings', () => {
+  const artifact = buildMutationReviewArtifact({
+    command: 'fast-list-import',
+    generatedAt: '2026-04-29T16:00:00.000Z',
+    importPlan: {
+      listName: 'M4 Review List',
+      sourcePath: '/tmp/source.md',
+      leads: [
+        {
+          row: 1,
+          accountName: 'Example Audio',
+          fullName: 'Ada Safe',
+          title: 'VP Engineering',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+          resolutionConfidence: 0.93,
+        },
+        {
+          row: 2,
+          accountName: 'Example Audio',
+          fullName: 'Ada Safe Duplicate',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada?tracking=1',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+        {
+          row: 3,
+          accountName: 'Example Audio',
+          fullName: 'Already Saved',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/existing',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+        {
+          row: 4,
+          accountName: 'Example Audio',
+          fullName: 'Manual Review',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/manual',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'manual_review',
+          resolutionEvidence: 'identity_manual_review',
+        },
+        {
+          row: 5,
+          accountName: 'Example Audio',
+          fullName: 'Missing Url',
+          resolutionStatus: 'unresolved',
+        },
+      ],
+    },
+    existingLeadUrls: ['https://www.linkedin.com/sales/lead/existing?miniProfileUrn=x'],
+  });
+
+  assert.equal(artifact.drySafe, true);
+  assert.equal(artifact.liveMutationReady, false);
+  assert.equal(artifact.summary.intendedAdds, 2);
+  assert.equal(artifact.summary.alreadySavedSkips, 1);
+  assert.equal(artifact.summary.exclusions, 2);
+  assert.equal(artifact.summary.duplicateWarnings, 1);
+  assert.equal(artifact.intendedAdds[0].fullName, 'Ada Safe');
+  assert.equal(artifact.alreadySavedSkips[0].fullName, 'Already Saved');
+  assert.equal(artifact.exclusions.find((row) => row.fullName === 'Manual Review').reason, 'manual_review');
+  assert.equal(artifact.exclusions.find((row) => row.fullName === 'Missing Url').reason, 'unresolved_or_missing_sales_nav_url');
+  assert.match(artifact.duplicateWarnings[0].salesNavigatorUrl, /\/sales\/lead\/ada$/);
+  assert.ok(artifact.approvalChecklist.some((item) => /intended adds/i.test(item)));
+});
+
+test('renderMutationReviewMarkdown includes operator checklist and excludes live mutation flags', () => {
+  const artifact = buildMutationReviewArtifact({
+    command: 'fast-list-import',
+    generatedAt: '2026-04-29T16:00:00.000Z',
+    importPlan: {
+      listName: 'M4 Review List',
+      leads: [
+        {
+          accountName: 'Example Audio',
+          fullName: 'Ada Safe',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+      ],
+    },
+  });
+
+  const markdown = renderMutationReviewMarkdown(artifact);
+
+  assert.match(markdown, /# Live Mutation Review/);
+  assert.match(markdown, /## Operator Approval Checklist/);
+  assert.match(markdown, /\[ \] Confirm intended adds/);
+  assert.match(markdown, /Ada Safe/);
+  assert.doesNotMatch(markdown, /--live-save|--live-connect|allow-background-connects/i);
+});
+
+test('writeMutationReviewArtifact writes paired JSON and Markdown artifacts', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const outputPath = path.join(os.tmpdir(), `mutation-review-${Date.now()}.json`);
+  const artifact = buildMutationReviewArtifact({
+    command: 'fast-list-import',
+    generatedAt: '2026-04-29T16:00:00.000Z',
+    importPlan: {
+      listName: 'M4 Review List',
+      leads: [
+        {
+          accountName: 'Example Audio',
+          fullName: 'Ada Safe',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada',
+          resolutionStatus: 'resolved',
+          resolutionBucket: 'resolved_safe_to_save',
+        },
+      ],
+    },
+  });
+
+  const written = writeMutationReviewArtifact(artifact, outputPath);
+  const parsed = JSON.parse(fs.readFileSync(written.artifactPath, 'utf8'));
+  const markdown = fs.readFileSync(written.reportPath, 'utf8');
+
+  assert.equal(parsed.type, 'live_mutation_review');
+  assert.equal(parsed.summary.intendedAdds, 1);
+  assert.match(markdown, /Live Mutation Review/);
+  assert.match(written.reportPath, /\.md$/);
 });

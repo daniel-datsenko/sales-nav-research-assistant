@@ -101,6 +101,45 @@ test('playwright driver defaults live connect pacing and spinner recovery guards
   assert.equal(driver.options.spinnerReloadWaitUntil, 'networkidle');
 });
 
+test('playwright saveCandidateToList rejects non-Sales-Navigator URLs before opening the candidate', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver({ allowMutations: true });
+  driver.openCandidate = async () => {
+    assert.fail('openCandidate must not run when the candidate URL fails validation');
+  };
+
+  await assert.rejects(
+    () => driver.saveCandidateToList(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/in/someone',
+        profileUrl: 'https://www.linkedin.com/in/someone',
+      },
+      { listName: 'Existing Test List' },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
+test('playwright sendConnect rejects non-Sales-Navigator URLs before opening the candidate', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver({ allowMutations: true });
+  driver.openCandidate = async () => {
+    assert.fail('openCandidate must not run when the candidate URL fails validation');
+  };
+
+  await assert.rejects(
+    () => driver.sendConnect(
+      {
+        fullName: 'Wrong URL',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/search/people?keywords=wrong',
+        profileUrl: 'https://www.linkedin.com/sales/search/people?keywords=wrong',
+      },
+      { dryRun: false },
+    ),
+    /does not point to a Sales Navigator lead URL/,
+  );
+});
+
 test('checkSessionHealth reads login state without navigating away from the current page', async () => {
   const gotoCalls = [];
   const driver = new PlaywrightSalesNavigatorDriver({
@@ -406,6 +445,206 @@ test('playwright driver exports live-save helpers for current LinkedIn list flow
   assert.equal(typeof findSaveToListButton, 'function');
   assert.equal(typeof findListNameInput, 'function');
   assert.equal(typeof clickVisibleListRow, 'function');
+});
+
+function emptyLocator() {
+  return {
+    async count() {
+      return 0;
+    },
+    nth() {
+      return {
+        async isVisible() {
+          return false;
+        },
+      };
+    },
+  };
+}
+
+/**
+ * Minimal page stub for save-panel list rows (aria-label match path in clickVisibleListRow).
+ * When alreadySelected is true, the row exposes aria-checked="true" like an active membership toggle.
+ */
+function createSavePanelListRowPage({ listName, alreadySelected }) {
+  const clicks = { listRow: 0 };
+  const ariaSelector = `button[aria-label*="${listName}"]`;
+
+  const rowNth = () => ({
+    async isVisible() {
+      return true;
+    },
+    async getAttribute(name) {
+      if (name === 'aria-label') {
+        return `${listName}`;
+      }
+      return '';
+    },
+    async innerText() {
+      return listName;
+    },
+    async click() {
+      clicks.listRow += 1;
+    },
+    async evaluate(fn) {
+      const el = {
+        tagName: 'BUTTON',
+        className: '',
+        getAttribute(name) {
+          if (alreadySelected && name === 'aria-checked') {
+            return 'true';
+          }
+          return '';
+        },
+        querySelectorAll: () => [],
+      };
+      return fn(el);
+    },
+  });
+
+  return {
+    clicks,
+    locator(selector) {
+      if (selector === ariaSelector) {
+        return {
+          async count() {
+            return 1;
+          },
+          nth: rowNth,
+        };
+      }
+      return emptyLocator();
+    },
+    getByRole() {
+      return emptyLocator();
+    },
+  };
+}
+
+/**
+ * Page stub that skips the aria-label button branch (count 0) so clickVisibleListRow uses
+ * getByRole('button', { name: /listName/i }) — matches LinkedIn rows labeled by visible text only.
+ */
+function createSavePanelListRowPageGetByRoleFallback({ listName, alreadySelected }) {
+  const clicks = { listRow: 0 };
+
+  const rowNth = () => ({
+    async isVisible() {
+      return true;
+    },
+    async getAttribute(name) {
+      if (name === 'aria-label') {
+        return '';
+      }
+      return '';
+    },
+    async innerText() {
+      return listName;
+    },
+    async click() {
+      clicks.listRow += 1;
+    },
+    async evaluate(fn) {
+      const el = {
+        tagName: 'BUTTON',
+        className: '',
+        getAttribute(name) {
+          if (alreadySelected && name === 'aria-checked') {
+            return 'true';
+          }
+          return '';
+        },
+        querySelectorAll: () => [],
+      };
+      return fn(el);
+    },
+  });
+
+  return {
+    clicks,
+    locator(selector) {
+      const ariaBranch = `button[aria-label*="${listName}"]`;
+      if (selector === ariaBranch) {
+        return emptyLocator();
+      }
+      return emptyLocator();
+    },
+    getByRole(role, options) {
+      assert.equal(role, 'button');
+      assert.ok(options?.name instanceof RegExp);
+      assert.ok(options.name.test(listName));
+      return {
+        async count() {
+          return 1;
+        },
+        nth: rowNth,
+      };
+    },
+  };
+}
+
+test('clickVisibleListRow does not click when list row is already selected (already_saved)', async () => {
+  const page = createSavePanelListRowPage({
+    listName: 'Enterprise Targets',
+    alreadySelected: true,
+  });
+
+  const result = await clickVisibleListRow(page, 'Enterprise Targets');
+
+  assert.deepEqual(result, {
+    outcome: 'already_saved',
+    listName: 'Enterprise Targets',
+    selectionMode: 'existing_list',
+  });
+  assert.equal(page.clicks.listRow, 0);
+});
+
+test('clickVisibleListRow clicks once when list row is not yet selected', async () => {
+  const page = createSavePanelListRowPage({
+    listName: 'Enterprise Targets',
+    alreadySelected: false,
+  });
+
+  const result = await clickVisibleListRow(page, 'Enterprise Targets');
+
+  assert.deepEqual(result, {
+    outcome: 'clicked',
+    listName: 'Enterprise Targets',
+    selectionMode: 'existing_list',
+  });
+  assert.equal(page.clicks.listRow, 1);
+});
+
+test('clickVisibleListRow getByRole fallback returns already_saved without clicking when row is selected', async () => {
+  const page = createSavePanelListRowPageGetByRoleFallback({
+    listName: 'Enterprise Targets',
+    alreadySelected: true,
+  });
+
+  const result = await clickVisibleListRow(page, 'Enterprise Targets');
+
+  assert.deepEqual(result, {
+    outcome: 'already_saved',
+    listName: 'Enterprise Targets',
+    selectionMode: 'existing_list',
+  });
+  assert.equal(page.clicks.listRow, 0);
+});
+
+test('clickVisibleListRow getByRole fallback clicks once and returns clicked when row is unselected', async () => {
+  const page = createSavePanelListRowPageGetByRoleFallback({
+    listName: 'Enterprise Targets',
+    alreadySelected: false,
+  });
+
+  const result = await clickVisibleListRow(page, 'Enterprise Targets');
+
+  assert.deepEqual(result, {
+    outcome: 'clicked',
+    listName: 'Enterprise Targets',
+    selectionMode: 'existing_list',
+  });
+  assert.equal(page.clicks.listRow, 1);
 });
 
 test('classifyLeadDetailSnapshot detects spinner-only lead shells', () => {

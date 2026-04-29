@@ -14,6 +14,9 @@ const {
   renderMvpOperatorDashboard,
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
+const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
+const { buildResearchEvaluationMetrics } = require('../src/core/research-evaluation-metrics');
+const { buildResearchExecutionGate } = require('../src/core/research-execution-gate');
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -264,6 +267,321 @@ test('buildMvpAutoresearchArtifact surfaces repeated noisy accounts as cooldown 
   assert.equal(artifact.background.noisyCooldownCandidates[0].recommendedAction, 'cooldown_or_review_account_scope');
   assert.match(renderMvpOperatorDashboard(artifact), /Cooldown candidates: `1`/);
 });
+
+test('research evaluation metrics compute manual review, duplicate, alias disagreement, and noise rates', () => {
+  const metrics = buildResearchEvaluationMetrics({
+    fastResolveArtifacts: [{
+      leads: [
+        { fullName: 'Ada', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada', resolutionBucket: 'resolved_safe_to_save' },
+        { fullName: 'Ada Duplicate', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada', resolutionBucket: 'resolved_safe_to_save' },
+        { fullName: 'Manual', resolutionBucket: 'manual_review' },
+        { fullName: 'Alias', resolutionBucket: 'needs_company_alias_retry' },
+      ],
+      bucketCounts: {
+        resolved_safe_to_save: 2,
+        manual_review: 1,
+        needs_company_alias_retry: 1,
+      },
+    }],
+    background: {
+      runnerCoverageByType: {
+        productive: { count: 2 },
+        noisy: { count: 1 },
+        sparse: { count: 1 },
+        all_sweeps_failed: { count: 1 },
+      },
+    },
+    companyResolution: {
+      total: 5,
+      needsManualReview: 1,
+      failed: 1,
+      multiTarget: 1,
+    },
+  });
+
+  assert.equal(metrics.fastResolve.totalLeads, 4);
+  assert.equal(metrics.fastResolve.manualReviewRate, 0.25);
+  assert.equal(metrics.fastResolve.duplicateRate, 0.25);
+  assert.equal(metrics.fastResolve.companyAliasRetryRate, 0.25);
+  assert.equal(metrics.companyResolution.aliasDisagreementRate, 0.6);
+  assert.equal(metrics.background.noiseRate, 0.5);
+  assert.equal(metrics.overall.riskLevel, 'medium');
+});
+
+test('buildMvpAutoresearchArtifact includes evaluation metrics in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-metrics-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  const fastResolveDir = path.join(tempDir, 'account-batches');
+  fs.mkdirSync(backgroundDir);
+  fs.mkdirSync(fastResolveDir);
+  writeJson(path.join(fastResolveDir, 'example-fast-resolve-2026.json'), {
+    leads: [
+      { fullName: 'Manual', resolutionBucket: 'manual_review' },
+      { fullName: 'Safe', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/safe', resolutionBucket: 'resolved_safe_to_save' },
+    ],
+  });
+  makeAcceptanceArtifact(acceptancePath);
+  makeBackgroundArtifact(path.join(backgroundDir, 'example-loop-1.json'), {
+    status: 'completed',
+    environment: { ok: true, state: 'healthy', sessionCheckSkipped: false },
+    metrics: { accountsAttempted: 1, productiveAccounts: 1 },
+    results: [
+      {
+        accountName: 'Noisy Co',
+        coverageStatus: 'live',
+        candidateCount: 2,
+        listCandidateCount: 0,
+        productivity: { classification: 'noisy' },
+      },
+    ],
+  });
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+    fastResolveArtifactsDir: fastResolveDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.evaluationMetrics.drySafe, true);
+  assert.equal(artifact.evaluationMetrics.fastResolve.manualReviewRate, 0.5);
+  assert.equal(typeof artifact.evaluationMetrics.background.noiseRate, 'number');
+  assert.match(markdown, /## Evaluation Metrics/);
+  assert.match(markdown, /Risk level:/);
+});
+
+test('research execution gate blocks live save until company resolution blockers clear', () => {
+  const gate = buildResearchExecutionGate({
+    researchLoopPlan: {
+      drySafe: true,
+      steps: [
+        { id: 'company-resolution-retry', gate: 'review_retry_artifact_before_fast_resolve' },
+      ],
+    },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'low', indicators: [] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 3, alreadySavedSkips: 0, exclusions: 0, duplicateWarnings: 0 },
+    },
+  });
+
+  assert.equal(gate.drySafe, true);
+  assert.equal(gate.decision, 'blocked_until_company_resolution');
+  assert.equal(gate.liveSaveEligible, false);
+  assert.ok(gate.reasons.includes('company_resolution_retry_pending'));
+});
+
+test('research execution gate requires operator review for review warnings and only allows clean low-risk artifacts', () => {
+  const needsReview = buildResearchExecutionGate({
+    researchLoopPlan: { drySafe: true, steps: [{ id: 'autoresearch-refresh' }] },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'medium', indicators: ['duplicate_sales_nav_urls'] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 2, alreadySavedSkips: 1, exclusions: 0, duplicateWarnings: 1 },
+    },
+  });
+  const clean = buildResearchExecutionGate({
+    researchLoopPlan: { drySafe: true, steps: [{ id: 'autoresearch-refresh' }] },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'low', indicators: [] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 2, alreadySavedSkips: 0, exclusions: 0, duplicateWarnings: 0 },
+    },
+  });
+
+  assert.equal(needsReview.decision, 'requires_operator_review');
+  assert.equal(needsReview.liveSaveEligible, false);
+  assert.equal(clean.decision, 'eligible_for_live_save');
+  assert.equal(clean.liveSaveEligible, true);
+  assert.doesNotMatch(clean.allowedCommandTemplate, /--live-connect|allow-background-connects/i);
+});
+
+test('research execution gate rejects implicit live mutation commands for non-live decisions', () => {
+  assert.throws(
+    () => buildResearchExecutionGate({
+      researchLoopPlan: {
+        drySafe: true,
+        steps: [
+          { id: 'unsafe-live-command', command: 'node src/cli.js pilot-live-save-batch --account-names=Example' },
+        ],
+      },
+      evaluationMetrics: {
+        drySafe: true,
+        overall: { riskLevel: 'high', indicators: ['background_noise_rate'] },
+      },
+      mutationReview: null,
+    }),
+    /implicit live mutation command/i,
+  );
+});
+
+test('buildMvpAutoresearchArtifact includes execution gate in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-gate-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  fs.mkdirSync(backgroundDir);
+  makeAcceptanceArtifact(acceptancePath);
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+    fastResolveArtifactsDir: tempDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.executionGate.drySafe, true);
+  assert.equal(artifact.executionGate.decision, 'allow_dry_run_only');
+  assert.equal(artifact.executionGate.liveSaveEligible, false);
+  assert.match(markdown, /## Execution Gate/);
+  assert.match(markdown, /Decision:/);
+});
+
+test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {
+  const artifact = {
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    nextActions: [
+      'continue_limit_1_or_2_background_dry_runs',
+      'resolve_company_targets_then_retry',
+      'do_not_run_live_save_or_live_connect_from_autoresearch',
+    ],
+    background: {
+      healthyLiveRuns: 4,
+      latestEnvironmentBlock: null,
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 6,
+        notObservedTypes: ['mixed', 'sparse'],
+      },
+      accountLevelErrors: [
+        {
+          accountName: 'Filter Fail Co',
+          coverageError: 'all_sweeps_failed: Unable to scope people search',
+        },
+      ],
+      noisyCooldownCandidates: [
+        { accountName: 'Noisy Co', recommendedAction: 'cooldown_or_review_account_scope' },
+      ],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  };
+
+  const plan = buildResearchLoopPlan(artifact, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.version, 1);
+  assert.equal(plan.drySafe, true);
+  assert.equal(plan.steps.length, 3);
+  assert.deepEqual(plan.steps.map((step) => step.id), [
+    'company-resolution-retry',
+    'background-dry-run',
+    'operator-review',
+  ]);
+  assert.match(plan.steps[0].command, /run-company-resolution-retries/);
+  assert.match(plan.steps[1].command, /run-background-territory-loop/);
+  assert.equal(plan.steps[2].command, null);
+  assert.doesNotMatch(plan.steps.map((step) => step.command || '').join(' '), /--live-save|--live-connect|allow-background-connects/i);
+});
+
+test('research loop planner ignores stale environment blocks after healthy evidence resumes', () => {
+  const plan = buildResearchLoopPlan({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    background: {
+      healthyLiveRuns: 2,
+      latestEnvironmentBlock: {
+        environment: { nextAction: 'allow_browser_runtime_then_retry' },
+      },
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 8,
+        notObservedTypes: ['mixed'],
+      },
+      accountLevelErrors: [],
+      noisyCooldownCandidates: [],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  }, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.steps.some((step) => step.id === 'environment-check'), false);
+  assert.equal(plan.steps.some((step) => step.id === 'background-dry-run'), true);
+});
+
+test('research loop planner prioritizes environment check when latest block is newer than healthy evidence', () => {
+  const plan = buildResearchLoopPlan({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    background: {
+      healthyLiveRuns: 2,
+      latestHealthy: { processedAt: '2026-04-24T05:00:00.000Z' },
+      latestEnvironmentBlock: {
+        processedAt: '2026-04-24T06:00:00.000Z',
+        environment: { nextAction: 'restart_browser_harness_then_retry' },
+      },
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 8,
+        notObservedTypes: ['mixed'],
+      },
+      accountLevelErrors: [],
+      noisyCooldownCandidates: [],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  }, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.steps[0].id, 'environment-check');
+  assert.equal(plan.steps.some((step) => step.id === 'background-dry-run'), false);
+});
+
+test('buildMvpAutoresearchArtifact includes a dry-safe research loop plan in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-plan-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  fs.mkdirSync(backgroundDir);
+  makeAcceptanceArtifact(acceptancePath);
+  makeBackgroundArtifact(path.join(backgroundDir, 'example-loop-1.json'), {
+    status: 'completed',
+    environment: { ok: true, state: 'healthy', sessionCheckSkipped: false },
+    metrics: { accountsAttempted: 1, productiveAccounts: 1 },
+    results: [
+      {
+        accountName: 'Filter Fail Co',
+        coverageStatus: 'live',
+        coverageError: 'all_sweeps_failed: Unable to scope people search',
+        candidateCount: 0,
+        listCandidateCount: 0,
+        productivity: { classification: 'noisy' },
+      },
+    ],
+  });
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.researchLoopPlan.drySafe, true);
+  assert.equal(artifact.researchLoopPlan.steps[0].id, 'company-resolution-retry');
+  assert.match(markdown, /## Research Loop Plan/);
+  assert.match(markdown, /company-resolution-retry/);
+});
+
 
 test('writeMvpAutoresearchRun writes JSON and Markdown reports', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-write-'));

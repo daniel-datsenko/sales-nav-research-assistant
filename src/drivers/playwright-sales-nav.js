@@ -4,6 +4,7 @@ const { chromium } = require('playwright');
 const { DriverAdapter } = require('./driver-adapter');
 const { classifyConnectMenuActionLabel } = require('../core/connect-menu');
 const { limitCandidatesByTemplate, normalizeCandidateLimit } = require('../core/candidate-limits');
+const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const MIN_COMPANY_FILTER_CONFIDENCE = 0.7;
@@ -502,7 +503,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     if (!candidate.salesNavigatorUrl && !candidate.profileUrl) {
       throw new Error(`Candidate ${candidate.fullName} is missing a Sales Navigator URL`);
     }
-    if (!/linkedin\.com\/sales\/lead\//i.test(candidate.salesNavigatorUrl || candidate.profileUrl || '')) {
+    if (!isSalesNavigatorLeadUrl(candidate.salesNavigatorUrl || candidate.profileUrl || '')) {
       throw new Error(`Candidate ${candidate.fullName} does not point to a Sales Navigator lead URL`);
     }
 
@@ -522,8 +523,16 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       await this.pacedWait(2);
       await waitForAnySelector(this.page, DEFAULT_SELECTORS.savePanelMarkers, 12000).catch(() => {});
 
-      const selected = await clickVisibleListRow(this.page, listInfo.listName);
-      if (selected) {
+      const rowOutcome = await clickVisibleListRow(this.page, listInfo.listName);
+      if (rowOutcome?.outcome === 'already_saved') {
+        await this.pacedWait(2);
+        return {
+          status: 'already_saved',
+          listName: listInfo.listName,
+          selectionMode: rowOutcome.selectionMode || 'existing_list',
+        };
+      }
+      if (rowOutcome?.outcome === 'clicked') {
         await this.pacedWait(2);
         return { status: 'saved', listName: listInfo.listName, selectionMode: 'existing_list' };
       }
@@ -600,6 +609,11 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
   async sendConnect(candidate, context) {
     if (!this.options.allowMutations) {
       return { status: context.dryRun ? 'simulated' : 'planned', note: 'mutations disabled' };
+    }
+
+    const connectTargetUrl = candidate.salesNavigatorUrl || candidate.profileUrl || '';
+    if (!connectTargetUrl || !isSalesNavigatorLeadUrl(connectTargetUrl)) {
+      throw new Error(`Candidate ${candidate.fullName || 'unknown'} does not point to a Sales Navigator lead URL`);
     }
 
     if (
@@ -2509,8 +2523,16 @@ async function saveCandidateToListFromVisibleResults(page, candidate, listInfo, 
       await page.waitForTimeout(Math.max(180, settleMs)).catch(() => {});
       await waitForAnySelector(page, DEFAULT_SELECTORS.savePanelMarkers, 12000).catch(() => {});
 
-      const selected = await clickVisibleListRow(page, listInfo.listName);
-      if (selected) {
+      const rowOutcome = await clickVisibleListRow(page, listInfo.listName);
+      if (rowOutcome?.outcome === 'already_saved') {
+        await page.waitForTimeout(Math.max(180, settleMs)).catch(() => {});
+        return {
+          status: 'already_saved',
+          listName: listInfo.listName,
+          selectionMode: 'results_row_fallback',
+        };
+      }
+      if (rowOutcome?.outcome === 'clicked') {
         await page.waitForTimeout(Math.max(180, settleMs)).catch(() => {});
         return { status: 'saved', listName: listInfo.listName, selectionMode: 'results_row_fallback' };
       }
@@ -2629,6 +2651,37 @@ async function tryClickVisibleText(page, textValue) {
   return false;
 }
 
+async function evaluateSalesNavListRowSelected(locator) {
+  return locator.evaluate((element) => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const nodes = [element, ...element.querySelectorAll('*')];
+    return nodes.some((node) => {
+      if (!node || typeof node.getAttribute !== 'function') {
+        return false;
+      }
+      const ariaChecked = String(node.getAttribute('aria-checked') || '').toLowerCase();
+      const ariaSelected = String(node.getAttribute('aria-selected') || '').toLowerCase();
+      const ariaPressed = String(node.getAttribute('aria-pressed') || '').toLowerCase();
+      const ariaCurrent = String(node.getAttribute('aria-current') || '').toLowerCase();
+      if (ariaChecked === 'true' || ariaSelected === 'true' || ariaPressed === 'true' || ariaCurrent === 'true') {
+        return true;
+      }
+      if (node.tagName === 'INPUT' && node.checked) {
+        return true;
+      }
+      const className = String(node.className || '').toLowerCase();
+      if (/(selected|checked|is-selected)/.test(className) && !/(unselected|unchecked)/.test(className)) {
+        return true;
+      }
+      const label = normalize(node.getAttribute('aria-label') || '');
+      return label.includes('selected')
+        || label.includes('ausgewählt')
+        || label.includes('saved')
+        || label.includes('gespeichert');
+    });
+  }).catch(() => false);
+}
+
 async function clickVisibleListRow(page, listName) {
   const escaped = escapeRegex(listName);
   const exactAria = page.locator(`button[aria-label*="${listName}"]`);
@@ -2645,8 +2698,11 @@ async function clickVisibleListRow(page, listName) {
     if (combined.includes('create new list') || combined.includes('saved searches')) {
       continue;
     }
+    if (await evaluateSalesNavListRowSelected(locator)) {
+      return { outcome: 'already_saved', listName, selectionMode: 'existing_list' };
+    }
     await locator.click().catch(() => {});
-    return true;
+    return { outcome: 'clicked', listName, selectionMode: 'existing_list' };
   }
 
   const buttonByText = page.getByRole('button', {
@@ -2663,11 +2719,19 @@ async function clickVisibleListRow(page, listName) {
     if (!new RegExp(escaped, 'i').test(text || '')) {
       continue;
     }
+    const ariaSecond = await locator.getAttribute('aria-label').catch(() => '');
+    const combinedSecond = `${text || ''} ${ariaSecond || ''}`.toLowerCase();
+    if (combinedSecond.includes('create new list') || combinedSecond.includes('saved searches')) {
+      continue;
+    }
+    if (await evaluateSalesNavListRowSelected(locator)) {
+      return { outcome: 'already_saved', listName, selectionMode: 'existing_list' };
+    }
     await locator.click().catch(() => {});
-    return true;
+    return { outcome: 'clicked', listName, selectionMode: 'existing_list' };
   }
 
-  return false;
+  return null;
 }
 
 function jitteredWait(base) {

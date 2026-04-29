@@ -741,6 +741,24 @@ function dedupeMergedImportLeads(leads = []) {
   return output;
 }
 
+function buildFastResolveLeadKey(lead = {}) {
+  const row = lead.row || lead.importSourceRow || '';
+  const url = normalizeLeadUrl(lead.salesNavigatorUrl || lead.profileUrl || lead.publicLinkedInUrl || '');
+  const fallback = [
+    normalizeLookupValue(lead.accountName || lead.company),
+    normalizeLookupValue(lead.fullName || lead.name),
+    normalizeLookupValue(lead.title || lead.titel),
+    normalizeLookupValue(lead.location || lead.standort),
+  ].filter(Boolean).join('::');
+  const parts = [
+    lead.importSourcePath || lead.sourcePath || '',
+    row ? `row:${row}` : '',
+    url ? `url:${url}` : '',
+    fallback ? `lead:${fallback}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join('::') : null;
+}
+
 function loadFastListImportSource(sourcePath, options = {}) {
   const absolutePath = path.isAbsolute(sourcePath) ? sourcePath : path.resolve(sourcePath);
   const raw = fs.readFileSync(absolutePath, 'utf8');
@@ -1175,7 +1193,11 @@ async function fastResolveLeads({
         }));
         const bucketed = bucketFastResolveLead(prepared.leadForResolution, scored, prepared.aliasTerms);
         if (bucketed.resolutionBucket === 'resolved_safe_to_save') {
-          resolvedRows.set(prepared.lead.row || `${groupKey}:${prepared.lead.fullName}`, {
+          const leadKey = buildFastResolveLeadKey(prepared.lead);
+          if (!leadKey) {
+            continue;
+          }
+          resolvedRows.set(leadKey, {
             ...bucketed,
             resolutionPath: 'grouped_company_pool',
             resolutionEvidence: 'grouped_company_pool',
@@ -1228,7 +1250,7 @@ async function fastResolveLeads({
       continue;
     }
 
-    const groupedRow = groupedRows.get(lead.row || `${normalizeLookupValue(lead.accountName)}:${lead.fullName}`);
+    const groupedRow = groupedRows.get(buildFastResolveLeadKey(lead));
     if (groupedRow) {
       leads.push(groupedRow);
       if (typeof onProgress === 'function') {

@@ -924,6 +924,71 @@ test('fastResolveLeads resolves multiple same-company leads from one grouped com
   assert.equal(artifact.leads.every((lead) => lead.resolutionPath === 'grouped_company_pool'), true);
 });
 
+test('fastResolveLeads keeps grouped rows collision-safe when source row ids repeat', async () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const sourcePath = path.join(os.tmpdir(), `fast-resolve-collision-${Date.now()}.json`);
+  fs.writeFileSync(sourcePath, JSON.stringify({
+    listName: 'Collision Test',
+    leads: [
+      {
+        row: 1,
+        accountName: 'Example Observability Co',
+        fullName: 'Alex Platform',
+        title: 'Platform Engineer',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/alex-platform',
+      },
+      {
+        row: 1,
+        accountName: 'Example Observability Co',
+        fullName: 'Riley SRE',
+        title: 'SRE Manager',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/riley-sre',
+      },
+    ],
+  }));
+  const driver = {
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates(account, template) {
+      if (template.id !== 'fast-resolve-company-pool') {
+        return [];
+      }
+      return [
+        {
+          fullName: 'Alex Platform',
+          title: 'Platform Engineer',
+          company: 'Example Observability Co',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/alex-platform',
+        },
+        {
+          fullName: 'Riley SRE',
+          title: 'SRE Manager',
+          company: 'Example Observability Co',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/riley-sre',
+        },
+      ];
+    },
+  };
+
+  const artifact = await fastResolveLeads({
+    driver,
+    sourcePath,
+    searchTimeoutMs: 8000,
+  });
+
+  assert.equal(artifact.bucketCounts.resolved_safe_to_save, 2);
+  assert.equal(artifact.leads.filter((lead) => ['Alex Platform', 'Riley SRE'].includes(lead.fullName)).length, 2);
+  assert.deepEqual(
+    artifact.leads.map((lead) => lead.salesNavigatorUrl).sort(),
+    [
+      'https://www.linkedin.com/sales/lead/alex-platform',
+      'https://www.linkedin.com/sales/lead/riley-sre',
+    ],
+  );
+});
+
 test('fastResolveLeads uses slug name fallback and guarded name-only company retry', async () => {
   const calls = [];
   const driver = {

@@ -13,6 +13,7 @@ const { summarizeCompanyResolutionRetryResults } = require('./company-resolution
 const { readLatestConnectEvidenceArtifact } = require('./connect-evidence');
 const { buildResearchLoopPlan } = require('./research-loop-planner');
 const { buildResearchEvaluationMetrics } = require('./research-evaluation-metrics');
+const { buildResearchExecutionGate } = require('./research-execution-gate');
 
 const FINAL_CONNECT_STATES = new Set([
   'sent',
@@ -459,9 +460,18 @@ function buildMvpAutoresearchArtifact({
     }),
   };
 
+  const researchLoopPlan = buildResearchLoopPlan(baseArtifact, { generatedAt: now.toISOString() });
+  const executionGate = buildResearchExecutionGate({
+    researchLoopPlan,
+    evaluationMetrics,
+    mutationReview: null,
+    generatedAt: now.toISOString(),
+  });
+
   return {
     ...baseArtifact,
-    researchLoopPlan: buildResearchLoopPlan(baseArtifact, { generatedAt: now.toISOString() }),
+    researchLoopPlan,
+    executionGate,
   };
 }
 
@@ -604,6 +614,13 @@ function renderMvpAutoresearchMarkdown(artifact) {
   lines.push(`- Background noise rate: \`${artifact.evaluationMetrics?.background?.noiseRate ?? 0}\``);
   lines.push(`- Company alias disagreement rate: \`${artifact.evaluationMetrics?.companyResolution?.aliasDisagreementRate ?? 0}\``);
   lines.push(`- Indicators: \`${artifact.evaluationMetrics?.overall?.indicators?.join(', ') || 'none'}\``);
+  lines.push('');
+  lines.push('## Execution Gate');
+  lines.push(`- Decision: \`${artifact.executionGate?.decision || 'unknown'}\``);
+  lines.push(`- Live save eligible: \`${artifact.executionGate?.liveSaveEligible ? 'yes' : 'no'}\``);
+  lines.push(`- Risk level: \`${artifact.executionGate?.riskLevel || 'unknown'}\``);
+  lines.push(`- Reasons: \`${artifact.executionGate?.reasons?.join(', ') || 'none'}\``);
+  lines.push(`- Allowed command template: \`${artifact.executionGate?.allowedCommandTemplate || 'none'}\``);
   lines.push('');
   lines.push('## Research Loop Plan');
   lines.push(`- Version: \`${artifact.researchLoopPlan?.version || 'none'}\``);

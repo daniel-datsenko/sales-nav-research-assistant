@@ -16,6 +16,7 @@ const {
 } = require('../src/core/autoresearch-mvp');
 const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
 const { buildResearchEvaluationMetrics } = require('../src/core/research-evaluation-metrics');
+const { buildResearchExecutionGate } = require('../src/core/research-execution-gate');
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -349,6 +350,102 @@ test('buildMvpAutoresearchArtifact includes evaluation metrics in JSON and Markd
   assert.equal(typeof artifact.evaluationMetrics.background.noiseRate, 'number');
   assert.match(markdown, /## Evaluation Metrics/);
   assert.match(markdown, /Risk level:/);
+});
+
+test('research execution gate blocks live save until company resolution blockers clear', () => {
+  const gate = buildResearchExecutionGate({
+    researchLoopPlan: {
+      drySafe: true,
+      steps: [
+        { id: 'company-resolution-retry', gate: 'review_retry_artifact_before_fast_resolve' },
+      ],
+    },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'low', indicators: [] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 3, alreadySavedSkips: 0, exclusions: 0, duplicateWarnings: 0 },
+    },
+  });
+
+  assert.equal(gate.drySafe, true);
+  assert.equal(gate.decision, 'blocked_until_company_resolution');
+  assert.equal(gate.liveSaveEligible, false);
+  assert.ok(gate.reasons.includes('company_resolution_retry_pending'));
+});
+
+test('research execution gate requires operator review for review warnings and only allows clean low-risk artifacts', () => {
+  const needsReview = buildResearchExecutionGate({
+    researchLoopPlan: { drySafe: true, steps: [{ id: 'autoresearch-refresh' }] },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'medium', indicators: ['duplicate_sales_nav_urls'] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 2, alreadySavedSkips: 1, exclusions: 0, duplicateWarnings: 1 },
+    },
+  });
+  const clean = buildResearchExecutionGate({
+    researchLoopPlan: { drySafe: true, steps: [{ id: 'autoresearch-refresh' }] },
+    evaluationMetrics: {
+      drySafe: true,
+      overall: { riskLevel: 'low', indicators: [] },
+    },
+    mutationReview: {
+      drySafe: true,
+      summary: { intendedAdds: 2, alreadySavedSkips: 0, exclusions: 0, duplicateWarnings: 0 },
+    },
+  });
+
+  assert.equal(needsReview.decision, 'requires_operator_review');
+  assert.equal(needsReview.liveSaveEligible, false);
+  assert.equal(clean.decision, 'eligible_for_live_save');
+  assert.equal(clean.liveSaveEligible, true);
+  assert.doesNotMatch(clean.allowedCommandTemplate, /--live-connect|allow-background-connects/i);
+});
+
+test('research execution gate rejects implicit live mutation commands for non-live decisions', () => {
+  assert.throws(
+    () => buildResearchExecutionGate({
+      researchLoopPlan: {
+        drySafe: true,
+        steps: [
+          { id: 'unsafe-live-command', command: 'node src/cli.js pilot-live-save-batch --account-names=Example' },
+        ],
+      },
+      evaluationMetrics: {
+        drySafe: true,
+        overall: { riskLevel: 'high', indicators: ['background_noise_rate'] },
+      },
+      mutationReview: null,
+    }),
+    /implicit live mutation command/i,
+  );
+});
+
+test('buildMvpAutoresearchArtifact includes execution gate in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-gate-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  fs.mkdirSync(backgroundDir);
+  makeAcceptanceArtifact(acceptancePath);
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+    fastResolveArtifactsDir: tempDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.executionGate.drySafe, true);
+  assert.equal(artifact.executionGate.decision, 'allow_dry_run_only');
+  assert.equal(artifact.executionGate.liveSaveEligible, false);
+  assert.match(markdown, /## Execution Gate/);
+  assert.match(markdown, /Decision:/);
 });
 
 test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {

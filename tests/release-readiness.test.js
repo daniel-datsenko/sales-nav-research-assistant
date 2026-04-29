@@ -37,6 +37,8 @@ test('package scripts keep autoresearch dry-safe and expose release checks', () 
   assert.equal(packageJson.scripts['test:release-readiness'], 'node --test tests/release-readiness.test.js tests/live-readiness.test.js tests/pilot-config.test.js tests/background-list-maintenance.test.js');
   assert.equal(packageJson.scripts['autoresearch:mvp'], 'node src/cli.js autoresearch-mvp');
   assert.doesNotMatch(packageJson.scripts['autoresearch:mvp'], /--live-save|--live-connect|allow-background-connects/);
+  assert.equal(packageJson.scripts['autoresearch:speed'], 'node src/cli.js autoresearch-speed-eval');
+  assert.doesNotMatch(packageJson.scripts['autoresearch:speed'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['print-mvp-operator-dashboard'], 'node src/cli.js print-mvp-operator-dashboard');
 });
 

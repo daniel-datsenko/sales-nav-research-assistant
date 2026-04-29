@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { readJson, writeJson } = require('../lib/json');
 const {
   ACCOUNT_BATCH_ARTIFACTS_DIR,
@@ -154,6 +155,16 @@ function buildFastResolveQueryPlan({ lead, identityResolution, companyResolution
     seen.add(key);
     return true;
   });
+}
+
+function buildFastResolveQueryCacheKey({ query, maxCandidates } = {}) {
+  const normalizedQuery = normalizeLookupValue(String(query || '').trim());
+  const cap = Number.isFinite(Number(maxCandidates)) ? Number(maxCandidates) : 0;
+  return `${normalizedQuery}::mc:${cap}`;
+}
+
+function fingerprintFastResolveCacheKey(cacheKey = '') {
+  return crypto.createHash('sha256').update(String(cacheKey)).digest('hex').slice(0, 16);
 }
 
 function dedupeStrings(values = []) {
@@ -925,6 +936,13 @@ async function fastResolveLeads({
   const safeSearchTimeout = Math.max(2000, Number(searchTimeoutMs || 8000));
   const selectorTimeout = Math.max(1000, Math.floor(safeSearchTimeout / 2));
   const aliasResearchCache = new Map();
+  const fastResolveSearchCache = new Map();
+  const queryCacheState = {
+    hits: 0,
+    misses: 0,
+    avoidedSearches: 0,
+    keyFingerprints: new Set(),
+  };
 
   async function collectScoredCandidates(leadForResolution, queryPlan, aliasTerms) {
     const scored = [];
@@ -950,31 +968,45 @@ async function fastResolveLeads({
         titleIncludes: [],
       };
 
+      const cacheLookupKey = buildFastResolveQueryCacheKey({ query, maxCandidates });
+      queryCacheState.keyFingerprints.add(fingerprintFastResolveCacheKey(cacheLookupKey));
+
       let candidates = [];
-      try {
-        await driver.openPeopleSearch(account, { runId, accountKey: 'fast-resolve-unscoped' });
-        await driver.applySearchTemplate(template, { runId, accountKey: 'fast-resolve-unscoped' });
-        candidates = await driver.scrollAndCollectCandidates(account, template, {
-          runId,
-          accountKey: 'fast-resolve-unscoped',
-          resultTimeoutMs: selectorTimeout,
-          hydrateTimeoutMs: selectorTimeout,
-        });
-      } catch (error) {
-        scored.push({
-          candidate: {
-            fullName: null,
-            title: null,
-            company: null,
-            salesNavigatorUrl: null,
-          },
-          score: 0,
-          exactName: false,
-          slugMatch: false,
-          companyMatch: false,
-          titleMatch: false,
-          error: error.message,
-        });
+      if (fastResolveSearchCache.has(cacheLookupKey)) {
+        candidates = fastResolveSearchCache.get(cacheLookupKey).slice();
+        queryCacheState.hits += 1;
+        queryCacheState.avoidedSearches += 1;
+      } else {
+        queryCacheState.misses += 1;
+        try {
+          await driver.openPeopleSearch(account, { runId, accountKey: 'fast-resolve-unscoped' });
+          await driver.applySearchTemplate(template, { runId, accountKey: 'fast-resolve-unscoped' });
+          candidates = await driver.scrollAndCollectCandidates(account, template, {
+            runId,
+            accountKey: 'fast-resolve-unscoped',
+            resultTimeoutMs: selectorTimeout,
+            hydrateTimeoutMs: selectorTimeout,
+          });
+          fastResolveSearchCache.set(
+            cacheLookupKey,
+            Array.isArray(candidates) ? candidates.slice() : [],
+          );
+        } catch (error) {
+          scored.push({
+            candidate: {
+              fullName: null,
+              title: null,
+              company: null,
+              salesNavigatorUrl: null,
+            },
+            score: 0,
+            exactName: false,
+            slugMatch: false,
+            companyMatch: false,
+            titleMatch: false,
+            error: error.message,
+          });
+        }
       }
 
       for (const candidate of candidates) {
@@ -1306,6 +1338,13 @@ async function fastResolveLeads({
     maxCandidates,
     groupedCompanyPool,
     timings: finishRunTimings(timings, now),
+    queryCache: {
+      enabled: true,
+      hits: queryCacheState.hits,
+      misses: queryCacheState.misses,
+      avoidedSearches: queryCacheState.avoidedSearches,
+      keyFingerprints: Array.from(queryCacheState.keyFingerprints).sort(),
+    },
     leads,
   });
 }
@@ -2004,6 +2043,7 @@ module.exports = {
   buildFastListImportArtifactPath,
   buildFastResolveArtifact,
   buildFastResolveArtifactPath,
+  buildFastResolveQueryCacheKey,
   buildMutationReviewArtifact,
   buildMutationReviewArtifactPath,
   bucketFastResolveLead,

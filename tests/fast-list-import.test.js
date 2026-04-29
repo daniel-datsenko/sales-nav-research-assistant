@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   buildCompanyAliasTerms,
+  buildFastResolveQueryCacheKey,
   buildFastResolveQueryPlan,
   bucketFastResolveLead,
   classifySaveFailure,
@@ -1444,4 +1445,144 @@ test('writeMutationReviewArtifact writes paired JSON and Markdown artifacts', ()
   assert.equal(parsed.summary.intendedAdds, 1);
   assert.match(markdown, /Live Mutation Review/);
   assert.match(written.reportPath, /\.md$/);
+});
+
+test('buildFastResolveQueryCacheKey includes maxCandidates so result shape cannot collide', () => {
+  assert.notEqual(
+    buildFastResolveQueryCacheKey({ query: 'Jane Doe Acme', maxCandidates: 4 }),
+    buildFastResolveQueryCacheKey({ query: 'Jane Doe Acme', maxCandidates: 8 }),
+  );
+  assert.equal(
+    buildFastResolveQueryCacheKey({ query: '  Jane Doe Acme  ', maxCandidates: 4 }),
+    buildFastResolveQueryCacheKey({ query: 'jane doe acme', maxCandidates: 4 }),
+  );
+});
+
+test('fastResolveLeads query cache: identical query across two leads runs search once and reports telemetry', async () => {
+  let openCount = 0;
+  let applyCount = 0;
+  let scrollCount = 0;
+  const calls = [];
+  const driver = {
+    async openPeopleSearch() {
+      openCount += 1;
+    },
+    async applySearchTemplate(template) {
+      applyCount += 1;
+      calls.push(template.keywords[0]);
+    },
+    async scrollAndCollectCandidates() {
+      scrollCount += 1;
+      return [{
+        fullName: 'Twin Lead',
+        title: 'Engineer',
+        company: 'Shared Accounts Co',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/twin-lead',
+      }];
+    },
+  };
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const sourcePath = path.join(os.tmpdir(), `fast-resolve-cache-dedupe-${Date.now()}.md`);
+  fs.writeFileSync(sourcePath, `
+| # | Account | Name | Titel | Score | Tier | LinkedIn |
+|---|---|---|---|---|---|---|
+| 1 | Shared Accounts Co | Twin Lead | Engineer | 50 | Tier 2 | [linkedin.com/in/twin-a](https://www.linkedin.com/in/twin-a) |
+| 2 | Shared Accounts Co | Twin Lead | Engineer | 50 | Tier 2 | [linkedin.com/in/twin-b](https://www.linkedin.com/in/twin-b) |
+`);
+
+  const artifact = await fastResolveLeads({
+    driver,
+    sourcePath,
+    aliasConfig: {
+      accounts: {
+        'shared accounts co': {
+          companyFilterAliases: ['Shared Accounts Co'],
+          resolutionStatus: 'resolved_exact',
+        },
+      },
+    },
+    searchTimeoutMs: 8000,
+    maxCandidates: 4,
+    groupedCompanyPool: false,
+  });
+
+  assert.equal(openCount, 1);
+  assert.equal(applyCount, 1);
+  assert.equal(scrollCount, 1);
+  assert.equal(artifact.queryCache?.enabled, true);
+  assert.equal(artifact.queryCache?.hits >= 1, true);
+  assert.equal(artifact.queryCache?.misses >= 1, true);
+  assert.equal(artifact.queryCache?.avoidedSearches >= 1, true);
+  assert.equal(artifact.bucketCounts.resolved_safe_to_save, 2);
+  assert.ok(Array.isArray(artifact.queryCache?.keyFingerprints));
+});
+
+test('fastResolveLeads query cache: rescored per lead; cached roster is scored independently (slug differs)', async () => {
+  let scrollCount = 0;
+  const driver = {
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      scrollCount += 1;
+      return [{
+        fullName: 'Jane Doe',
+        title: 'Engineer',
+        company: 'Cache Rescore Co',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/jane-doe',
+      }];
+    },
+  };
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const sourcePath = path.join(os.tmpdir(), `fast-resolve-cache-rescore-${Date.now()}.json`);
+  fs.writeFileSync(sourcePath, JSON.stringify({
+    listName: 'Rescore cache test',
+    leads: [
+      {
+        row: 1,
+        accountName: 'Cache Rescore Co',
+        fullName: 'Jane Doe',
+        title: 'Engineer',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/jane-doe-sn',
+      },
+      {
+        row: 2,
+        accountName: 'Cache Rescore Co',
+        fullName: 'Jane Doe',
+        title: 'Engineer',
+        publicLinkedInUrl: 'https://www.linkedin.com/in/other-person',
+      },
+    ],
+  }));
+
+  const artifact = await fastResolveLeads({
+    driver,
+    sourcePath,
+    aliasConfig: {
+      accounts: {
+        'cache rescore co': {
+          accountSearchAliases: ['Cache Rescore'],
+          companyFilterAliases: ['Cache Rescore Co', 'Cache Rescore'],
+          resolutionStatus: 'resolved_exact',
+        },
+      },
+    },
+    searchTimeoutMs: 8000,
+    maxCandidates: 4,
+    groupedCompanyPool: false,
+  });
+
+  assert.equal(scrollCount, 1);
+  const [firstJane, secondJane] = artifact.leads;
+  assert.equal(firstJane.resolutionBucket, 'resolved_safe_to_save');
+  assert.ok(firstJane.candidateDecision?.bestCandidate?.slugMatch);
+  assert.equal(secondJane.candidateDecision?.bestCandidate?.slugMatch, false);
+  assert.equal(
+    secondJane.resolutionCandidates?.[0]?.fullName,
+    firstJane.resolutionCandidates?.[0]?.fullName,
+  );
+  assert.ok(artifact.queryCache?.hits >= 1);
 });

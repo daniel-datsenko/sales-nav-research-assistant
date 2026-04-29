@@ -101,6 +101,8 @@ const {
   readLatestAutoresearchArtifact,
   renderMvpOperatorDashboard,
   renderMvpGateReport,
+  buildMvpSupervisorRunbook,
+  renderMvpSupervisorRunbook,
   writeMvpAutoresearchRun,
 } = require('./core/autoresearch-mvp');
 const {
@@ -257,6 +259,9 @@ async function main() {
         break;
       case 'print-autoresearch-gate':
         await handlePrintAutoresearchGate(values, logger);
+        break;
+      case 'print-autoresearch-supervisor':
+        await handlePrintAutoresearchSupervisor(values, logger);
         break;
       case 'run-account-batch':
         await handleRunAccountBatch(getRepository(), values, logger);
@@ -2978,25 +2983,51 @@ async function handlePrintAutoresearchGate(values, logger) {
     throw new Error('print-autoresearch-gate is read-only and refuses live-save, live-connect, or background connects');
   }
 
-  const explicitArtifactPath = getString(values, 'artifact');
-  const latest = explicitArtifactPath
-    ? {
-      artifactPath: path.isAbsolute(explicitArtifactPath) ? explicitArtifactPath : resolveProjectPath(explicitArtifactPath),
-      artifact: readJson(path.isAbsolute(explicitArtifactPath) ? explicitArtifactPath : resolveProjectPath(explicitArtifactPath)),
-    }
-    : readLatestAutoresearchArtifact();
+  const latest = loadAutoresearchArtifactForReadOnlyReport(values);
   if (!latest) {
     logger.warn('No MVP autoresearch artifact found. Run npm run autoresearch:mvp first.');
     console.log(renderMvpGateReport(null));
     return;
   }
 
-  const artifact = {
+  const artifact = buildReportArtifact(latest);
+  console.log(renderMvpGateReport(artifact));
+}
+
+async function handlePrintAutoresearchSupervisor(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects')) {
+    throw new Error('print-autoresearch-supervisor is read-only and refuses live-save, live-connect, or background connects');
+  }
+
+  const latest = loadAutoresearchArtifactForReadOnlyReport(values);
+  if (!latest) {
+    logger.warn('No MVP autoresearch artifact found. Run npm run autoresearch:mvp first.');
+    console.log(renderMvpSupervisorRunbook(buildMvpSupervisorRunbook(null)));
+    return;
+  }
+
+  const artifact = buildReportArtifact(latest);
+  console.log(renderMvpSupervisorRunbook(buildMvpSupervisorRunbook(artifact)));
+}
+
+function loadAutoresearchArtifactForReadOnlyReport(values) {
+  const explicitArtifactPath = getString(values, 'artifact');
+  if (!explicitArtifactPath) {
+    return readLatestAutoresearchArtifact();
+  }
+  const artifactPath = path.isAbsolute(explicitArtifactPath) ? explicitArtifactPath : resolveProjectPath(explicitArtifactPath);
+  return {
+    artifactPath,
+    artifact: readJson(artifactPath),
+  };
+}
+
+function buildReportArtifact(latest) {
+  return {
     ...latest.artifact,
     artifactPath: latest.artifact.artifactPath || latest.artifactPath,
     reportPath: latest.artifact.reportPath || String(latest.artifactPath || '').replace(/\.json$/i, '.md'),
   };
-  console.log(renderMvpGateReport(artifact));
 }
 
 async function handleRunAccountBatch(repository, values, logger) {
@@ -3653,6 +3684,7 @@ Usage:
   node src/cli.js run-background-territory-loop [--queue-artifact=runtime/artifacts/background-runner/example-operator-territory-queue.json] [--driver=hybrid] [--limit=3] [--speed-profile=balanced] [--reuse-sweep-cache] [--live-save] [--account-timeout-ms=180000]
   node src/cli.js autoresearch-mvp [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
+  node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect

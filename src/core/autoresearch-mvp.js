@@ -764,6 +764,155 @@ function sanitizeGateReportCommand(command, { allowLiveSave = false, fallback = 
   return raw;
 }
 
+function buildMvpSupervisorRunbook(artifact) {
+  if (!artifact) {
+    return {
+      version: 1,
+      generatedAt: new Date().toISOString(),
+      executionMode: 'read_only_supervisor',
+      autoExecute: false,
+      gateDecision: 'unknown',
+      nextAction: 'run_autoresearch_first',
+      primaryCommand: 'npm run autoresearch:mvp',
+      requiresHumanApproval: false,
+      reasons: ['autoresearch_artifact_missing'],
+      checkpoints: ['generate_autoresearch_artifact_before_supervisor_loop'],
+      planSteps: [],
+      evidence: { artifactPath: null, reportPath: null },
+    };
+  }
+
+  const gate = artifact.executionGate || {};
+  const decision = gate.decision || 'unknown';
+  const planSteps = Array.isArray(artifact.researchLoopPlan?.steps) ? artifact.researchLoopPlan.steps : [];
+  const primaryCommand = chooseSupervisorPrimaryCommand({ decision, gate, planSteps });
+  const nextAction = chooseSupervisorNextAction(decision);
+  const requiresHumanApproval = decision === 'eligible_for_live_save'
+    || decision === 'requires_operator_review'
+    || gate.requiresOperatorApproval === true;
+
+  return {
+    version: 1,
+    generatedAt: artifact.generatedAt || new Date().toISOString(),
+    executionMode: 'read_only_supervisor',
+    autoExecute: false,
+    gateDecision: decision,
+    nextAction,
+    primaryCommand,
+    requiresHumanApproval,
+    liveSaveEligible: gate.liveSaveEligible === true,
+    riskLevel: gate.riskLevel || artifact.evaluationMetrics?.overall?.riskLevel || 'unknown',
+    reasons: Array.isArray(gate.reasons) ? gate.reasons : [],
+    checkpoints: Array.isArray(gate.checkpoints) ? gate.checkpoints : [],
+    planSteps: planSteps.map((step) => ({
+      id: step.id,
+      reason: step.reason || step.type || 'no reason',
+      command: step.command ? sanitizeGateReportCommand(step.command, {
+        allowLiveSave: false,
+        fallback: 'unsafe_command_suppressed',
+      }) : null,
+    })),
+    evidence: {
+      artifactPath: artifact.artifactPath || null,
+      reportPath: artifact.reportPath || null,
+    },
+  };
+}
+
+function chooseSupervisorPrimaryCommand({ decision, gate, planSteps }) {
+  if (decision === 'blocked_until_company_resolution') {
+    const retryStep = planSteps.find((step) => step.id === 'company-resolution-retry' && step.command);
+    return sanitizeGateReportCommand(
+      retryStep?.command || gate.allowedCommandTemplate || 'node src/cli.js run-company-resolution-retries --limit=3 --driver=hybrid --max-candidates=25',
+      { allowLiveSave: false, fallback: 'unsafe_command_suppressed_run_autoresearch_gate' },
+    );
+  }
+  if (decision === 'requires_operator_review') {
+    return 'npm run autoresearch:gate';
+  }
+  if (decision === 'eligible_for_live_save') {
+    return sanitizeGateReportCommand(
+      gate.allowedCommandTemplate || 'node src/cli.js fast-list-import --source=<reviewed-source> --list-name=<reviewed-list> --live-save',
+      { allowLiveSave: true, fallback: 'unsafe_command_suppressed_run_autoresearch_gate' },
+    );
+  }
+  if (decision === 'allow_dry_run_only') {
+    return sanitizeGateReportCommand(
+      gate.allowedCommandTemplate || 'npm run autoresearch:mvp',
+      { allowLiveSave: false, fallback: 'unsafe_command_suppressed_run_autoresearch_mvp' },
+    );
+  }
+  return 'npm run autoresearch:mvp';
+}
+
+function chooseSupervisorNextAction(decision) {
+  switch (decision) {
+    case 'blocked_until_company_resolution':
+      return 'run_company_resolution_retries';
+    case 'requires_operator_review':
+      return 'review_gate_and_mutation_artifacts';
+    case 'eligible_for_live_save':
+      return 'prepare_supervised_live_save';
+    case 'allow_dry_run_only':
+      return 'continue_dry_research';
+    default:
+      return 'run_autoresearch_first';
+  }
+}
+
+function renderMvpSupervisorRunbook(runbook) {
+  const lines = [];
+  const safeRunbook = runbook || buildMvpSupervisorRunbook(null);
+  lines.push('# Autoresearch Supervisor Runbook');
+  lines.push('');
+  lines.push(`- Generated at: \`${safeRunbook.generatedAt || 'unknown'}\``);
+  lines.push(`- Execution mode: \`${safeRunbook.executionMode}\``);
+  lines.push(`- Auto execute: \`${safeRunbook.autoExecute ? 'yes' : 'no'}\``);
+  lines.push(`- Gate decision: \`${safeRunbook.gateDecision}\``);
+  lines.push(`- Next action: \`${safeRunbook.nextAction}\``);
+  lines.push(`- Primary command: \`${safeRunbook.primaryCommand}\``);
+  lines.push(`- Requires human approval: \`${safeRunbook.requiresHumanApproval ? 'yes' : 'no'}\``);
+  lines.push(`- Live save eligible: \`${safeRunbook.liveSaveEligible ? 'yes' : 'no'}\``);
+  lines.push(`- Risk level: \`${safeRunbook.riskLevel || 'unknown'}\``);
+  lines.push('');
+  lines.push('## Reasons');
+  if ((safeRunbook.reasons || []).length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const reason of safeRunbook.reasons) {
+      lines.push(`- \`${reason}\``);
+    }
+  }
+  lines.push('');
+  lines.push('## Required Checkpoints');
+  if ((safeRunbook.checkpoints || []).length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const checkpoint of safeRunbook.checkpoints) {
+      lines.push(`- \`${checkpoint}\``);
+    }
+  }
+  lines.push('');
+  lines.push('## Plan Steps');
+  if ((safeRunbook.planSteps || []).length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const step of safeRunbook.planSteps) {
+      lines.push(`- \`${step.id}\`: ${escapeMarkdownCell(step.reason || '')}${step.command ? ` — \`${step.command}\`` : ' — manual gate only'}`);
+    }
+  }
+  lines.push('');
+  lines.push('## Evidence');
+  lines.push(`- Latest autoresearch: \`${safeRunbook.evidence?.artifactPath || 'missing'}\``);
+  lines.push(`- Latest autoresearch report: \`${safeRunbook.evidence?.reportPath || 'missing'}\``);
+  lines.push('');
+  lines.push('## Safety Contract');
+  lines.push('- This runbook is advisory and read-only; it never executes the primary command.');
+  lines.push('- Live-save remains supervised and requires human approval plus reviewed mutation artifacts.');
+  lines.push('- Live-connect and background-connect modes are never part of the supervisor runbook.');
+  return `${lines.join('\n').trim()}\n`;
+}
+
 function renderMvpOperatorDashboard(artifact) {
   const lines = [];
   lines.push('# MVP Control Center');
@@ -937,6 +1086,8 @@ module.exports = {
   readLatestAutoresearchArtifact,
   renderMvpOperatorDashboard,
   renderMvpGateReport,
+  buildMvpSupervisorRunbook,
+  renderMvpSupervisorRunbook,
   buildRunnerCoverageTarget,
   buildRunnerCoverageByType,
   summarizeBackgroundEvidence,

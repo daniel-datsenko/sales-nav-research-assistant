@@ -15,6 +15,7 @@ const {
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
 const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
+const { buildResearchEvaluationMetrics } = require('../src/core/research-evaluation-metrics');
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -264,6 +265,90 @@ test('buildMvpAutoresearchArtifact surfaces repeated noisy accounts as cooldown 
   assert.equal(artifact.background.noisyCooldownCandidates[0].noisyRuns, 2);
   assert.equal(artifact.background.noisyCooldownCandidates[0].recommendedAction, 'cooldown_or_review_account_scope');
   assert.match(renderMvpOperatorDashboard(artifact), /Cooldown candidates: `1`/);
+});
+
+test('research evaluation metrics compute manual review, duplicate, alias disagreement, and noise rates', () => {
+  const metrics = buildResearchEvaluationMetrics({
+    fastResolveArtifacts: [{
+      leads: [
+        { fullName: 'Ada', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada', resolutionBucket: 'resolved_safe_to_save' },
+        { fullName: 'Ada Duplicate', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ada', resolutionBucket: 'resolved_safe_to_save' },
+        { fullName: 'Manual', resolutionBucket: 'manual_review' },
+        { fullName: 'Alias', resolutionBucket: 'needs_company_alias_retry' },
+      ],
+      bucketCounts: {
+        resolved_safe_to_save: 2,
+        manual_review: 1,
+        needs_company_alias_retry: 1,
+      },
+    }],
+    background: {
+      runnerCoverageByType: {
+        productive: { count: 2 },
+        noisy: { count: 1 },
+        sparse: { count: 1 },
+        all_sweeps_failed: { count: 1 },
+      },
+    },
+    companyResolution: {
+      total: 5,
+      needsManualReview: 1,
+      failed: 1,
+      multiTarget: 1,
+    },
+  });
+
+  assert.equal(metrics.fastResolve.totalLeads, 4);
+  assert.equal(metrics.fastResolve.manualReviewRate, 0.25);
+  assert.equal(metrics.fastResolve.duplicateRate, 0.25);
+  assert.equal(metrics.fastResolve.companyAliasRetryRate, 0.25);
+  assert.equal(metrics.companyResolution.aliasDisagreementRate, 0.6);
+  assert.equal(metrics.background.noiseRate, 0.5);
+  assert.equal(metrics.overall.riskLevel, 'medium');
+});
+
+test('buildMvpAutoresearchArtifact includes evaluation metrics in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-metrics-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  const fastResolveDir = path.join(tempDir, 'account-batches');
+  fs.mkdirSync(backgroundDir);
+  fs.mkdirSync(fastResolveDir);
+  writeJson(path.join(fastResolveDir, 'example-fast-resolve-2026.json'), {
+    leads: [
+      { fullName: 'Manual', resolutionBucket: 'manual_review' },
+      { fullName: 'Safe', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/safe', resolutionBucket: 'resolved_safe_to_save' },
+    ],
+  });
+  makeAcceptanceArtifact(acceptancePath);
+  makeBackgroundArtifact(path.join(backgroundDir, 'example-loop-1.json'), {
+    status: 'completed',
+    environment: { ok: true, state: 'healthy', sessionCheckSkipped: false },
+    metrics: { accountsAttempted: 1, productiveAccounts: 1 },
+    results: [
+      {
+        accountName: 'Noisy Co',
+        coverageStatus: 'live',
+        candidateCount: 2,
+        listCandidateCount: 0,
+        productivity: { classification: 'noisy' },
+      },
+    ],
+  });
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+    fastResolveArtifactsDir: fastResolveDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.evaluationMetrics.drySafe, true);
+  assert.equal(artifact.evaluationMetrics.fastResolve.manualReviewRate, 0.5);
+  assert.equal(typeof artifact.evaluationMetrics.background.noiseRate, 'number');
+  assert.match(markdown, /## Evaluation Metrics/);
+  assert.match(markdown, /Risk level:/);
 });
 
 test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {

@@ -3,8 +3,8 @@ const path = require('node:path');
 const { readJson, writeJson } = require('../lib/json');
 const {
   AUTORESEARCH_ARTIFACTS_DIR,
-  BACKGROUND_RUNNER_ARTIFACTS_DIR,
   ACCOUNT_BATCH_ARTIFACTS_DIR,
+  BACKGROUND_RUNNER_ARTIFACTS_DIR,
   ensureDir,
   resolveProjectPath,
 } = require('../lib/paths');
@@ -12,6 +12,7 @@ const { summarizeCompanyResolutionArtifacts } = require('./company-resolution');
 const { summarizeCompanyResolutionRetryResults } = require('./company-resolution-retry');
 const { readLatestConnectEvidenceArtifact } = require('./connect-evidence');
 const { buildResearchLoopPlan } = require('./research-loop-planner');
+const { buildResearchEvaluationMetrics } = require('./research-evaluation-metrics');
 
 const FINAL_CONNECT_STATES = new Set([
   'sent',
@@ -103,6 +104,23 @@ function readJsonIfExists(filePath) {
     return null;
   }
   return readJson(filePath);
+}
+
+function readLatestFastResolveArtifacts(artifactsDir = ACCOUNT_BATCH_ARTIFACTS_DIR, limit = 5) {
+  if (!artifactsDir || !fs.existsSync(artifactsDir)) {
+    return [];
+  }
+  return fs.readdirSync(artifactsDir)
+    .filter((fileName) => /fast-resolve.+\.json$/i.test(fileName))
+    .map((fileName) => {
+      const filePath = path.join(artifactsDir, fileName);
+      const stat = fs.statSync(filePath);
+      return { filePath, mtimeMs: stat.mtimeMs };
+    })
+    .sort((left, right) => right.mtimeMs - left.mtimeMs)
+    .slice(0, limit)
+    .map((entry) => readJsonIfExists(entry.filePath))
+    .filter(Boolean);
 }
 
 function summarizeConnectShapes(acceptanceArtifact, evidencePath = DEFAULT_ACCEPTANCE_ARTIFACT) {
@@ -388,6 +406,7 @@ function buildMvpAutoresearchArtifact({
   now = new Date(),
   acceptanceArtifactPath = DEFAULT_ACCEPTANCE_ARTIFACT,
   backgroundArtifactsDir = BACKGROUND_RUNNER_ARTIFACTS_DIR,
+  fastResolveArtifactsDir = ACCOUNT_BATCH_ARTIFACTS_DIR,
 } = {}) {
   assertDrySafeCommands(SAFE_EVAL_COMMANDS);
   const acceptanceArtifact = readJsonIfExists(acceptanceArtifactPath);
@@ -398,6 +417,11 @@ function buildMvpAutoresearchArtifact({
   const connectEvidence = readLatestConnectEvidenceArtifact()?.artifact || null;
   const unresolvedAllSweepsFailures = getUnresolvedAllSweepsFailures({ background, companyResolutionRetries });
   const outcome = decideAutoresearchOutcome({ connect, background });
+  const evaluationMetrics = buildResearchEvaluationMetrics({
+    fastResolveArtifacts: readLatestFastResolveArtifacts(fastResolveArtifactsDir),
+    background,
+    companyResolution,
+  });
   const baseArtifact = {
     goal: 'supervised_mvp_release_candidate',
     generatedAt: now.toISOString(),
@@ -426,6 +450,7 @@ function buildMvpAutoresearchArtifact({
       ].filter((value, index, all) => all.indexOf(value) === index),
     },
     companyResolutionRetries,
+    evaluationMetrics,
     nextActions: buildAutoresearchNextActions({
       connect,
       background,
@@ -571,6 +596,14 @@ function renderMvpAutoresearchMarkdown(artifact) {
   for (const command of artifact.commands) {
     lines.push(`- \`${command}\``);
   }
+  lines.push('');
+  lines.push('## Evaluation Metrics');
+  lines.push(`- Risk level: \`${artifact.evaluationMetrics?.overall?.riskLevel || 'unknown'}\``);
+  lines.push(`- Fast manual review rate: \`${artifact.evaluationMetrics?.fastResolve?.manualReviewRate ?? 0}\``);
+  lines.push(`- Fast duplicate rate: \`${artifact.evaluationMetrics?.fastResolve?.duplicateRate ?? 0}\``);
+  lines.push(`- Background noise rate: \`${artifact.evaluationMetrics?.background?.noiseRate ?? 0}\``);
+  lines.push(`- Company alias disagreement rate: \`${artifact.evaluationMetrics?.companyResolution?.aliasDisagreementRate ?? 0}\``);
+  lines.push(`- Indicators: \`${artifact.evaluationMetrics?.overall?.indicators?.join(', ') || 'none'}\``);
   lines.push('');
   lines.push('## Research Loop Plan');
   lines.push(`- Version: \`${artifact.researchLoopPlan?.version || 'none'}\``);

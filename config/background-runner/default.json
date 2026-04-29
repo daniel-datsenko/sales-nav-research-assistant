@@ -113,10 +113,10 @@
     "productiveRatio": 0.2
   },
   "listCandidateSelection": {
-    "description": "Day-list quality gate. Research can stay broad, but default list candidates should be core platform/infra/DevOps/observability personas rather than logistics, generic security, or data-adjacent roles.",
-    "includeBuckets": ["direct_observability"],
-    "minScore": 35,
-    "excludeRoleFamilies": ["security", "data"],
+    "description": "Day-list quality gate. Research stays broad and list candidates include direct observability plus technical-adjacent software, executive, cloud, AI, platform, architecture, microservices, and engineering leadership personas while keeping hard noise excludes.",
+    "includeBuckets": ["direct_observability", "technical_adjacent"],
+    "minScore": 25,
+    "excludeRoleFamilies": [],
     "excludeTitleKeywords": [
       "logistics",
       "transport",

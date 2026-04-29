@@ -373,9 +373,77 @@ test('selectCoverageListCandidates narrows technical adjacent to ICP-positive su
     'Principal Data AI',
   ]);
   assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
-    'technical_adjacent_senior_platform_leader',
-    'technical_adjacent_senior_platform_leader',
-    'technical_adjacent_ai_cloud_compound',
+    'technical_adjacent_executive_engineering',
+    'technical_adjacent_core_technical_scope',
+    'technical_adjacent_core_technical_scope',
+  ]);
+});
+
+test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas', () => {
+  const selected = selectCoverageListCandidates({
+    candidates: [
+      {
+        fullName: 'Software Engineer',
+        title: 'Senior Software Engineer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'software_engineering',
+        seniority: 'senior',
+        score: 4,
+      },
+      {
+        fullName: 'Executive Engineering',
+        title: 'Engineering Executive',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'unknown',
+        score: 2,
+      },
+      {
+        fullName: 'Architecture Owner',
+        title: 'Architecture Lead',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        seniority: 'lead',
+        score: 1,
+      },
+      {
+        fullName: 'Engineering Leadership',
+        title: 'Engineering Leadership',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        seniority: 'unknown',
+        score: 0,
+      },
+      {
+        fullName: 'Finance Leadership',
+        title: 'Finance Leadership',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        seniority: 'unknown',
+        score: 99,
+      },
+      {
+        fullName: 'Security IC',
+        title: 'Security Engineer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'security',
+        seniority: 'individual_contributor',
+        score: 99,
+      },
+    ],
+  }, { minScore: 50 });
+
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), [
+    'Executive Engineering',
+    'Software Engineer',
+    'Architecture Owner',
+    'Engineering Leadership',
+  ]);
+  assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
+    'technical_adjacent_executive_engineering',
+    'technical_adjacent_software_engineering',
+    'technical_adjacent_core_technical_scope',
+    'technical_adjacent_engineering_leadership',
   ]);
 });
 

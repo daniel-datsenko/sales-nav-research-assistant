@@ -22,8 +22,8 @@ test('buildBackgroundRunnerDefaults uses supervised SDR stale-account defaults',
   assert.equal(defaults.geoFocus.strictInclude, true);
   assert.equal(defaults.coverageCache.maxAgeDays, 7);
   assert.equal(defaults.productiveAccountRules.minListCandidates, 2);
-  assert.deepEqual(defaults.listCandidateSelection.includeBuckets, ['direct_observability']);
-  assert.equal(defaults.listCandidateSelection.excludeRoleFamilies.includes('security'), true);
+  assert.deepEqual(defaults.listCandidateSelection.includeBuckets, ['direct_observability', 'technical_adjacent']);
+  assert.equal(defaults.listCandidateSelection.excludeRoleFamilies.length, 0);
   assert.equal(defaults.retryPolicy.noisyAccountCooldownDays, 7);
   assert.equal(defaults.subsidiaryExpansion.enabled, true);
 });

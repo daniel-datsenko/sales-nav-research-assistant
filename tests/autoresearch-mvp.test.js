@@ -14,6 +14,7 @@ const {
   renderMvpOperatorDashboard,
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
+const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
 
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
@@ -264,6 +265,141 @@ test('buildMvpAutoresearchArtifact surfaces repeated noisy accounts as cooldown 
   assert.equal(artifact.background.noisyCooldownCandidates[0].recommendedAction, 'cooldown_or_review_account_scope');
   assert.match(renderMvpOperatorDashboard(artifact), /Cooldown candidates: `1`/);
 });
+
+test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {
+  const artifact = {
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    nextActions: [
+      'continue_limit_1_or_2_background_dry_runs',
+      'resolve_company_targets_then_retry',
+      'do_not_run_live_save_or_live_connect_from_autoresearch',
+    ],
+    background: {
+      healthyLiveRuns: 4,
+      latestEnvironmentBlock: null,
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 6,
+        notObservedTypes: ['mixed', 'sparse'],
+      },
+      accountLevelErrors: [
+        {
+          accountName: 'Filter Fail Co',
+          coverageError: 'all_sweeps_failed: Unable to scope people search',
+        },
+      ],
+      noisyCooldownCandidates: [
+        { accountName: 'Noisy Co', recommendedAction: 'cooldown_or_review_account_scope' },
+      ],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  };
+
+  const plan = buildResearchLoopPlan(artifact, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.version, 1);
+  assert.equal(plan.drySafe, true);
+  assert.equal(plan.steps.length, 3);
+  assert.deepEqual(plan.steps.map((step) => step.id), [
+    'company-resolution-retry',
+    'background-dry-run',
+    'operator-review',
+  ]);
+  assert.match(plan.steps[0].command, /run-company-resolution-retries/);
+  assert.match(plan.steps[1].command, /run-background-territory-loop/);
+  assert.equal(plan.steps[2].command, null);
+  assert.doesNotMatch(plan.steps.map((step) => step.command || '').join(' '), /--live-save|--live-connect|allow-background-connects/i);
+});
+
+test('research loop planner ignores stale environment blocks after healthy evidence resumes', () => {
+  const plan = buildResearchLoopPlan({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    background: {
+      healthyLiveRuns: 2,
+      latestEnvironmentBlock: {
+        environment: { nextAction: 'allow_browser_runtime_then_retry' },
+      },
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 8,
+        notObservedTypes: ['mixed'],
+      },
+      accountLevelErrors: [],
+      noisyCooldownCandidates: [],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  }, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.steps.some((step) => step.id === 'environment-check'), false);
+  assert.equal(plan.steps.some((step) => step.id === 'background-dry-run'), true);
+});
+
+test('research loop planner prioritizes environment check when latest block is newer than healthy evidence', () => {
+  const plan = buildResearchLoopPlan({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    decision: 'needs_followup',
+    background: {
+      healthyLiveRuns: 2,
+      latestHealthy: { processedAt: '2026-04-24T05:00:00.000Z' },
+      latestEnvironmentBlock: {
+        processedAt: '2026-04-24T06:00:00.000Z',
+        environment: { nextAction: 'restart_browser_harness_then_retry' },
+      },
+      runnerCoverageTarget: {
+        healthyLiveAccountsRemaining: 8,
+        notObservedTypes: ['mixed'],
+      },
+      accountLevelErrors: [],
+      noisyCooldownCandidates: [],
+    },
+    companyResolutionRetries: { latestAccounts: [] },
+  }, {
+    generatedAt: '2026-04-24T06:01:00.000Z',
+  });
+
+  assert.equal(plan.steps[0].id, 'environment-check');
+  assert.equal(plan.steps.some((step) => step.id === 'background-dry-run'), false);
+});
+
+test('buildMvpAutoresearchArtifact includes a dry-safe research loop plan in JSON and Markdown', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-plan-'));
+  const acceptancePath = path.join(tempDir, 'acceptance.json');
+  const backgroundDir = path.join(tempDir, 'background');
+  fs.mkdirSync(backgroundDir);
+  makeAcceptanceArtifact(acceptancePath);
+  makeBackgroundArtifact(path.join(backgroundDir, 'example-loop-1.json'), {
+    status: 'completed',
+    environment: { ok: true, state: 'healthy', sessionCheckSkipped: false },
+    metrics: { accountsAttempted: 1, productiveAccounts: 1 },
+    results: [
+      {
+        accountName: 'Filter Fail Co',
+        coverageStatus: 'live',
+        coverageError: 'all_sweeps_failed: Unable to scope people search',
+        candidateCount: 0,
+        listCandidateCount: 0,
+        productivity: { classification: 'noisy' },
+      },
+    ],
+  });
+
+  const artifact = buildMvpAutoresearchArtifact({
+    now: new Date('2026-04-24T06:00:00.000Z'),
+    acceptanceArtifactPath: acceptancePath,
+    backgroundArtifactsDir: backgroundDir,
+  });
+  const markdown = renderMvpAutoresearchMarkdown(artifact);
+
+  assert.equal(artifact.researchLoopPlan.drySafe, true);
+  assert.equal(artifact.researchLoopPlan.steps[0].id, 'company-resolution-retry');
+  assert.match(markdown, /## Research Loop Plan/);
+  assert.match(markdown, /company-resolution-retry/);
+});
+
 
 test('writeMvpAutoresearchRun writes JSON and Markdown reports', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mvp-autoresearch-write-'));

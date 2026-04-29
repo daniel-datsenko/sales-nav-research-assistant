@@ -11,6 +11,7 @@ const {
 const { summarizeCompanyResolutionArtifacts } = require('./company-resolution');
 const { summarizeCompanyResolutionRetryResults } = require('./company-resolution-retry');
 const { readLatestConnectEvidenceArtifact } = require('./connect-evidence');
+const { buildResearchLoopPlan } = require('./research-loop-planner');
 
 const FINAL_CONNECT_STATES = new Set([
   'sent',
@@ -397,8 +398,7 @@ function buildMvpAutoresearchArtifact({
   const connectEvidence = readLatestConnectEvidenceArtifact()?.artifact || null;
   const unresolvedAllSweepsFailures = getUnresolvedAllSweepsFailures({ background, companyResolutionRetries });
   const outcome = decideAutoresearchOutcome({ connect, background });
-
-  return {
+  const baseArtifact = {
     goal: 'supervised_mvp_release_candidate',
     generatedAt: now.toISOString(),
     hypothesis: 'Small dry-safe measurement loops harden release readiness without widening live LinkedIn mutation scope.',
@@ -432,6 +432,11 @@ function buildMvpAutoresearchArtifact({
       outcome,
       companyResolutionRetries,
     }),
+  };
+
+  return {
+    ...baseArtifact,
+    researchLoopPlan: buildResearchLoopPlan(baseArtifact, { generatedAt: now.toISOString() }),
   };
 }
 
@@ -565,6 +570,13 @@ function renderMvpAutoresearchMarkdown(artifact) {
   lines.push('## Safe Commands');
   for (const command of artifact.commands) {
     lines.push(`- \`${command}\``);
+  }
+  lines.push('');
+  lines.push('## Research Loop Plan');
+  lines.push(`- Version: \`${artifact.researchLoopPlan?.version || 'none'}\``);
+  lines.push(`- Dry safe: \`${artifact.researchLoopPlan?.drySafe ? 'yes' : 'no'}\``);
+  for (const step of artifact.researchLoopPlan?.steps || []) {
+    lines.push(`- \`${step.id}\` — ${escapeMarkdownCell(step.reason || '')}${step.command ? ` — \`${step.command}\`` : ' — manual gate only'}`);
   }
   lines.push('');
   lines.push('## Next Actions');

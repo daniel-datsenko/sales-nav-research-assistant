@@ -1378,7 +1378,8 @@ async function saveFastListImport({
 } = {}) {
   const results = [];
   const listInfo = { listName: importPlan.listName, externalRef: null };
-  const existingLeadUrlSet = buildExistingLeadUrlSet(existingLeadUrls);
+  const initialExistingLeadUrlSet = buildExistingLeadUrlSet(existingLeadUrls);
+  const existingLeadUrlSet = new Set(initialExistingLeadUrlSet);
   let rateLimitStop = null;
 
   if (!liveSave) {
@@ -1401,6 +1402,25 @@ async function saveFastListImport({
         status: 'unresolved',
         note: 'missing_sales_nav_url',
       });
+      continue;
+    }
+
+    const mutationReviewClassification = classifyMutationReviewLead(lead, existingLeadUrlSet);
+    if (!['intended_add', 'already_saved'].includes(mutationReviewClassification)) {
+      const row = {
+        ...lead,
+        status: mutationReviewClassification === 'identity_manual_review' ? 'manual_review' : mutationReviewClassification,
+        saveRecoveryPath: 'mutation_review_exclusion',
+        failureCategory: mutationReviewClassification,
+        selectionMode: null,
+        attempt: 0,
+        note: mutationReviewClassification,
+        nextAction: 'manual_review_before_save',
+      };
+      results.push(row);
+      if (typeof onProgress === 'function') {
+        onProgress(row);
+      }
       continue;
     }
 
@@ -1427,11 +1447,17 @@ async function saveFastListImport({
       const row = {
         ...lead,
         status: 'already_saved',
-        saveRecoveryPath: 'snapshot_preflight',
+        saveRecoveryPath: initialExistingLeadUrlSet.has(normalizeLeadUrl(lead.salesNavigatorUrl))
+          ? 'snapshot_preflight'
+          : 'in_run_duplicate_preflight',
         failureCategory: null,
-        selectionMode: 'snapshot_preflight',
+        selectionMode: initialExistingLeadUrlSet.has(normalizeLeadUrl(lead.salesNavigatorUrl))
+          ? 'snapshot_preflight'
+          : 'in_run_duplicate_preflight',
         attempt: 0,
-        note: 'snapshot_preflight_already_saved',
+        note: initialExistingLeadUrlSet.has(normalizeLeadUrl(lead.salesNavigatorUrl))
+          ? 'snapshot_preflight_already_saved'
+          : 'in_run_duplicate_already_processed',
       };
       results.push(row);
       if (typeof onProgress === 'function') {
@@ -1470,6 +1496,7 @@ async function saveFastListImport({
           note: saveResult.note || null,
         };
         results.push(row);
+        existingLeadUrlSet.add(normalizeLeadUrl(lead.salesNavigatorUrl));
         if (typeof onProgress === 'function') {
           onProgress(row);
         }
@@ -1583,6 +1610,7 @@ function buildFastListImportResult(payload) {
   const failed = results.filter((row) => failedStatuses.has(row.status)).length;
   const unresolved = results.filter((row) => row.status === 'unresolved').length;
   const manualReview = results.filter((row) => row.status === 'manual_review').length;
+  const mutationReviewExcluded = results.filter((row) => row.saveRecoveryPath === 'mutation_review_exclusion').length;
   const confirmedSaved = results.filter((row) => ['saved', 'results_row_fallback_saved'].includes(row.status)).length;
   const alreadySaved = results.filter((row) => row.status === 'already_saved').length;
   const snapshotSkipped = results.filter((row) => row.status === 'already_saved' && row.saveRecoveryPath === 'snapshot_preflight').length;
@@ -1590,7 +1618,7 @@ function buildFastListImportResult(payload) {
   const failureBreakdown = summarizeSaveFailureBreakdown(results);
   return {
     ...payload,
-    status: failed || unresolved || manualReview || rateLimitSkipped ? 'completed_with_followup' : 'completed',
+    status: failed || unresolved || manualReview || mutationReviewExcluded || rateLimitSkipped ? 'completed_with_followup' : 'completed',
     saved: confirmedSaved,
     confirmedSaved,
     alreadySaved,
@@ -1599,8 +1627,9 @@ function buildFastListImportResult(payload) {
     failed,
     unresolved,
     manualReview,
+    mutationReviewExcluded,
     failureBreakdown,
-    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, rateLimitSkipped, failureBreakdown }),
+    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }),
   };
 }
 
@@ -1621,7 +1650,7 @@ function summarizeSaveFailureBreakdown(results = []) {
   }, {});
 }
 
-function deriveFastListImportNextAction({ failed, unresolved, manualReview, rateLimitSkipped, failureBreakdown }) {
+function deriveFastListImportNextAction({ failed, unresolved, manualReview, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }) {
   if (failureBreakdown?.rate_limit || rateLimitSkipped) {
     return 'wait_10_min_and_retry_failed';
   }
@@ -1634,7 +1663,7 @@ function deriveFastListImportNextAction({ failed, unresolved, manualReview, rate
   if (failureBreakdown?.save_ui_state || failureBreakdown?.save_selector_miss) {
     return 'retry_after_ui_cooldown_or_open_bug';
   }
-  if (manualReview || unresolved) {
+  if (manualReview || unresolved || mutationReviewExcluded) {
     return 'review_unresolved_or_manual_rows';
   }
   if (failed) {
@@ -1659,6 +1688,183 @@ function buildFastResolveArtifactPath(label = 'fast-resolve-leads') {
     .replace(/^-+|-+$/g, '') || 'fast-resolve-leads';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   return path.join(ACCOUNT_BATCH_ARTIFACTS_DIR, `${slug}-fast-resolve-${timestamp}.json`);
+}
+
+function buildMutationReviewArtifactPath(label = 'mutation-review') {
+  const slug = String(label || 'mutation-review')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'mutation-review';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return path.join(ACCOUNT_BATCH_ARTIFACTS_DIR, `${slug}-mutation-review-${timestamp}.json`);
+}
+
+function buildMutationReviewRow(lead = {}, reason = null) {
+  return {
+    row: lead.row || lead.importSourceRow || null,
+    accountName: lead.accountName || lead.company || null,
+    fullName: lead.fullName || lead.name || null,
+    title: lead.title || lead.titel || null,
+    salesNavigatorUrl: normalizeLeadUrl(lead.salesNavigatorUrl || lead.profileUrl || lead.publicLinkedInUrl || ''),
+    resolutionStatus: lead.resolutionStatus || null,
+    resolutionBucket: lead.resolutionBucket || null,
+    resolutionConfidence: lead.resolutionConfidence ?? lead.confidence ?? null,
+    evidence: lead.resolutionEvidence || lead.evidence || null,
+    reason,
+  };
+}
+
+function classifyMutationReviewLead(lead = {}, existingLeadUrlSet = new Set()) {
+  const url = normalizeLeadUrl(lead.salesNavigatorUrl || lead.profileUrl || lead.publicLinkedInUrl || '');
+  if (!url || !isSalesNavigatorLeadUrl(url)) {
+    return 'unresolved_or_missing_sales_nav_url';
+  }
+  if (existingLeadUrlSet.has(url)) {
+    return 'already_saved';
+  }
+  if (lead.resolutionBucket && !['resolved_safe_to_save', 'resolved_via_alias_research'].includes(lead.resolutionBucket)) {
+    return lead.resolutionBucket === 'manual_review' ? 'manual_review' : lead.resolutionBucket;
+  }
+  if (lead.identityResolution?.needsManualReview || Number(lead.identityResolution?.confidence || 1) < 0.7) {
+    return 'identity_manual_review';
+  }
+  if (lead.resolutionStatus && lead.resolutionStatus !== 'resolved') {
+    return 'unresolved_or_missing_sales_nav_url';
+  }
+  return 'intended_add';
+}
+
+function buildDuplicateWarnings(rows = []) {
+  const byUrl = new Map();
+  for (const row of rows) {
+    if (!row.salesNavigatorUrl) {
+      continue;
+    }
+    const bucket = byUrl.get(row.salesNavigatorUrl) || [];
+    bucket.push(row);
+    byUrl.set(row.salesNavigatorUrl, bucket);
+  }
+  return Array.from(byUrl.entries())
+    .filter(([, matches]) => matches.length > 1)
+    .map(([salesNavigatorUrl, matches]) => ({
+      salesNavigatorUrl,
+      count: matches.length,
+      rows: matches.map((row) => row.row).filter(Boolean),
+      names: matches.map((row) => row.fullName).filter(Boolean),
+      warning: 'duplicate_sales_nav_url_in_intended_adds',
+    }));
+}
+
+function buildMutationReviewArtifact({
+  importPlan = {},
+  existingLeadUrls = [],
+  command = 'fast-list-import',
+  generatedAt = new Date().toISOString(),
+} = {}) {
+  const existingLeadUrlSet = buildExistingLeadUrlSet(existingLeadUrls);
+  const intendedAdds = [];
+  const alreadySavedSkips = [];
+  const exclusions = [];
+
+  for (const lead of importPlan.leads || importPlan.results || []) {
+    const classification = classifyMutationReviewLead(lead, existingLeadUrlSet);
+    if (classification === 'intended_add') {
+      intendedAdds.push(buildMutationReviewRow(lead, 'intended_add'));
+    } else if (classification === 'already_saved') {
+      alreadySavedSkips.push(buildMutationReviewRow(lead, 'already_saved'));
+    } else {
+      exclusions.push(buildMutationReviewRow(lead, classification));
+    }
+  }
+
+  const duplicateWarnings = buildDuplicateWarnings(intendedAdds);
+  const approvalChecklist = [
+    `Confirm intended adds count is ${intendedAdds.length} and every lead belongs in list "${importPlan.listName || 'unknown'}".`,
+    `Confirm already-saved skips count is ${alreadySavedSkips.length}; these should not be clicked again.`,
+    `Confirm exclusions count is ${exclusions.length}; manual-review/unresolved leads must not be saved live.`,
+    `Review duplicate warnings count is ${duplicateWarnings.length}; duplicates must be intentional before any live save.`,
+    'Confirm Sales Navigator session, target list, and company/identity evidence are current before running a live command.',
+  ];
+
+  return {
+    version: '1.0.0',
+    type: 'live_mutation_review',
+    command,
+    generatedAt,
+    listName: importPlan.listName || null,
+    sourcePath: importPlan.sourcePath || null,
+    sourcePaths: importPlan.sourcePaths || null,
+    drySafe: true,
+    liveMutationReady: false,
+    summary: {
+      totalRows: (importPlan.leads || importPlan.results || []).length,
+      intendedAdds: intendedAdds.length,
+      alreadySavedSkips: alreadySavedSkips.length,
+      exclusions: exclusions.length,
+      duplicateWarnings: duplicateWarnings.length,
+    },
+    intendedAdds,
+    alreadySavedSkips,
+    exclusions,
+    duplicateWarnings,
+    approvalChecklist,
+  };
+}
+
+function renderMutationReviewMarkdown(artifact) {
+  const lines = [];
+  lines.push('# Live Mutation Review');
+  lines.push('');
+  lines.push(`- Generated at: \`${artifact.generatedAt}\``);
+  lines.push(`- Command: \`${artifact.command || 'fast-list-import'}\``);
+  lines.push(`- List: \`${artifact.listName || 'unknown'}\``);
+  lines.push(`- Dry safe: \`${artifact.drySafe ? 'yes' : 'no'}\``);
+  lines.push(`- Live mutation ready: \`${artifact.liveMutationReady ? 'yes' : 'no'}\``);
+  lines.push(`- Intended adds: \`${artifact.summary?.intendedAdds || 0}\``);
+  lines.push(`- Already-saved skips: \`${artifact.summary?.alreadySavedSkips || 0}\``);
+  lines.push(`- Exclusions: \`${artifact.summary?.exclusions || 0}\``);
+  lines.push(`- Duplicate warnings: \`${artifact.summary?.duplicateWarnings || 0}\``);
+  lines.push('');
+  lines.push('## Operator Approval Checklist');
+  lines.push('');
+  for (const item of artifact.approvalChecklist || []) {
+    lines.push(`- [ ] ${item}`);
+  }
+  lines.push('');
+  lines.push('## Intended Adds');
+  lines.push('');
+  lines.push('| # | Account | Name | Confidence | URL |');
+  lines.push('|---:|---|---|---:|---|');
+  for (const [index, row] of (artifact.intendedAdds || []).entries()) {
+    lines.push(`| ${index + 1} | ${escapeMarkdown(row.accountName)} | ${escapeMarkdown(row.fullName)} | ${row.resolutionConfidence ?? ''} | ${escapeMarkdown(row.salesNavigatorUrl)} |`);
+  }
+  lines.push('');
+  lines.push('## Already-Saved Skips');
+  lines.push('');
+  lines.push('| # | Account | Name | Reason | URL |');
+  lines.push('|---:|---|---|---|---|');
+  for (const [index, row] of (artifact.alreadySavedSkips || []).entries()) {
+    lines.push(`| ${index + 1} | ${escapeMarkdown(row.accountName)} | ${escapeMarkdown(row.fullName)} | ${escapeMarkdown(row.reason)} | ${escapeMarkdown(row.salesNavigatorUrl)} |`);
+  }
+  lines.push('');
+  lines.push('## Exclusions');
+  lines.push('');
+  lines.push('| # | Account | Name | Reason | Evidence |');
+  lines.push('|---:|---|---|---|---|');
+  for (const [index, row] of (artifact.exclusions || []).entries()) {
+    lines.push(`| ${index + 1} | ${escapeMarkdown(row.accountName)} | ${escapeMarkdown(row.fullName)} | ${escapeMarkdown(row.reason)} | ${escapeMarkdown(row.evidence)} |`);
+  }
+  lines.push('');
+  lines.push('## Duplicate Warnings');
+  lines.push('');
+  if ((artifact.duplicateWarnings || []).length === 0) {
+    lines.push('- None');
+  } else {
+    for (const warning of artifact.duplicateWarnings || []) {
+      lines.push(`- ${escapeMarkdown(warning.salesNavigatorUrl)} appears ${warning.count} times: ${escapeMarkdown((warning.names || []).join(', '))}`);
+    }
+  }
+  return `${lines.join('\n').trim()}\n`;
 }
 
 function renderFastListImportMarkdown(artifact) {
@@ -1700,6 +1906,17 @@ function writeFastListImportArtifact(artifact, outputPath = null) {
   writeJson(targetPath, artifact);
   const reportPath = targetPath.replace(/\.json$/i, '.md');
   fs.writeFileSync(reportPath, renderFastListImportMarkdown(artifact), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  return { artifactPath: targetPath, reportPath };
+}
+
+function writeMutationReviewArtifact(artifact, outputPath = null) {
+  const targetPath = outputPath || buildMutationReviewArtifactPath(artifact.listName || artifact.command || 'mutation-review');
+  writeJson(targetPath, artifact);
+  const reportPath = targetPath.replace(/\.json$/i, '.md');
+  fs.writeFileSync(reportPath, renderMutationReviewMarkdown(artifact), {
     encoding: 'utf8',
     mode: 0o600,
   });
@@ -1787,6 +2004,8 @@ module.exports = {
   buildFastListImportArtifactPath,
   buildFastResolveArtifact,
   buildFastResolveArtifactPath,
+  buildMutationReviewArtifact,
+  buildMutationReviewArtifactPath,
   bucketFastResolveLead,
   buildCompanyAliasTerms,
   buildFastResolveQueryPlan,
@@ -1806,6 +2025,7 @@ module.exports = {
   parseMarkdownLeadRows,
   renderFastResolveMarkdown,
   renderFastListImportMarkdown,
+  renderMutationReviewMarkdown,
   resolveLeadsWithCoverage,
   resolveLeadIdentity,
   saveFastListImport,
@@ -1813,4 +2033,5 @@ module.exports = {
   writeLearnedLeadResolutionSuggestions,
   writeFastListImportArtifact,
   writeFastResolveArtifact,
+  writeMutationReviewArtifact,
 };

@@ -373,7 +373,10 @@ function bucketFastResolveLead(lead, scoredCandidates = [], aliasTerms = []) {
   const sorted = [...scoredCandidates].sort((left, right) => right.score - left.score);
   const best = sorted[0] || null;
   const bestIsGuardedNameOnly = best?.queryPlanEntry?.guardedNameOnly || best?.guardedNameOnly;
+  const identityNeedsManualReview = Boolean(lead.identityResolution?.needsManualReview)
+    || (typeof lead.identityResolution?.confidence === 'number' && lead.identityResolution.confidence < 0.7);
   const safe = best
+    && !identityNeedsManualReview
     && best.exactName
     && (best.candidate.salesNavigatorUrl || best.candidate.profileUrl)
     && (
@@ -408,11 +411,13 @@ function bucketFastResolveLead(lead, scoredCandidates = [], aliasTerms = []) {
   const bucket = companyUnresolved || noCandidates || exactWrongCompany || hasOnlyOriginalAlias
     ? 'needs_company_alias_retry'
     : 'manual_review';
-  const evidence = companyUnresolved
-    ? 'company_unresolved'
-    : noCandidates && lead.identityResolution?.needsManualReview
-      ? 'identity_incomplete'
-      : bucket;
+  const evidence = identityNeedsManualReview
+    ? 'identity_manual_review'
+    : companyUnresolved
+      ? 'company_unresolved'
+      : noCandidates && lead.identityResolution?.needsManualReview
+        ? 'identity_incomplete'
+        : bucket;
   return {
     ...lead,
     salesNavigatorUrl: null,

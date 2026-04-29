@@ -702,6 +702,35 @@ test('bucketFastResolveLead emits resolved_safe_to_save only for safe matches', 
   assert.equal(bucketed.resolutionStatus, 'resolved');
 });
 
+test('bucketFastResolveLead blocks manual-review identity from resolved_safe_to_save', () => {
+  const bucketed = bucketFastResolveLead({
+    fullName: 'T. Smith',
+    accountName: 'Example Account',
+    identityResolution: {
+      needsManualReview: true,
+      confidence: 0.35,
+      evidence: ['truncated_name_without_slug'],
+    },
+  }, [{
+    candidate: {
+      fullName: 'T. Smith',
+      company: 'Example Account',
+      salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/manual-identity',
+    },
+    score: 100,
+    exactName: true,
+    slugMatch: false,
+    companyMatch: true,
+    titleMatch: true,
+    additionalSignals: 3,
+  }], ['Example Account']);
+
+  assert.notEqual(bucketed.resolutionBucket, 'resolved_safe_to_save');
+  assert.equal(bucketed.resolutionStatus, 'unresolved');
+  assert.equal(bucketed.salesNavigatorUrl, null);
+  assert.equal(bucketed.resolutionEvidence, 'identity_manual_review');
+});
+
 test('bucketFastResolveLead sends same-name wrong-company matches to alias retry', () => {
   const bucketed = bucketFastResolveLead({
     fullName: 'Peter Cloud',

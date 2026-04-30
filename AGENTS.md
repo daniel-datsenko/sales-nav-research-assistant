@@ -40,6 +40,8 @@ If LinkedIn/Sales Navigator is not authenticated, explain the two safe paths:
 - Read relevant ADRs in `docs/adr/` before changing safety gates, live-mutation paths, performance mechanisms, or agent workflows.
 - Use `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` when creating or triaging GitHub issues.
 - Use `docs/agents/ready-for-agent-brief.md` before handing work to an AFK implementation agent.
+- Use `docs/agents/multi-agent-pr-stack.md` when splitting Parallel Research or agent-orchestration work across stacked PRs.
+- Use `docs/testing/parallel-research-stress-verification.md` before claiming Parallel Research stability, speed, or merge readiness.
 
 ## Recommended First Commands
 

@@ -31,7 +31,8 @@ Out of scope:
 - Preserve dry-safe defaults.
 - Do not run `--live-save`, `--live-connect`, or background connect commands.
 - Do not edit `runtime/`, `.env`, cookies, browser profiles, screenshots, local DBs, or secrets.
-- Do not weaken Manual Review, Company Scope, Execution Gate, Gate Report, or Mutation Review behavior.
+- Do not weaken Manual Review, Company Scope, Execution Gate, Gate Report, Mutation Review, Browser Worker Lock, or `browserConcurrency=1` behavior.
+- If browser-backed Sales Navigator work appears necessary, keep it behind the single Browser Worker path and mark the slice HITL unless it uses fake-driver/dry-safe tests only.
 - If live mutation appears necessary, stop and mark the issue `ready-for-human`.
 
 ### Suggested files/modules

@@ -6,7 +6,8 @@ This repository uses a single shared domain context:
 
 - `CONTEXT.md` — canonical project language and ambiguity notes.
 - `docs/adr/` — accepted architectural and operating decisions.
-- `docs/agents/` — agent operating docs: issue tracker, triage labels, and Agent Brief conventions.
+- `docs/agents/` — agent operating docs: issue tracker, triage labels, Agent Brief conventions, and stacked PR runbooks.
+- `docs/testing/` — verification and stress-check runbooks for dry-safe pipeline work.
 
 ## Consumer rules
 

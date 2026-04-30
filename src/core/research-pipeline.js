@@ -308,6 +308,8 @@ async function executeBrowserSweepJobs({
  *   coverageConfig?: object,
  *   priorityModel?: object | null,
  *   localConcurrency?: number,
+ *   researchMode?: string,
+ *   speedProfile?: string,
  * }} params
  */
 async function scoreResearchCandidates({
@@ -481,6 +483,8 @@ function buildResearchPipelineArtifact({
   startedAt,
   finishedAt,
   localConcurrency = 4,
+  researchMode = null,
+  speedProfile = null,
 } = {}) {
   const jobsWithCache = cacheResults ?? plannedJobs?.jobs ?? [];
   const sweepJobs = jobsWithCache.filter((j) => j.type === 'sweep');
@@ -529,6 +533,8 @@ function buildResearchPipelineArtifact({
     accountCount: queue?.accounts?.length ?? 0,
     browserConcurrency: 1,
     localConcurrency,
+    researchMode,
+    speedProfile,
     status: 'completed',
     metrics,
     researchPipeline: {

@@ -109,6 +109,15 @@ function normalizeCandidateKey(candidate) {
 }
 
 const SPEED_PROFILES = new Set(['exhaustive', 'balanced', 'fast']);
+const RESEARCH_MODES = new Set(['persona-led', 'exhaustive', 'keyword']);
+const PERSONA_LAYER_ORDER = {
+  broad: 0,
+  buyer: 1,
+  operator: 2,
+  user: 3,
+  adjacent: 4,
+  unknown: 5,
+};
 const PRIORITY_SWEEP_HINTS = [
   'observability',
   'platform',
@@ -125,6 +134,56 @@ const PRIORITY_SWEEP_HINTS = [
 function normalizeSpeedProfile(value = 'balanced') {
   const profile = String(value || 'balanced').toLowerCase();
   return SPEED_PROFILES.has(profile) ? profile : 'balanced';
+}
+
+function normalizeResearchMode(value = 'persona-led') {
+  const mode = String(value || 'persona-led').toLowerCase();
+  return RESEARCH_MODES.has(mode) ? mode : 'persona-led';
+}
+
+function inferPersonaLayerForSweep(sweep = {}) {
+  const text = [
+    sweep.id,
+    sweep.name,
+    ...(sweep.keywords || []),
+    ...(sweep.titleIncludes || []),
+  ].join(' ').toLowerCase();
+
+  if (sweep.id === 'broad-crawl' || /\bbroad\b/.test(text)) {
+    return 'broad';
+  }
+  if (/\b(buyer|cto|cio|cdo|chief|vp|director|directeur|directrice|direttore|direttrice|data\s*&\s*ai|data and ai|daten\s*&\s*ki|datos e ia|dati e ai|digital transformation|transformation digitale|marketplace director)\b/.test(text)) {
+    return 'buyer';
+  }
+  if (/\b(operator|responsable domaine|direction informatique|gouvernance si|it-governance|governance|architecture des environnements|enterprise architecture|production informatique|produktion it|produzione it|infrastructure|platform|cloud governance|head of tech|leiter|responsabile|jefe de plataforma)\b/.test(text)) {
+    return 'operator';
+  }
+  if (/\b(user|sre|site reliability|devops|devsecops|observability|observabilit|observabilidad|osservabilit|monitoring|technical lead|tech lead|cloud engineer|ingénieur|ingenieur|ingeniero|ingegnere|kubernetes|terraform|prometheus|grafana|dynatrace|datadog)\b/.test(text)) {
+    return 'user';
+  }
+  if (/\b(security|data|software|technology|integration|operations|system|it)\b/.test(text)) {
+    return 'adjacent';
+  }
+  return 'unknown';
+}
+
+function orderTemplatesForResearchMode(templates, researchMode = 'persona-led') {
+  const mode = normalizeResearchMode(researchMode);
+  if (mode === 'keyword') {
+    return templates;
+  }
+
+  return templates
+    .map((template, index) => ({ template, index }))
+    .sort((left, right) => {
+      const layerDiff = (PERSONA_LAYER_ORDER[left.template.personaLayer] ?? PERSONA_LAYER_ORDER.unknown)
+        - (PERSONA_LAYER_ORDER[right.template.personaLayer] ?? PERSONA_LAYER_ORDER.unknown);
+      if (layerDiff !== 0) {
+        return layerDiff;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.template);
 }
 
 function isPrioritySweep(template) {
@@ -217,6 +276,7 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       keywords: [],
       titleIncludes: config.broadCrawl.titleIncludes || [],
       titleExcludes: config.broadCrawl.titleExcludes || defaultTitleExcludes,
+      personaLayer: 'broad',
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -233,6 +293,7 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       keywords: sweep.keywords || [],
       titleIncludes: sweep.titleIncludes || [],
       titleExcludes: sweep.titleExcludes || defaultTitleExcludes,
+      personaLayer: sweep.personaLayer || inferPersonaLayerForSweep(sweep),
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -241,7 +302,9 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
     templates.push(template);
   }
 
-  return applySpeedProfileToTemplates(templates, options.speedProfile || 'balanced', {
+  const ordered = orderTemplatesForResearchMode(templates, options.researchMode || 'persona-led');
+
+  return applySpeedProfileToTemplates(ordered, options.speedProfile || 'balanced', {
     adaptiveSweepPruning: options.adaptiveSweepPruning,
   });
 }
@@ -477,6 +540,9 @@ function summarizePersonaCoverage(candidates = []) {
     user: { count: 0 },
     unknown: { count: 0 },
     warnings: [],
+    coverageGaps: [],
+    status: 'coverage_sufficient',
+    nextAction: 'coverage_sufficient',
   };
 
   for (const candidate of candidates) {
@@ -485,14 +551,103 @@ function summarizePersonaCoverage(candidates = []) {
     bucket.count += 1;
   }
 
-  if (summary.buyer.count === 0 && (summary.operator.count > 0 || summary.user.count > 0)) {
-    summary.warnings.push('buyer_coverage_gap');
+  if (summary.buyer.count === 0) {
+    summary.coverageGaps.push('buyer_coverage_gap');
   }
-  if (summary.operator.count === 0 && summary.user.count > 0) {
-    summary.warnings.push('operator_coverage_gap');
+  if (summary.operator.count === 0) {
+    summary.coverageGaps.push('operator_coverage_gap');
+  }
+  if (summary.user.count === 0) {
+    summary.coverageGaps.push('user_coverage_gap');
+  }
+
+  summary.warnings = [...summary.coverageGaps];
+  if (summary.coverageGaps.length > 0) {
+    summary.status = 'coverage_incomplete';
+    if (summary.coverageGaps.includes('buyer_coverage_gap')) {
+      summary.nextAction = 'run_buyer_follow_up_sweeps';
+    } else if (summary.coverageGaps.includes('operator_coverage_gap')) {
+      summary.nextAction = 'run_operator_follow_up_sweeps';
+    } else {
+      summary.nextAction = 'run_user_follow_up_sweeps';
+    }
   }
 
   return summary;
+}
+
+function buildPersonaCoverageFollowUpPlan(personaCoverage = {}, options = {}) {
+  const researchMode = normalizeResearchMode(options.researchMode || 'persona-led');
+  const gaps = Array.isArray(personaCoverage.coverageGaps)
+    ? personaCoverage.coverageGaps
+    : Array.isArray(personaCoverage.warnings)
+      ? personaCoverage.warnings
+      : [];
+  const missingLayers = gaps
+    .map((gap) => String(gap).replace(/_coverage_gap$/, ''))
+    .filter((layer) => ['buyer', 'operator', 'user'].includes(layer));
+
+  if (missingLayers.length === 0) {
+    return {
+      status: 'coverage_sufficient',
+      missingLayers: [],
+      nextAction: 'coverage_sufficient',
+      followUpSweeps: [],
+    };
+  }
+
+  const followUpKeywords = {
+    buyer: [
+      'CTO',
+      'CIO',
+      'CDO',
+      'Chief Data Officer',
+      'Director Data',
+      'Directeur Data',
+      'Digital Transformation',
+      'Cloud Transformation',
+      'VP Platform',
+      'Head of Cloud',
+    ],
+    operator: [
+      'Head of Technology',
+      'Head of Architecture',
+      'Enterprise Architecture',
+      'Responsable Domaine',
+      'Direction Informatique',
+      'Gouvernance SI',
+      'IT Production',
+      'Production Informatique',
+      'Cloud Governance',
+      'Platform Operations',
+    ],
+    user: [
+      'SRE',
+      'DevOps',
+      'Observability',
+      'Observabilité',
+      'Monitoring',
+      'Cloud Engineer',
+      'Technical Lead',
+      'Tech Lead',
+      'Kubernetes',
+      'Prometheus',
+    ],
+  };
+
+  return {
+    status: 'coverage_incomplete',
+    missingLayers,
+    nextAction: researchMode === 'exhaustive'
+      ? 'manual_review_persona_gap_after_exhaustive_run'
+      : `run_${missingLayers[0]}_follow_up_sweeps`,
+    followUpSweeps: missingLayers.map((layer) => ({
+      id: `persona-follow-up-${layer}`,
+      personaLayer: layer,
+      keywords: followUpKeywords[layer],
+      drySafe: true,
+    })),
+  };
 }
 
 function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, coverageConfig, accountName }) {
@@ -570,13 +725,17 @@ function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, c
     buyerGroupRoles: priorityModel?.buyerGroupRoles || {},
   })[0] || null;
 
+  const personaCoverage = summarizePersonaCoverage(candidates);
+  const personaFollowUpPlan = buildPersonaCoverageFollowUpPlan(personaCoverage);
+
   return {
     accountName,
     generatedAt: new Date().toISOString(),
     candidateCount: candidates.length,
     candidates,
     coverage,
-    personaCoverage: summarizePersonaCoverage(candidates),
+    personaCoverage,
+    personaFollowUpPlan,
   };
 }
 
@@ -622,6 +781,7 @@ async function runAccountCoverageWorkflow({
   icpConfig,
   priorityModel,
   maxCandidates = null,
+  researchMode = 'persona-led',
   speedProfile = 'balanced',
   adaptiveSweepPruning = false,
   reuseSweepCache = false,
@@ -633,13 +793,16 @@ async function runAccountCoverageWorkflow({
   now = Date.now,
 }) {
   const normalizedSpeedProfile = normalizeSpeedProfile(speedProfile);
+  const normalizedResearchMode = normalizeResearchMode(researchMode);
+  const effectiveSpeedProfile = normalizedResearchMode === 'exhaustive' ? 'exhaustive' : normalizedSpeedProfile;
   const timings = createRunTimings(now);
   const adaptivePruningRequested = Boolean(adaptiveSweepPruning);
-  const adaptivePruningActive = adaptivePruningRequested && normalizedSpeedProfile !== 'exhaustive';
-  const pruningThresholds = adaptivePruningActive ? getAdaptivePruningThresholds(normalizedSpeedProfile) : null;
+  const adaptivePruningActive = adaptivePruningRequested && effectiveSpeedProfile !== 'exhaustive';
+  const pruningThresholds = adaptivePruningActive ? getAdaptivePruningThresholds(effectiveSpeedProfile) : null;
   const templates = buildSweepTemplates(coverageConfig, maxCandidates, {
-    speedProfile: normalizedSpeedProfile,
-    adaptiveSweepPruning: adaptivePruningRequested && normalizedSpeedProfile === 'fast',
+    speedProfile: effectiveSpeedProfile,
+    researchMode: normalizedResearchMode,
+    adaptiveSweepPruning: adaptivePruningRequested && effectiveSpeedProfile === 'fast',
   });
   const aliasConfig = loadAccountAliasConfig();
   const aliasEntry = findAccountAliasEntry(aliasConfig, accountName);
@@ -688,9 +851,9 @@ async function runAccountCoverageWorkflow({
     executedTemplates: [],
     uniqueCandidatesAddedByTemplate: {},
     thresholds: pruningThresholds
-      ? { ...pruningThresholds, profile: normalizedSpeedProfile }
+      ? { ...pruningThresholds, profile: effectiveSpeedProfile }
       : null,
-    profile: normalizedSpeedProfile,
+    profile: effectiveSpeedProfile,
   };
   const executedUniqueAdds = [];
 
@@ -887,7 +1050,11 @@ async function runAccountCoverageWorkflow({
   finalResult.slowestSweeps = summarizeSlowestSweeps(timings.events);
   finalResult.cacheHits = cacheHits;
   finalResult.cacheMisses = cacheMisses;
-  finalResult.speedProfile = normalizedSpeedProfile;
+  finalResult.speedProfile = effectiveSpeedProfile;
+  finalResult.researchMode = normalizedResearchMode;
+  finalResult.personaFollowUpPlan = buildPersonaCoverageFollowUpPlan(finalResult.personaCoverage, {
+    researchMode: normalizedResearchMode,
+  });
   finalResult.adaptivePruning = adaptivePruningTelemetry;
   const bucketSummary = summarizeCoverageBuckets(finalResult.candidates);
 
@@ -901,7 +1068,8 @@ async function runAccountCoverageWorkflow({
     slowestSweeps: finalResult.slowestSweeps,
     cacheHits,
     cacheMisses,
-    speedProfile: normalizedSpeedProfile,
+    speedProfile: effectiveSpeedProfile,
+    researchMode: normalizedResearchMode,
   };
 }
 
@@ -1217,10 +1385,12 @@ module.exports = {
   loadPriorityModel,
   normalizeAccountAliasKey,
   normalizeCandidateKey,
+  normalizeResearchMode,
   normalizeSpeedProfile,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   selectDeepReviewCandidates,
+  buildPersonaCoverageFollowUpPlan,
   summarizeCoverageBuckets,
   summarizeCoverageSweepErrors,
   writeAccountCoverageArtifact,

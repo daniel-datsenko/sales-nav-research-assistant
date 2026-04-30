@@ -5,7 +5,8 @@
 The platform now supports a `hybrid` browser architecture:
 
 - `PlaywrightSalesNavigatorDriver` remains the fast, structured discovery engine.
-- `BrowserHarnessSalesNavigatorDriver` adds direct-CDP control of the user's real Chrome for fragile live actions.
+- `PlaywrightSalesNavigatorDriver` owns automated live mutations such as save-to-list and supervised connect attempts.
+- `BrowserHarnessSalesNavigatorDriver` is retained as an explicit manual diagnostic tool for observing fragile UI shapes.
 - `HybridSalesNavigatorDriver` combines both behind the existing `DriverAdapter` interface.
 
 ## Why this exists
@@ -19,13 +20,13 @@ Our platform already had the right operational structure:
 - approval queue
 - pacing and dedupe
 
-What it lacked was a second execution path for browser work that is:
+What it lacked was a safe boundary for browser work that is:
 
-- closer to the user's real browser session
-- more tolerant of odd UI flows
-- better suited for mutation-heavy tasks like `save to list`
+- fast enough for automated background research
+- predictable for live mutations
+- still debuggable when LinkedIn changes a UI shape
 
-Browser Harness fills that gap without replacing the platform.
+Playwright fills the automated path. Browser Harness fills the manual observation gap without owning production mutations.
 
 ## Current driver split
 
@@ -36,21 +37,22 @@ Browser Harness fills that gap without replacing the platform.
 - template application
 - candidate extraction
 - structured evidence capture from known Sales Navigator DOMs
+- automated save-to-list flows
+- supervised connect flows when explicitly requested
 
 ### Browser Harness owns
 
 - attach to the user's real Chrome through CDP
-- session verification in a real browser context
-- mutation-oriented flows such as `saveCandidateToList`
-- recovery screenshots in the real browser context
-- future path for fragile connect/dialog flows
+- manual UI inspection when Playwright selectors need repair
+- evidence gathering for fragile LinkedIn UI variants
+- one-off operator-driven debugging via explicit `--driver=browser-harness`
 
 ### Hybrid owns
 
 - one `DriverAdapter` surface to the orchestrator
 - Playwright for discovery methods
-- Browser Harness for mutation methods
-- health gating that can require both layers for live mutation runs
+- Playwright for mutation methods
+- no automatic Browser Harness subprocesses
 
 ## Practical stack
 
@@ -62,24 +64,24 @@ flowchart TD
   B --> E["DriverAdapter"]
 
   E --> F["Playwright Driver"]
-  E --> G["Browser Harness Driver"]
 
   F --> H["Sales Nav Discovery"]
   F --> I["Candidate Extraction"]
-
-  G --> J["Real Chrome via CDP"]
-  G --> K["Save To List / Recovery / Future Connect"]
+  F --> K["Headless Save To List / Supervised Connect"]
 
   I --> C
   K --> C
   C --> D
+
+  L["Manual Browser Harness Debug"] -. explicit opt-in .-> J["Real Chrome via CDP"]
+  J -. selector evidence .-> F
 ```
 
 ## Recommended operating mode
 
 ### Default for runs
 
-Use `--driver=hybrid` for production-oriented discovery runs where list-save matters.
+Use `--driver=playwright` for automated live-save/live-connect work. `--driver=hybrid` remains compatible, but it is Playwright-backed for both discovery and mutation.
 
 ### Use `playwright` alone when
 
@@ -90,19 +92,19 @@ Use `--driver=hybrid` for production-oriented discovery runs where list-save mat
 ### Use `browser-harness` alone when
 
 - checking direct Chrome attach behavior
-- testing a live save-to-list flow
 - debugging fragile UI behavior in the user's real browser
+- collecting selector evidence for a Playwright fix
+- running a manual repair session with the operator watching
 
 ## Known limitations
 
-- Browser Harness is not yet the primary discovery engine.
-- The harness integration currently prioritizes session, mutation, and recovery paths.
-- LinkedIn-specific Browser Harness domain-skills are not yet authored in this repo.
+- Browser Harness is intentionally not the automated mutation engine.
+- LinkedIn-specific Browser Harness domain skills may help diagnose UI changes, but shipped automation should land in Playwright.
 - Cloud-profile sync is intentionally not part of the default production path for LinkedIn.
 
 ## Next build steps
 
-1. Add a dedicated `linkedin-sales-navigator` Browser Harness skill pack.
-2. Expand harness-backed list-save handling with LinkedIn-specific selectors and waits learned from live tests.
-3. Add harness-backed connect dialog handling only after list-save is stable.
-4. Optionally add a fallback policy so Playwright discovery failures can trigger Browser Harness recovery flows automatically.
+1. Keep Playwright list-save and supervised connect flows as the production path.
+2. Use Browser Harness only to observe new LinkedIn UI shapes and translate findings back into Playwright selectors.
+3. Add release tests that prevent automated flows from depending on a local `browser-harness` binary.
+4. Keep explicit `--driver=browser-harness` available for manual diagnostics, not unattended runs.

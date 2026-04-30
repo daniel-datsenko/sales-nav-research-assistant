@@ -748,6 +748,83 @@ test('browser harness driver normalizes unverifiable post-click connect flows to
   assert.equal(result.driver, 'browser-harness');
 });
 
+test('hybrid driver defaults automated mutations to the Playwright discovery driver', async () => {
+  class StubPlaywrightDriver extends DriverAdapter {
+    constructor() {
+      super();
+      this.openCount = 0;
+      this.closeCount = 0;
+      this.ensureListCalls = [];
+      this.saveCalls = [];
+      this.connectCalls = [];
+      this.health = {
+        ok: true,
+        authenticated: true,
+        state: 'authenticated',
+        mode: 'playwright',
+        url: 'https://www.linkedin.com/sales/home',
+      };
+    }
+
+    async openSession() {
+      this.openCount += 1;
+    }
+
+    async checkSessionHealth() {
+      return this.health;
+    }
+
+    async ensureList(listName, context) {
+      this.ensureListCalls.push({ listName, context });
+      return { status: 'ready', driver: 'playwright' };
+    }
+
+    async saveCandidateToList(candidate, listInfo, context) {
+      this.saveCalls.push({ candidate, listInfo, context });
+      return { status: 'saved', driver: 'playwright' };
+    }
+
+    async sendConnect(candidate, context) {
+      this.connectCalls.push({ candidate, context });
+      return { status: 'sent', driver: 'playwright' };
+    }
+
+    async close() {
+      this.closeCount += 1;
+    }
+  }
+
+  const playwright = new StubPlaywrightDriver();
+  const hybrid = new HybridSalesNavigatorDriver({
+    allowMutations: true,
+    discoveryDriver: playwright,
+  });
+
+  await hybrid.openSession({ runId: 'run-1', dryRun: false });
+  const health = await hybrid.checkSessionHealth();
+  await hybrid.ensureList('Headless List', { dryRun: false });
+  const saveResult = await hybrid.saveCandidateToList(
+    { fullName: 'Headless Save', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/headless' },
+    { listName: 'Headless List' },
+    { dryRun: false },
+  );
+  const connectResult = await hybrid.sendConnect(
+    { fullName: 'Headless Connect', salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/connect' },
+    { dryRun: false },
+  );
+  await hybrid.close();
+
+  assert.equal(playwright.openCount, 1);
+  assert.equal(playwright.closeCount, 1);
+  assert.equal(health.ok, true);
+  assert.equal(health.mutation.mode, 'playwright');
+  assert.equal(saveResult.driver, 'playwright');
+  assert.equal(connectResult.driver, 'playwright');
+  assert.equal(playwright.ensureListCalls.length, 1);
+  assert.equal(playwright.saveCalls.length, 1);
+  assert.equal(playwright.connectCalls.length, 1);
+});
+
 test('hybrid driver requires mutation health for live mutation runs', async () => {
   class StubDriver extends DriverAdapter {
     constructor(health) {

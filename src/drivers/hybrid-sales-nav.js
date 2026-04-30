@@ -1,6 +1,5 @@
 const { DriverAdapter } = require('./driver-adapter');
 const { PlaywrightSalesNavigatorDriver } = require('./playwright-sales-nav');
-const { BrowserHarnessSalesNavigatorDriver } = require('./browser-harness-sales-nav');
 
 class HybridSalesNavigatorDriver extends DriverAdapter {
   constructor(options = {}) {
@@ -8,12 +7,9 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
     this.options = { ...options };
     this.discoveryDriver = options.discoveryDriver || new PlaywrightSalesNavigatorDriver({
       ...options,
-      allowMutations: false,
-    });
-    this.mutationDriver = options.mutationDriver || new BrowserHarnessSalesNavigatorDriver({
-      ...options,
       allowMutations: options.allowMutations,
     });
+    this.mutationDriver = options.mutationDriver || this.discoveryDriver;
     this.runContext = null;
     this.mutationOpenError = null;
   }
@@ -22,10 +18,12 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
     this.runContext = context;
     this.mutationOpenError = null;
     await this.discoveryDriver.openSession(context);
-    try {
-      await this.mutationDriver.openSession(context);
-    } catch (error) {
-      this.mutationOpenError = error;
+    if (this.mutationDriver !== this.discoveryDriver) {
+      try {
+        await this.mutationDriver.openSession(context);
+      } catch (error) {
+        this.mutationOpenError = error;
+      }
     }
   }
 
@@ -33,12 +31,14 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
     const discovery = await this.discoveryDriver.checkSessionHealth();
     let mutation = null;
 
-    if (this.mutationOpenError) {
+    if (this.mutationDriver === this.discoveryDriver) {
+      mutation = discovery;
+    } else if (this.mutationOpenError) {
       mutation = {
         ok: false,
         authenticated: false,
         state: 'mutation_driver_not_ready',
-        mode: 'browser-harness',
+        mode: this.mutationDriver?.options?.mode || 'custom',
         error: this.mutationOpenError.message,
       };
     } else {
@@ -128,6 +128,18 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
   }
 
   async recoverFromInterruption(event, context) {
+    if (this.mutationDriver === this.discoveryDriver) {
+      const recovery = await this.discoveryDriver.recoverFromInterruption(event, context);
+      return {
+        status: recovery?.status || 'recorded',
+        screenshotPath: recovery?.screenshotPath || null,
+        htmlPath: recovery?.htmlPath || null,
+        textPath: recovery?.textPath || null,
+        discovery: recovery,
+        mutation: recovery,
+      };
+    }
+
     let mutation = null;
     let discovery = null;
 
@@ -162,10 +174,10 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
   }
 
   async close() {
-    await Promise.allSettled([
-      this.discoveryDriver.close(),
-      this.mutationDriver.close(),
-    ]);
+    const drivers = this.mutationDriver === this.discoveryDriver
+      ? [this.discoveryDriver]
+      : [this.discoveryDriver, this.mutationDriver];
+    await Promise.allSettled(drivers.map((driver) => driver.close()));
   }
 }
 

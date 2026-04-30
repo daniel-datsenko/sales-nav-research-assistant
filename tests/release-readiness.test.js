@@ -63,6 +63,19 @@ test('default configs are generic and keep live connects guarded', () => {
   assert.ok(Object.hasOwn(pilot.connectPolicy.manualReviewAccounts, 'Example Manual Review Account'));
 });
 
+test('automated hybrid mutations do not depend on Browser Harness', () => {
+  const hybridDriver = read('src/drivers/hybrid-sales-nav.js');
+  const cli = read('src/cli.js');
+  const architecture = read('docs/ways-of-working/driver-architecture.md');
+
+  assert.doesNotMatch(hybridDriver, /browser-harness-sales-nav/);
+  assert.match(hybridDriver, /this\.mutationDriver = options\.mutationDriver \|\| this\.discoveryDriver/);
+  assert.match(cli, /async function handleImportCoverage[\s\S]+const driverName = getString\(values, 'driver'\) \|\| 'playwright'/);
+  assert.match(cli, /async function handleFastListImport[\s\S]+const driverName = getString\(values, 'driver'\) \|\| 'playwright'/);
+  assert.match(cli, /async function handleConnectLeadList[\s\S]+const driverName = getString\(values, 'driver'\) \|\| 'playwright'/);
+  assert.match(architecture, /Browser Harness is a manual diagnostic and repair tool/);
+});
+
 test('tracked docs do not include historical handoff or acceptance snapshots', () => {
   const docs = fs.readdirSync(path.join(projectRoot, 'docs'));
   const forbidden = docs.filter((fileName) =>

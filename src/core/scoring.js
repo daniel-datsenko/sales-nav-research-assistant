@@ -1,45 +1,50 @@
 function normalizeText(value) {
-  return String(value || '').toLowerCase();
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 function detectRoleFamily(candidate) {
   const text = normalizeText(`${candidate.title} ${candidate.headline || ''}`);
 
-  if (/\b(chief information officer|chief technology officer|cio|cto)\b/.test(text)) return 'executive_engineering';
+  if (/\b(platform engineering|director of platform engineering|head of cloud|head of platform|cloud technology|platform operations|technology foundation operations)\b/.test(text)) return 'platform_engineering';
+  if (/\b(chief information officer|chief technology officer|cio|cto|directeur technique|directeur des systemes d'information|dsi|directeur informatique|director tecnico|director de tecnologia|direttore tecnico|direttore tecnologia)\b/.test(text)) return 'executive_engineering';
+  if (/\b(mlops|aiops|dataops|ai platform|data platform|plateforme de donnees|plataforma de datos|datenplattform|data piattaforma|piattaforma dati)\b/.test(text)) return 'data';
   if (/microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text)) return 'platform_engineering';
-  if (/site reliability|sre/.test(text)) return 'site_reliability';
-  if (/system owner|it product owner/.test(text)) return 'platform_engineering';
+  if (/\b(system owner|it product owner|product owner it|responsable technique|responsable plateforme|responsable infrastructure|responsabile piattaforma|jefe de plataforma|leiter cloud|leiterin cloud|kompetenzzentrum|competency center|centre of excellence|center of excellence|ccoe|cloud governance|cloud practice)\b/.test(text)) return 'platform_engineering';
+  if (/site reliability|\bsre\b|observabilite|observability|osservabilita|monitoring|monitoraggio|monitoreo/.test(text)) return 'site_reliability';
   if (/security architect|security engineer|cyber security|cybersecurity|information security/.test(text)) return 'security';
   if (/data architect|data engineer|data engineering|data platform/.test(text)) return 'data';
   if (/chapter lead.*(tech|technology|platform|ops|operations|infrastructure|monitoring)/.test(text)) return 'platform_engineering';
   if (/operations.*monitoring|monitoring.*operations/.test(text)) return 'platform_engineering';
   if (/head of (cloud|it|it ops|it operations|technology|platform)/.test(text)) return 'platform_engineering';
   if (/\bvp (of )?(technology|it|business it)\b|\bvice president (of )?(technology|it|business it)\b/.test(text)) return 'executive_engineering';
-  if (/architect|architecture/.test(text)) return 'platform_engineering';
-  if (/platform/.test(text)) return 'platform_engineering';
-  if (/devops/.test(text)) return 'devops';
-  if (/infrastructure|cloud ops|cloud operations/.test(text)) return 'infrastructure';
+  if (/architect|architecture|architecte|architekt|architetto|arquitecto/.test(text)) return 'platform_engineering';
+  if (/platform|plateforme|plattform|piattaforma|plataforma/.test(text)) return 'platform_engineering';
+  if (/devops|devsecops/.test(text)) return 'devops';
+  if (/infrastructure|cloud ops|cloud operations|infraestructura|infrastruttura|infrastruktur/.test(text)) return 'infrastructure';
   if (/cto|vp engineering|head of engineering|director of engineering/.test(text)) return 'executive_engineering';
   if (/security/.test(text)) return 'security';
   if (/data/.test(text)) return 'data';
   if (/engineering manager/.test(text)) return 'platform_engineering';
-  if (/engineer|software/.test(text)) return 'software_engineering';
+  if (/engineer|software|ingenieur|ingenieur|ingeniero|ingegnere/.test(text)) return 'software_engineering';
   return 'unknown';
 }
 
 function detectSeniority(candidate) {
   const text = normalizeText(candidate.title);
 
-  if (/\b(chief information officer|chief technology officer|cio|cto)\b/.test(text)) return 'vp';
+  if (/\b(chief information officer|chief technology officer|cio|cto|directeur technique|directeur informatique|dsi|director tecnico|direttore tecnico)\b/.test(text)) return 'vp';
   if (/vice president|\bvp\b/.test(text)) return 'vp';
-  if (/director/.test(text)) return 'director';
-  if (/head/.test(text)) return 'head';
-  if (/manager/.test(text)) return 'manager';
+  if (/director|directeur|direktor|direttore/.test(text)) return 'director';
+  if (/head|leiter|leiterin|jefe|responsable|responsabili?e/.test(text)) return 'head';
+  if (/manager|gestionnaire/.test(text)) return 'manager';
   if (/staff/.test(text)) return 'staff';
   if (/principal/.test(text)) return 'principal';
-  if (/lead/.test(text)) return 'lead';
-  if (/senior/.test(text)) return 'senior';
-  if (/engineer|architect|developer/.test(text)) return 'individual_contributor';
+  if (/lead|tech lead|technical lead/.test(text)) return 'lead';
+  if (/senior|senior/.test(text)) return 'senior';
+  if (/engineer|architect|developer|ingenieur|ingenieur|ingeniero|ingegnere|architecte|architekt|architetto|arquitecto/.test(text)) return 'individual_contributor';
   return 'unknown';
 }
 

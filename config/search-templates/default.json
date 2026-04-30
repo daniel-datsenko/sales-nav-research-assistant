@@ -203,5 +203,59 @@
     "maxCandidates": 10,
     "minimumRelevantHits": 1,
     "listSegment": "account-data"
+  },
+  {
+    "id": "emea-hidden-platform-personas",
+    "name": "EMEA Hidden Platform Personas",
+    "keywords": [
+      "FinOps",
+      "CCOE",
+      "Cloud Governance",
+      "Observability Leader",
+      "Data Platform Lead",
+      "MLOps",
+      "AIOps",
+      "DevSecOps",
+      "Kubernetes",
+      "Terraform",
+      "Datadog",
+      "Dynatrace",
+      "Prometheus",
+      "Grafana"
+    ],
+    "titleIncludes": [
+      "Responsable",
+      "Directeur Technique",
+      "Leiter",
+      "Cloud Kompetenzzentrum",
+      "Responsabile",
+      "Direttore Tecnico",
+      "Jefe",
+      "Director T\u00e9cnico",
+      "Technical Lead",
+      "Tech Lead",
+      "SRE Lead"
+    ],
+    "titleExcludes": [
+      "Facilities",
+      "Fleet",
+      "HSEQ",
+      "Procurement",
+      "Purchasing",
+      "Category Manager",
+      "Sales Director",
+      "Commercial Finance"
+    ],
+    "seniorityTargets": [
+      "manager",
+      "director",
+      "head",
+      "lead",
+      "principal",
+      "vp"
+    ],
+    "maxCandidates": 10,
+    "minimumRelevantHits": 1,
+    "listSegment": "emea-hidden-platform"
   }
 ]

@@ -8,6 +8,7 @@ const { buildPriorityModelV1 } = require('../src/core/priority-score');
 const {
   applyDeepReviewResult,
   buildSweepTemplates,
+  buildCoverageLanguageSplits,
   classifyReviewedCoverageBucket,
   consolidateCoverageCandidates,
   findAccountAliasEntry,
@@ -186,6 +187,37 @@ test('normalizeCandidateKey strips query-string noise from lead urls', () => {
   });
 
   assert.equal(key, 'https://www.linkedin.com/sales/lead/abc123');
+});
+
+test('buildCoverageLanguageSplits produces DE and EN email-list buckets from selected coverage candidates', () => {
+  const split = buildCoverageLanguageSplits({
+    accountName: 'Example AG',
+    candidates: [
+      {
+        fullName: 'Anna',
+        title: 'Leiterin Cloud Plattform',
+        profileLanguage: 'Deutsch',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'head',
+        score: 70,
+      },
+      {
+        fullName: 'Ben',
+        title: 'Head of Platform',
+        profileLanguage: 'English',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'head',
+        score: 72,
+      },
+    ],
+  }, { segment: 'platform-owner' });
+
+  assert.equal(split.listNames.de, 'Example AG - platform-owner - DE');
+  assert.equal(split.listNames.en, 'Example AG - platform-owner - EN');
+  assert.deepEqual(split.buckets.de.map((candidate) => candidate.fullName), ['Anna']);
+  assert.deepEqual(split.buckets.en.map((candidate) => candidate.fullName), ['Ben']);
 });
 
 test('selectDeepReviewCandidates prioritizes adjacent and likely-noise technical titles', () => {

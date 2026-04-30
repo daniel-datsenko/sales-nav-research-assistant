@@ -22,6 +22,10 @@ const {
   readSweepCache,
   writeSweepCache,
 } = require('./sweep-cache');
+const {
+  buildLanguageSplitListNames,
+  splitCandidatesByProfileLanguage,
+} = require('./emea-territory');
 
 function loadAccountCoverageConfig(configPath) {
   return readJson(configPath || resolveProjectPath('config', 'account-coverage', 'default.json'));
@@ -1062,6 +1066,35 @@ function selectCoverageListCandidates(result, options = {}) {
     });
 }
 
+function buildCoverageLanguageSplits(result, options = {}) {
+  const selectedCandidates = options.selectedOnly === false
+    ? (result?.candidates || [])
+    : selectCoverageListCandidates(result, options.selection || {});
+  const segment = options.segment || 'prospects';
+  const listNames = buildLanguageSplitListNames({
+    accountName: result?.accountName || options.accountName || 'Account',
+    segment,
+    prefix: options.prefix || null,
+  });
+  const split = splitCandidatesByProfileLanguage(selectedCandidates, {
+    primaryLanguage: options.primaryLanguage || 'de',
+  });
+
+  return {
+    policy: {
+      primaryLanguage: options.primaryLanguage || 'de',
+      de: 'German profile language',
+      en: 'English and other profile languages',
+    },
+    listNames,
+    buckets: {
+      de: split.de,
+      en: split.en,
+    },
+    meta: split.meta,
+  };
+}
+
 function writeAccountCoverageArtifact(accountName, coverageResult) {
   const artifactPath = buildCoverageArtifactPath(accountName);
   writeJson(artifactPath, coverageResult);
@@ -1076,6 +1109,7 @@ module.exports = {
   classifySweepErrorCategory,
   consolidateCoverageCandidates,
   buildCoverageArtifactPath,
+  buildCoverageLanguageSplits,
   findAccountAliasEntry,
   loadAccountCoverageConfig,
   loadAccountAliasConfig,

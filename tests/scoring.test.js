@@ -231,6 +231,70 @@ test('scoreCandidate keeps qualified technical architecture and platform roles e
   }
 });
 
+test('scoreCandidate recognizes multilingual EMEA buyer and operator personas', () => {
+  const candidates = [
+    {
+      title: 'CDO',
+      expectedRoleFamily: 'executive_engineering',
+      expectedSeniority: 'vp',
+    },
+    {
+      title: 'Directrice Data Product',
+      expectedRoleFamily: 'executive_engineering',
+      expectedSeniority: 'director',
+    },
+    {
+      title: 'Directrice Gouvernance SI et Transformation digitale & e-commerce',
+      expectedRoleFamily: 'platform_engineering',
+      expectedSeniority: 'director',
+    },
+    {
+      title: 'Responsable Domaine Direction Informatique et Production',
+      expectedRoleFamily: 'platform_engineering',
+      expectedSeniority: 'head',
+    },
+    {
+      title: 'Chef de Projet Senior Cloud & Observabilité',
+      expectedRoleFamily: 'site_reliability',
+      expectedSeniority: 'senior',
+    },
+    {
+      title: 'Leiter Digitale Transformation Daten & KI',
+      expectedRoleFamily: 'executive_engineering',
+      expectedSeniority: 'head',
+    },
+    {
+      title: 'Director de Datos e IA',
+      expectedRoleFamily: 'executive_engineering',
+      expectedSeniority: 'director',
+    },
+    {
+      title: 'Responsable Gobernanza TI y Observabilidad',
+      expectedRoleFamily: 'site_reliability',
+      expectedSeniority: 'head',
+    },
+    {
+      title: 'Direttrice Dati e AI',
+      expectedRoleFamily: 'executive_engineering',
+      expectedSeniority: 'director',
+    },
+    {
+      title: 'Responsabile Cloud e Osservabilità',
+      expectedRoleFamily: 'site_reliability',
+      expectedSeniority: 'head',
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const result = scoreCandidate(candidate, icpConfig);
+
+    assert.equal(result.eligible, true, candidate.title);
+    assert.equal(result.roleFamily, candidate.expectedRoleFamily, candidate.title);
+    assert.equal(result.seniority, candidate.expectedSeniority, candidate.title);
+    assert.ok(result.score >= icpConfig.saveToListThreshold, `${candidate.title} score ${result.score}`);
+  }
+});
+
 test('scoreCandidate recognizes SDR-sourced EMEA platform personas and profile signals', () => {
   const candidates = [
     {

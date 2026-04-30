@@ -29,14 +29,33 @@ function hasTechnicalAmbiguousQualifier(value) {
   return /\b(head of platform|platform owner|platform lead|platform manager|software|cloud|it|information technology|technology|technical|systems?|enterprise|solution|solutions|application|applications|platform engineering|infrastructure|devops|devsecops|sre|site reliability|observability|monitoring|backend|microservice|microservices|distributed|data platform|ai platform|engineering)\b/.test(text);
 }
 
-function detectRoleFamily(candidate) {
+function matchesAnyText(text, keywords = []) {
+  const normalized = normalizeText(text);
+  return (keywords || []).some((keyword) => {
+    const normalizedKeyword = normalizeText(keyword).trim();
+    if (!normalizedKeyword) {
+      return false;
+    }
+    return normalized.includes(normalizedKeyword);
+  });
+}
+
+function getMultilingualPersonaSignals(icpConfig = {}) {
+  return icpConfig.multilingualPersonaSignals || {};
+}
+
+function detectRoleFamily(candidate, icpConfig = {}) {
   const text = normalizeText(`${candidate.title} ${candidate.headline || ''}`);
   const title = normalizeText(candidate.title);
+  const multilingual = getMultilingualPersonaSignals(icpConfig);
 
   if (classifyNonIcpTitleReason(candidate.title)) return 'unknown';
 
+  if (matchesAnyText(title, multilingual.observabilityOperator)) return 'site_reliability';
+  if (matchesAnyText(text, multilingual.executiveDataBuyer)) return 'executive_engineering';
+  if (matchesAnyText(text, multilingual.platformOperator)) return 'platform_engineering';
   if (/\b(platform engineering|director of platform engineering|head of cloud|head of platform|cloud technology|platform operations|technology foundation operations)\b/.test(text)) return 'platform_engineering';
-  if (/\b(chief information officer|chief technology officer|cio|cto|directeur technique|directeur des systemes d'information|dsi|directeur informatique|director tecnico|director de tecnologia|direttore tecnico|direttore tecnologia)\b/.test(text)) return 'executive_engineering';
+  if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur des systemes d'information|directrice des systemes d'information|dsi|directeur informatique|directrice informatique|director tecnico|directora tecnica|director de tecnologia|directora de tecnologia|direttore tecnico|direttrice tecnica|direttore tecnologia|direttrice tecnologia)\b/.test(text)) return 'executive_engineering';
   if (/\b(mlops|aiops|dataops|ai platform|data platform|plateforme de donnees|plataforma de datos|datenplattform|data piattaforma|piattaforma dati)\b/.test(text)) return 'data';
   if (/microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text)) return 'platform_engineering';
   if (/\b(system owner|it product owner|product owner it|responsable technique|responsable plateforme|responsable infrastructure|responsabile piattaforma|jefe de plataforma|leiter cloud|leiterin cloud|kompetenzzentrum|competency center|centre of excellence|center of excellence|ccoe|cloud governance|cloud practice)\b/.test(text)) return 'platform_engineering';
@@ -59,12 +78,14 @@ function detectRoleFamily(candidate) {
   return 'unknown';
 }
 
-function detectSeniority(candidate) {
+function detectSeniority(candidate, icpConfig = {}) {
   const text = normalizeText(candidate.title);
+  const multilingual = getMultilingualPersonaSignals(icpConfig);
 
-  if (/\b(chief information officer|chief technology officer|cio|cto|directeur technique|directeur informatique|dsi|director tecnico|direttore tecnico)\b/.test(text)) return 'vp';
+  if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur informatique|directrice informatique|dsi|director tecnico|directora tecnica|direttore tecnico|direttrice tecnica)\b/.test(text)) return 'vp';
   if (/vice president|\bvp\b/.test(text)) return 'vp';
-  if (/director|directeur|direktor|direttore/.test(text)) return 'director';
+  if (matchesAnyText(text, multilingual.seniorityDirector)) return 'director';
+  if (/director|directeur|directrice|direktor|direktorin|direttore|direttrice|directora/.test(text)) return 'director';
   if (/head|leiter|leiterin|jefe|responsable|responsabili?e/.test(text)) return 'head';
   if (/manager|gestionnaire/.test(text)) return 'manager';
   if (/staff/.test(text)) return 'staff';
@@ -114,8 +135,15 @@ function scoreCandidate(candidate, icpConfig) {
   const observabilitySignals = countMatches(combinedText, icpConfig.observabilitySignals || []);
   const championSignals = countMatches(combinedText, icpConfig.technicalChampionSignals || []);
   const profileReviewSignals = countMatches(combinedText, icpConfig.profileReviewSignals || []);
-  const roleFamily = detectRoleFamily(candidate);
-  const seniority = detectSeniority(candidate);
+  const multilingual = getMultilingualPersonaSignals(icpConfig);
+  const localizedPersonaSignals = [
+    ...(multilingual.executiveDataBuyer || []),
+    ...(multilingual.platformOperator || []),
+    ...(multilingual.observabilityOperator || []),
+  ];
+  const localizedSignals = countMatches(combinedText, localizedPersonaSignals);
+  const roleFamily = detectRoleFamily(candidate, icpConfig);
+  const seniority = detectSeniority(candidate, icpConfig);
 
   const breakdown = {
     excludedTitles,
@@ -123,6 +151,7 @@ function scoreCandidate(candidate, icpConfig) {
     observabilitySignals,
     championSignals,
     profileReviewSignals,
+    localizedSignals,
     roleFamily,
     seniority,
     nonIcpTitleReason,
@@ -146,6 +175,7 @@ function scoreCandidate(candidate, icpConfig) {
   const observabilityScore = Math.min(observabilitySignals.length * 6, 24);
   const championScore = Math.min(championSignals.length * 7, 21);
   const profileReviewScore = Math.min(profileReviewSignals.length * 4, 20);
+  const localizedPersonaScore = Math.min(localizedSignals.length * 8, 24);
 
   breakdown.components.roleScore = roleScore;
   breakdown.components.seniorityScore = seniorityScore;
@@ -153,8 +183,9 @@ function scoreCandidate(candidate, icpConfig) {
   breakdown.components.observabilityScore = observabilityScore;
   breakdown.components.championScore = championScore;
   breakdown.components.profileReviewScore = profileReviewScore;
+  breakdown.components.localizedPersonaScore = localizedPersonaScore;
 
-  const score = roleScore + seniorityScore + includeScore + observabilityScore + championScore + profileReviewScore;
+  const score = roleScore + seniorityScore + includeScore + observabilityScore + championScore + profileReviewScore + localizedPersonaScore;
 
   return {
     score,

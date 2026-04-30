@@ -97,6 +97,23 @@ test('buildSweepTemplates preserves title guard metadata for driver-side filteri
   assert.deepEqual(templates[1].titleExcludes, ['Architecture & Construction']);
 });
 
+test('default account coverage config includes multilingual EMEA buyer and operator sweeps', () => {
+  const config = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const templates = buildSweepTemplates(config, null, { speedProfile: 'exhaustive' });
+  const templateIds = templates.map((template) => template.id);
+  const keywords = templates.flatMap((template) => template.keywords || []);
+
+  assert.ok(templateIds.includes('sweep-emea-data-ai-buyers'));
+  assert.ok(templateIds.includes('sweep-emea-it-governance-operators'));
+  assert.ok(templateIds.includes('sweep-emea-localized-observability'));
+  assert.ok(keywords.includes('CDO'));
+  assert.ok(keywords.includes('Gouvernance SI'));
+  assert.ok(keywords.includes('Observabilité'));
+  assert.ok(keywords.includes('Leiter Digitale Transformation'));
+  assert.ok(keywords.includes('Director de Datos'));
+  assert.ok(keywords.includes('Direttore Dati'));
+});
+
 test('buildSweepCacheKey is stable for account targets and template keywords', () => {
   const first = buildSweepCacheKey({
     account: {
@@ -573,6 +590,95 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
     'technical_adjacent_core_technical_scope',
     'technical_adjacent_engineering_leadership',
   ]);
+});
+
+test('consolidateCoverageCandidates adds buyer operator user coverage warnings', () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const result = consolidateCoverageCandidates([
+    {
+      templateId: 'sweep-devops',
+      candidates: [
+        {
+          fullName: 'DevOps User',
+          title: 'Cloud DevOps Engineer',
+          company: 'Example Retail',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/user',
+        },
+      ],
+    },
+  ], {
+    icpConfig,
+    coverageConfig,
+    priorityModel: null,
+    accountName: 'Example Retail',
+  });
+
+  assert.equal(result.personaCoverage.buyer.count, 0);
+  assert.equal(result.personaCoverage.operator.count, 0);
+  assert.equal(result.personaCoverage.user.count, 1);
+  assert.deepEqual(result.personaCoverage.warnings, ['buyer_coverage_gap', 'operator_coverage_gap']);
+  assert.equal(result.candidates[0].personaTier, 'user');
+});
+
+test('consolidateCoverageCandidates recognizes multilingual EMEA buyer operator and user coverage', () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const result = consolidateCoverageCandidates([
+    {
+      templateId: 'sweep-emea-data-ai-buyers',
+      candidates: [
+        {
+          fullName: 'Buyer',
+          title: 'Directrice Data Product',
+          company: 'Example Retail',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/buyer',
+        },
+      ],
+    },
+    {
+      templateId: 'sweep-emea-it-governance-operators',
+      candidates: [
+        {
+          fullName: 'Operator',
+          title: 'Responsable Domaine Direction Informatique et Production',
+          company: 'Example Retail',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/operator',
+        },
+      ],
+    },
+    {
+      templateId: 'sweep-emea-localized-observability',
+      candidates: [
+        {
+          fullName: 'User',
+          title: 'Consultant Cloud & DevSecOps',
+          company: 'Example Retail',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/user',
+        },
+      ],
+    },
+  ], {
+    icpConfig,
+    coverageConfig,
+    priorityModel: null,
+    accountName: 'Example Retail',
+  });
+
+  assert.equal(result.personaCoverage.buyer.count, 1);
+  assert.equal(result.personaCoverage.operator.count, 1);
+  assert.equal(result.personaCoverage.user.count, 1);
+  assert.deepEqual(result.personaCoverage.warnings, []);
+  assert.deepEqual(
+    result.candidates
+      .map((candidate) => [candidate.fullName, candidate.personaTier])
+      .sort((left, right) => left[0].localeCompare(right[0])),
+    [
+      ['Buyer', 'buyer'],
+      ['Operator', 'operator'],
+      ['User', 'user'],
+    ],
+  );
 });
 
 test('classifyReviewedCoverageBucket can promote signal-rich reviewed candidates', () => {

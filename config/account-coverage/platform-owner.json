@@ -85,6 +85,62 @@
         "Director T\u00e9cnico",
         "Ingeniero Cloud"
       ]
+    },
+    {
+      "id": "emea-data-ai-buyers",
+      "keywords": [
+        "CDO",
+        "Chief Data Officer",
+        "Data & AI",
+        "Director Data",
+        "Directeur Data",
+        "Directrice Data",
+        "Director de Datos",
+        "Directora de Datos",
+        "Direttore Dati",
+        "Direttrice Dati",
+        "Daten & KI",
+        "Datos e IA",
+        "Dati e AI"
+      ]
+    },
+    {
+      "id": "emea-it-governance-operators",
+      "keywords": [
+        "Gouvernance SI",
+        "Direction Informatique",
+        "Responsable Domaine",
+        "Responsable Int\u00e9gration Cloud",
+        "IT-Governance",
+        "Leiter Digitale Transformation",
+        "Bereichsleiter IT",
+        "Gobernanza TI",
+        "Dominio TI",
+        "Direzione Informatica",
+        "Governo IT",
+        "Trasformazione Digitale",
+        "Transformation Digitale",
+        "Transformaci\u00f3n Digital",
+        "Head of Tech",
+        "Architecture des Environnements"
+      ]
+    },
+    {
+      "id": "emea-localized-observability",
+      "keywords": [
+        "Observabilit\u00e9",
+        "Observabilit\u00e4t",
+        "Observabilidad",
+        "Osservabilit\u00e0",
+        "Chef de Projet Senior Cloud",
+        "Cloud & Observabilit\u00e9",
+        "Observability & Performance",
+        "Consultant Observability",
+        "Production Informatique",
+        "Produktion IT",
+        "Producci\u00f3n TI",
+        "Produzione IT"
+      ]
     }
   ],
   "bucketRules": {

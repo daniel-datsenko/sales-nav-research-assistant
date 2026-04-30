@@ -31,6 +31,13 @@ function renderCoverageReviewMarkdown(coverageArtifact) {
     lines.push(`- Coverage: ${coverage.coveredRoleCount}/${coverage.totalRoleCount} buying-group roles covered`);
     lines.push(`- Missing roles: ${coverage.missingRoles?.join(', ') || '(none)'}`);
   }
+  if (coverageArtifact.personaCoverage) {
+    const persona = coverageArtifact.personaCoverage;
+    lines.push(`- Buyer/Operator/User: buyer=${persona.buyer?.count || 0}, operator=${persona.operator?.count || 0}, user=${persona.user?.count || 0}`);
+    if (persona.warnings?.length) {
+      lines.push(`- Persona warnings: ${persona.warnings.join(', ')}`);
+    }
+  }
 
   lines.push('', '## Direct Observability', '');
   if (direct.length === 0) {

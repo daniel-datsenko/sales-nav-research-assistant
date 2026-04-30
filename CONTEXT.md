@@ -77,6 +77,27 @@ An opt-in account-coverage speed mechanism that can skip low-yield rest sweeps a
 **Fast Resolve Query Cache**
 A per-run cache that deduplicates repeated Fast Resolve searches by query shape. It caches raw candidate lists only; every lead is scored independently from cached candidates.
 
+**Research Queue**
+The deterministic account/job list that decomposes Account Research into independently verifiable work items. A Research Queue can be processed by multiple dry-safe workers, but it must route browser-required work through the Browser Worker.
+
+**Research Job**
+A single planned unit of Account Research with an account, job type, cache state, browser requirement, safety flags, and expected output. Research Jobs are artifacts/contracts, not permission to execute Live Mutation.
+
+**Browser Worker**
+The only worker allowed to perform browser-backed Sales Navigator navigation for the Parallel Research Pipeline. In v1 there is exactly one Browser Worker per LinkedIn/Sales Navigator session, guarded by a Browser Worker Lock.
+
+**Browser Worker Lock**
+The serialization guard that prevents concurrent browser-backed Sales Navigator actions. It protects session stability, rate-limit posture, and debuggability. It does not grant Live Mutation permission.
+
+**Local Research Worker**
+A dry-safe worker role that performs planning, cache analysis, candidate scoring, quality review, merge metrics, or benchmark evaluation without browser control or Live Mutation.
+
+**Merge Coordinator**
+The deterministic pipeline stage that combines cache hits, browser results, scored candidates, quality diagnostics, and telemetry into one reviewable Research Pipeline Artifact.
+
+**Research Pipeline Artifact**
+A reviewable artifact that captures Research Queue inputs, Research Job outcomes, Browser Worker telemetry, scoring/quality decisions, merge metrics, and Speed Fitness evidence. Runtime copies belong under `runtime/artifacts/**` and must not be committed.
+
 **Agent Brief**
 A durable issue/comment describing an implementation slice that an AFK coding agent can execute without extra context. It must include scope, acceptance criteria, safety constraints, commands, and forbidden actions.
 
@@ -92,7 +113,9 @@ A task that requires human-in-the-loop judgment, live external access, design ap
 - **Autoresearch** produces **Runtime Artifacts**, a **Research Loop Plan**, evaluation metrics, and an **Execution Gate**.
 - A **Gate Report** and **Supervisor Runbook** render the **Execution Gate** without executing live actions.
 - A **Safe-to-save Candidate** requires valid **Lead Identity**, verified **Company Scope**, no blocking **Manual Review**, and acceptable duplicate/already-saved state.
-- A **Speed Fitness Gate** protects lead quality when adding speed mechanisms such as **Adaptive Sweep Pruning** or **Fast Resolve Query Cache**.
+- A **Speed Fitness Gate** protects lead quality when adding speed mechanisms such as **Adaptive Sweep Pruning**, **Fast Resolve Query Cache**, or the **Parallel Research Pipeline**.
+- A **Research Queue** contains **Research Jobs**. **Local Research Workers** may process dry-safe jobs concurrently, but every browser-required job routes through the single **Browser Worker** and **Browser Worker Lock**.
+- The **Merge Coordinator** emits a **Research Pipeline Artifact**; if that artifact is written locally, it is a **Runtime Artifact** unless sanitized and intentionally promoted into docs.
 - **Agent Briefs** convert approved plans into **AFK Slices** or mark work as **HITL Slices**.
 
 ## Flagged Ambiguities

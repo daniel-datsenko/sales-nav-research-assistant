@@ -76,6 +76,27 @@ test('buildSweepTemplates applies speed profiles without adding hidden candidate
   assert.equal(normalizeSpeedProfile('unknown'), 'balanced');
 });
 
+test('buildSweepTemplates preserves title guard metadata for driver-side filtering', () => {
+  const templates = buildSweepTemplates({
+    broadCrawl: {
+      enabled: true,
+      titleExcludes: ['Brand Platform'],
+    },
+    sweeps: [
+      {
+        id: 'architecture',
+        keywords: ['architect'],
+        titleIncludes: ['Architect'],
+        titleExcludes: ['Architecture & Construction'],
+      },
+    ],
+  });
+
+  assert.deepEqual(templates[0].titleExcludes, ['Brand Platform']);
+  assert.deepEqual(templates[1].titleIncludes, ['Architect']);
+  assert.deepEqual(templates[1].titleExcludes, ['Architecture & Construction']);
+});
+
 test('buildSweepCacheKey is stable for account targets and template keywords', () => {
   const first = buildSweepCacheKey({
     account: {
@@ -443,7 +464,7 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
       },
       {
         fullName: 'Architecture Owner',
-        title: 'Architecture Lead',
+        title: 'IT Architecture Lead',
         coverageBucket: 'technical_adjacent',
         roleFamily: 'unknown',
         seniority: 'lead',
@@ -495,6 +516,46 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
         coverageBucket: 'direct_observability',
         roleFamily: 'platform_engineering',
         seniority: 'head',
+        score: 99,
+      },
+      {
+        fullName: 'Construction Architecture',
+        title: 'Directeur Architecture & Construction',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'director',
+        score: 99,
+      },
+      {
+        fullName: 'Process Engineering',
+        title: 'Senior Process Engineering Manager - CNC Machining',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'manager',
+        score: 99,
+      },
+      {
+        fullName: 'Brand Platform',
+        title: 'Brand Platform Senior Project Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'platform_engineering',
+        seniority: 'manager',
+        score: 99,
+      },
+      {
+        fullName: 'Travel Retail',
+        title: 'Commercial Integration and BD Director, Global Travel Retail',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'director',
+        score: 99,
+      },
+      {
+        fullName: 'Workforce Ops',
+        title: 'Director, Workforce Management and Process Improvement',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'platform_engineering',
+        seniority: 'director',
         score: 99,
       },
     ],

@@ -23,3 +23,20 @@ test('explicit maxCandidates still caps callers that intentionally request a sma
   assert.equal(hasCandidateLimit({ maxCandidates: 8 }), true);
   assert.deepEqual(limitCandidatesByTemplate(candidates, { maxCandidates: 8 }), candidates.slice(0, 8));
 });
+
+test('template title excludes remove known non-ICP false positives before applying candidate limits', () => {
+  const candidates = [
+    { fullName: 'A', title: 'Cloud Platform Engineer' },
+    { fullName: 'B', title: 'Brand Platform Senior Project Manager' },
+    { fullName: 'C', title: 'IT Architecture Director' },
+    { fullName: 'D', title: 'Directeur Architecture & Construction' },
+  ];
+
+  assert.deepEqual(
+    limitCandidatesByTemplate(candidates, {
+      maxCandidates: 2,
+      titleExcludes: ['Brand Platform', 'Architecture & Construction'],
+    }).map((candidate) => candidate.fullName),
+    ['A', 'C'],
+  );
+});

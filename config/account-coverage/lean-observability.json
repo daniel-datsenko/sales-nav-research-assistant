@@ -1,6 +1,22 @@
 {
   "version": "1.0.0",
   "name": "lean_observability_coverage_v1",
+  "titleExcludes": [
+    "Architecture & Construction",
+    "Architecture and Construction",
+    "Real Estate",
+    "Corporate Architecture",
+    "Process Engineering",
+    "Process Improvement",
+    "CNC",
+    "Machining",
+    "Manufacturing Engineering",
+    "Brand Platform",
+    "Client Marketing Platform",
+    "Global Travel Retail",
+    "Workforce Management",
+    "Client Relations"
+  ],
   "broadCrawl": {
     "enabled": true
   },

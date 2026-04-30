@@ -5,8 +5,35 @@ function normalizeText(value) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function classifyNonIcpTitleReason(value) {
+  const text = normalizeText(value);
+
+  if (/\b(architecture\s*(&|and)\s*construction|real estate|corporate architecture|construction|building|buildings|interior architecture|retail architecture|store design|workplace design)\b/.test(text)) {
+    return 'physical_architecture_not_observability';
+  }
+  if (/\b(process engineering|process improvement|cnc|machining|manufacturing engineering|production engineering|industrial engineering|lean manufacturing)\b/.test(text)) {
+    return 'physical_process_engineering_not_observability';
+  }
+  if (/\b(brand platform|brand management|client marketing platform|marketing platform program|international client marketing platform)\b/.test(text)) {
+    return 'brand_platform_not_observability';
+  }
+  if (/\b(global travel retail|commercial integration|business development|client relations|international client relations|workforce management)\b/.test(text)) {
+    return 'non_icp_commercial_or_operations_function';
+  }
+
+  return null;
+}
+
+function hasTechnicalAmbiguousQualifier(value) {
+  const text = normalizeText(value);
+  return /\b(head of platform|platform owner|platform lead|platform manager|software|cloud|it|information technology|technology|technical|systems?|enterprise|solution|solutions|application|applications|platform engineering|infrastructure|devops|devsecops|sre|site reliability|observability|monitoring|backend|microservice|microservices|distributed|data platform|ai platform|engineering)\b/.test(text);
+}
+
 function detectRoleFamily(candidate) {
   const text = normalizeText(`${candidate.title} ${candidate.headline || ''}`);
+  const title = normalizeText(candidate.title);
+
+  if (classifyNonIcpTitleReason(candidate.title)) return 'unknown';
 
   if (/\b(platform engineering|director of platform engineering|head of cloud|head of platform|cloud technology|platform operations|technology foundation operations)\b/.test(text)) return 'platform_engineering';
   if (/\b(chief information officer|chief technology officer|cio|cto|directeur technique|directeur des systemes d'information|dsi|directeur informatique|director tecnico|director de tecnologia|direttore tecnico|direttore tecnologia)\b/.test(text)) return 'executive_engineering';
@@ -20,14 +47,14 @@ function detectRoleFamily(candidate) {
   if (/operations.*monitoring|monitoring.*operations/.test(text)) return 'platform_engineering';
   if (/head of (cloud|it|it ops|it operations|technology|platform)/.test(text)) return 'platform_engineering';
   if (/\bvp (of )?(technology|it|business it)\b|\bvice president (of )?(technology|it|business it)\b/.test(text)) return 'executive_engineering';
-  if (/architect|architecture|architecte|architekt|architetto|arquitecto/.test(text)) return 'platform_engineering';
-  if (/platform|plateforme|plattform|piattaforma|plataforma/.test(text)) return 'platform_engineering';
+  if (/architect|architecture|architecte|architekt|architetto|arquitecto/.test(text) && hasTechnicalAmbiguousQualifier(text)) return 'platform_engineering';
+  if (/platform|plateforme|plattform|piattaforma|plataforma/.test(text) && hasTechnicalAmbiguousQualifier(text)) return 'platform_engineering';
   if (/devops|devsecops/.test(text)) return 'devops';
   if (/infrastructure|cloud ops|cloud operations|infraestructura|infrastruttura|infrastruktur/.test(text)) return 'infrastructure';
   if (/cto|vp engineering|head of engineering|director of engineering/.test(text)) return 'executive_engineering';
   if (/security/.test(text)) return 'security';
   if (/data/.test(text)) return 'data';
-  if (/engineering manager/.test(text)) return 'platform_engineering';
+  if (/engineering manager/.test(title)) return 'platform_engineering';
   if (/engineer|software|ingenieur|ingenieur|ingeniero|ingegnere/.test(text)) return 'software_engineering';
   return 'unknown';
 }
@@ -82,6 +109,7 @@ function scoreCandidate(candidate, icpConfig) {
   ].filter(Boolean).join(' ');
 
   const excludedTitles = countMatches(candidate.title, icpConfig.titleExcludeKeywords || []);
+  const nonIcpTitleReason = classifyNonIcpTitleReason(candidate.title);
   const includeTitles = countMatches(candidate.title, icpConfig.titleIncludeKeywords || []);
   const observabilitySignals = countMatches(combinedText, icpConfig.observabilitySignals || []);
   const championSignals = countMatches(combinedText, icpConfig.technicalChampionSignals || []);
@@ -97,10 +125,11 @@ function scoreCandidate(candidate, icpConfig) {
     profileReviewSignals,
     roleFamily,
     seniority,
+    nonIcpTitleReason,
     components: {},
   };
 
-  if (excludedTitles.length > 0) {
+  if (excludedTitles.length > 0 || nonIcpTitleReason) {
     breakdown.components.exclusionPenalty = -100;
     return {
       score: 0,
@@ -140,4 +169,6 @@ module.exports = {
   scoreCandidate,
   detectRoleFamily,
   detectSeniority,
+  classifyNonIcpTitleReason,
+  hasTechnicalAmbiguousQualifier,
 };

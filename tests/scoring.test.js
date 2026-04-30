@@ -183,6 +183,54 @@ test('scoreCandidate keeps security and data compound titles out of platform eng
   assert.ok(securityEngineer.score < icpConfig.saveToListThreshold);
 });
 
+test('scoreCandidate disambiguates physical architecture, process engineering and brand platform false positives', () => {
+  const falsePositiveTitles = [
+    'Directeur Architecture & Construction',
+    'Real Estate & Corporate Architecture Director',
+    'Senior PM Architecture and Construction',
+    'Senior Process Engineering Manager - CNC Machining',
+    'Process Engineering Manager',
+    'Brand Platform Senior Project Manager',
+    'Senior Brand Platform Manager',
+    'International Client Marketing Platform Program Manager',
+    'Commercial Integration and BD Director, Global Travel Retail',
+    'Director, Workforce Management and Process Improvement',
+    'International Client Relations Director',
+  ];
+
+  for (const title of falsePositiveTitles) {
+    const result = scoreCandidate({
+      title,
+      headline: 'Works across global retail and operations programs',
+    }, icpConfig);
+
+    assert.equal(result.eligible, false, title);
+    assert.equal(result.score, 0, title);
+    assert.equal(result.roleFamily, 'unknown', title);
+  }
+});
+
+test('scoreCandidate keeps qualified technical architecture and platform roles eligible', () => {
+  const qualifiedTitles = [
+    'Software Architect',
+    'IT Architecture Director',
+    'Cloud Platform Engineer',
+    'Platform Engineering Manager',
+    'Enterprise Architecture Lead',
+  ];
+
+  for (const title of qualifiedTitles) {
+    const result = scoreCandidate({
+      title,
+      headline: 'Owns cloud platforms, observability and production systems',
+    }, icpConfig);
+
+    assert.equal(result.eligible, true, title);
+    assert.ok(['platform_engineering', 'software_engineering', 'site_reliability'].includes(result.roleFamily), title);
+    assert.ok(result.score >= icpConfig.saveToListThreshold, `${title} score ${result.score}`);
+  }
+});
+
 test('scoreCandidate recognizes SDR-sourced EMEA platform personas and profile signals', () => {
   const candidates = [
     {

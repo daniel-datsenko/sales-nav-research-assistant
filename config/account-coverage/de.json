@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "name": "full_account_coverage_v1",
+  "name": "full_account_coverage_de_v1",
   "titleExcludes": [
     "Architecture & Construction",
     "Architecture and Construction",
@@ -18,7 +18,8 @@
     "Client Relations"
   ],
   "broadCrawl": {
-    "enabled": true
+    "enabled": true,
+    "maxScrollSteps": 25
   },
   "sweeps": [
     {
@@ -146,84 +147,14 @@
       "keywords": [
         "Responsable Plateforme",
         "Directeur Technique",
-        "Ing\u00e9nieur Cloud",
+        "Ingénieur Cloud",
         "Leiter Plattform",
         "Cloud Kompetenzzentrum",
         "Responsabile Piattaforma",
         "Direttore Tecnico",
         "Jefe de Plataforma",
-        "Director T\u00e9cnico",
+        "Director Técnico",
         "Ingeniero Cloud"
-      ]
-    },
-    {
-      "id": "emea-data-ai-buyers",
-      "keywords": [
-        "CDO",
-        "Chief Data Officer",
-        "Data & AI",
-        "Director Data",
-        "Directeur Data",
-        "Directrice Data",
-        "Director de Datos",
-        "Directora de Datos",
-        "Direttore Dati",
-        "Direttrice Dati",
-        "Daten & KI",
-        "Datos e IA",
-        "Dati e AI"
-      ]
-    },
-    {
-      "id": "emea-it-governance-operators",
-      "keywords": [
-        "Gouvernance SI",
-        "Direction Informatique",
-        "Responsable Domaine",
-        "Responsable Int\u00e9gration Cloud",
-        "IT-Governance",
-        "Leiter Digitale Transformation",
-        "Bereichsleiter IT",
-        "Gobernanza TI",
-        "Dominio TI",
-        "Direzione Informatica",
-        "Governo IT",
-        "Trasformazione Digitale",
-        "Transformation Digitale",
-        "Transformaci\u00f3n Digital",
-        "Head of Tech",
-        "Architecture des Environnements"
-      ]
-    },
-    {
-      "id": "emea-localized-observability",
-      "keywords": [
-        "Observabilit\u00e9",
-        "Observabilit\u00e4t",
-        "Observabilidad",
-        "Osservabilit\u00e0",
-        "Chef de Projet Senior Cloud",
-        "Cloud & Observabilit\u00e9",
-        "Observability & Performance",
-        "Consultant Observability",
-        "Production Informatique",
-        "Produktion IT",
-        "Producci\u00f3n TI",
-        "Produzione IT"
-      ]
-    },
-    {
-      "id": "fr-titles",
-      "keywords": [
-        "Responsable",
-        "Architecte",
-        "Ing\u00e9nieur",
-        "Chef de Projet",
-        "Directeur Technique",
-        "DSI",
-        "Observabilit\u00e9",
-        "Exploitation informatique",
-        "Responsable Domaine"
       ]
     },
     {
@@ -235,9 +166,29 @@
         "Plattform",
         "Betrieb",
         "Systemadministrator",
-        "L\u00f6sungsarchitekt",
+        "Lösungsarchitekt",
         "IT-Leiter",
         "Leiter Infrastruktur"
+      ]
+    },
+    {
+      "id": "de-extended",
+      "keywords": [
+        "Leiter Cloud",
+        "Leiter Infrastruktur",
+        "Leiter Plattform",
+        "Leiter IT",
+        "Cloud Architekt",
+        "Lösungsarchitekt",
+        "IT-Architekt",
+        "Systemingenieur",
+        "Cloud Ingenieur",
+        "DevOps Ingenieur",
+        "Plattform Ingenieur",
+        "IT-Betrieb",
+        "Systemadministrator",
+        "Kubernetes Administrator",
+        "Site Reliability Engineer"
       ]
     }
   ],

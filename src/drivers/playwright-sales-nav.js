@@ -431,7 +431,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       ? Number(context.duplicateShortCircuitThreshold)
       : 0.8;
 
-    for (let step = 0; step < this.options.maxScrollSteps; step += 1) {
+    for (let step = 0; step < (context.maxScrollSteps ?? this.options.maxScrollSteps); step += 1) {
       await this.handleRateLimitBackoff(context);
       const extracted = await extractCandidatesFromListPage(this.page, account, template);
       for (const candidate of extracted) {
@@ -2164,7 +2164,7 @@ async function extractCandidatesFromListPage(page, account, template) {
       const title = (titleNode?.textContent || '').trim() || split[0] || lines[1] || meta.defaultTitle || 'Unknown title';
       const company = (companyNode?.textContent || '').trim() || split[1] || null;
       const headline = cleanedLines.slice(1, Math.min(cleanedLines.length, 5)).join(' | ');
-      const outOfNetwork = /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks|\b3rd\b|\bthird degree\b/i.test(text);
+      const outOfNetwork = /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks/i.test(text);
       const summaryIndex = cleanedLines.findIndex((value) => value.startsWith('Über:') || value.startsWith('About:'));
       const summary = (summaryNode?.textContent || '').trim() || (summaryIndex >= 0
         ? cleanedLines.slice(summaryIndex, Math.min(cleanedLines.length, summaryIndex + 3)).join(' ')
@@ -2218,8 +2218,8 @@ async function extractCandidatesFromListPage(page, account, template) {
           profileUrl: href,
           salesNavigatorUrl: href && href.includes('/sales/') ? href : null,
           summary: text.slice(0, 500),
-          outOfNetwork: /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks|\b3rd\b|\bthird degree\b/i.test(text),
-          networkDistance: /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks|\b3rd\b|\bthird degree\b/i.test(text) ? 'out_of_network' : null,
+          outOfNetwork: /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks/i.test(text),
+          networkDistance: /\bout of network\b|\boutside your network\b|außerhalb deines netzwerks/i.test(text) ? 'out_of_network' : null,
           fromListPage: true,
         };
       }).filter((candidate) => candidate.fullName && candidate.title);

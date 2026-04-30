@@ -302,6 +302,7 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       titleIncludes: config.broadCrawl.titleIncludes || [],
       titleExcludes: config.broadCrawl.titleExcludes || defaultTitleExcludes,
       personaLayer: 'broad',
+      maxScrollSteps: config.broadCrawl.maxScrollSteps ?? null,
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -319,6 +320,7 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       titleIncludes: sweep.titleIncludes || [],
       titleExcludes: sweep.titleExcludes || defaultTitleExcludes,
       personaLayer: sweep.personaLayer || inferPersonaLayerForSweep(sweep),
+      maxScrollSteps: sweep.maxScrollSteps ?? null,
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -817,6 +819,9 @@ async function runAccountCoverageWorkflow({
   logger = null,
   now = Date.now,
 }) {
+  const normalizedSpeedProfile = normalizeSpeedProfile(speedProfile);
+  const scrollStepsByProfile = { exhaustive: 40, balanced: 20, fast: 10 };
+  const profileScrollSteps = scrollStepsByProfile[normalizedSpeedProfile] ?? 10;
   const timings = createRunTimings(now);
   const adaptivePruningRequested = Boolean(adaptiveSweepPruning);
   const sweepTemplateOptions = resolveSweepTemplateOptions({
@@ -960,6 +965,7 @@ async function runAccountCoverageWorkflow({
           logger,
           rateLimitEvents,
           duplicateShortCircuitThreshold: coverageConfig.duplicateShortCircuitThreshold ?? 0.8,
+          maxScrollSteps: template.maxScrollSteps ?? profileScrollSteps,
         });
         let uniqueNew = 0;
         rawResults.push({
@@ -1167,9 +1173,6 @@ function getHardExclusionReason(candidate, options = {}) {
   const excludeRoleFamilies = new Set((options.excludeRoleFamilies || []).map((value) => String(value || '').toLowerCase()));
   const excludeTitleKeywords = (options.excludeTitleKeywords || []).map((value) => String(value || '').toLowerCase().trim()).filter(Boolean);
 
-  if (candidate.outOfNetwork) {
-    return 'out_of_network';
-  }
   if (excludeRoleFamilies.has(roleFamily)) {
     return 'operator_excluded_role_family';
   }

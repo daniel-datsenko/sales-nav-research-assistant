@@ -403,7 +403,7 @@ test('selectCoverageListCandidates can enforce core-only day-list selection', ()
   assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Core Platform']);
 });
 
-test('selectCoverageListCandidates excludes out-of-network profiles from list targets', () => {
+test('selectCoverageListCandidates includes out-of-network profiles (Sales Nav allows saving 3rd-degree leads)', () => {
   const selected = selectCoverageListCandidates({
     candidates: [
       {
@@ -425,7 +425,7 @@ test('selectCoverageListCandidates excludes out-of-network profiles from list ta
     ],
   });
 
-  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Reachable Platform']);
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Out Of Network SRE', 'Reachable Platform']);
 });
 
 test('selectCoverageListCandidates always keeps direct observability below the score gate', () => {

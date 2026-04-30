@@ -69,6 +69,14 @@ const {
   writeAccountBatchReport,
 } = require('./core/account-batch');
 const {
+  attachSweepCacheState,
+  buildResearchPipelineArtifact,
+  buildResearchQueue,
+  normalizeResearchAccount,
+  planResearchJobs,
+  scoreResearchCandidates,
+} = require('./core/research-pipeline');
+const {
   fastResolveLeads,
   buildMutationReviewArtifact,
   loadCoverageImportPlan,
@@ -267,6 +275,9 @@ async function main() {
         break;
       case 'autoresearch-speed-eval':
         await handleAutoresearchSpeedEval(values, logger);
+        break;
+      case 'parallel-account-research':
+        await handleParallelAccountResearch(values, logger);
         break;
       case 'run-account-batch':
         await handleRunAccountBatch(getRepository(), values, logger);
@@ -3044,6 +3055,116 @@ async function handleAutoresearchSpeedEval(values, logger) {
   console.log(renderAutoresearchSpeedEvaluationMarkdown(evaluation));
 }
 
+async function handleParallelAccountResearch(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects')) {
+    throw new Error('parallel-account-research is dry-safe only and refuses live-save, live-connect, or background connects');
+  }
+
+  const accountsRaw = getString(values, 'accounts') || getString(values, 'account-names');
+  if (!accountsRaw) {
+    throw new Error('parallel-account-research requires --accounts="Account A, Account B"');
+  }
+  const names = parseAccountNames(accountsRaw);
+  if (names.length === 0) {
+    throw new Error('parallel-account-research requires at least one account name');
+  }
+
+  const runIdBase = getString(values, 'run-id') || 'parallel-account-research';
+  const localConcurrency = Math.max(1, Number(getString(values, 'local-concurrency') || 4));
+  const coverageConfigPath = getString(values, 'coverage-config');
+  const coverageConfig = loadAccountCoverageConfig(coverageConfigPath);
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const priorityModel = loadPriorityModel();
+
+  logger.info(`parallel-account-research: browserConcurrency=1 (fixed), localConcurrency=${localConcurrency}, accounts=${names.length}`);
+
+  /** @type {Array<object>} */
+  const accountArtifacts = [];
+
+  for (const accountName of names) {
+    const normalized = normalizeResearchAccount({ accountName });
+    const startedAt = Date.now();
+    const queue = buildResearchQueue({
+      accounts: [normalized],
+      runId: `${runIdBase}:${normalized.accountKey}`,
+    });
+    const plan = planResearchJobs({ queue, coverageConfig });
+    const jobsWithCache = await attachSweepCacheState({
+      jobs: plan.jobs,
+      readCache: () => null,
+    });
+    const browserExec = {
+      runId: queue.runId,
+      results: jobsWithCache
+        .filter((job) => job.type === 'sweep' && job.requiresBrowser)
+        .map((job) => ({
+          jobId: job.id,
+          templateId: job.templateId,
+          accountKey: job.accountKey,
+          cacheHit: false,
+          candidates: [],
+          status: 'skipped',
+          reason: 'dry_safe_cli_plan_only',
+        })),
+      rateLimitHitCount: 0,
+      browserJobsExecuted: 0,
+    };
+
+    /** @type {Array<{ templateId?: string, candidates?: Array<object>, cacheHit?: boolean }>} */
+    const rawResults = [];
+    for (const job of jobsWithCache) {
+      if (job.type !== 'sweep') continue;
+      if (job.cacheHit) {
+        rawResults.push({
+          templateId: job.templateId,
+          candidates: job.cacheCandidates || [],
+          cacheHit: true,
+        });
+      }
+    }
+    for (const row of browserExec.results || []) {
+      if (row.status === 'completed') {
+        rawResults.push({
+          templateId: row.templateId,
+          candidates: row.candidates || [],
+          cacheHit: false,
+        });
+      }
+    }
+
+    const scoringResults = await scoreResearchCandidates({
+      accountName,
+      rawResults,
+      icpConfig,
+      coverageConfig,
+      priorityModel,
+      localConcurrency,
+    });
+
+    const artifact = buildResearchPipelineArtifact({
+      queue,
+      plannedJobs: plan,
+      cacheResults: jobsWithCache,
+      browserResults: browserExec,
+      scoringResults,
+      lockTelemetry: [],
+      startedAt,
+      finishedAt: Date.now(),
+      localConcurrency,
+    });
+    accountArtifacts.push(artifact);
+  }
+
+  console.log(JSON.stringify({
+    version: '1.0.0',
+    mode: 'dry-safe',
+    browserConcurrency: 1,
+    localConcurrency,
+    accountCount: names.length,
+    accounts: accountArtifacts,
+  }, null, 2));
+}
+
 function loadAutoresearchArtifactForReadOnlyReport(values) {
   const explicitArtifactPath = getString(values, 'artifact');
   if (!explicitArtifactPath) {
@@ -3722,6 +3843,7 @@ Usage:
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
+  node src/cli.js parallel-account-research --accounts="Account A, Account B" [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect

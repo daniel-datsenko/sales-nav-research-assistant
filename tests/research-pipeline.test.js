@@ -2,10 +2,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  attachSweepCacheState,
+  buildResearchPipelineArtifact,
   buildResearchQueue,
+  executeBrowserSweepJobs,
   normalizeResearchAccount,
   planResearchJobs,
+  scoreResearchCandidates,
 } = require('../src/core/research-pipeline');
+const { createBrowserWorkerLock } = require('../src/core/browser-worker-lock');
 
 test('buildResearchQueue creates deterministic account jobs with dry-safe defaults', () => {
   const queue = buildResearchQueue({
@@ -148,4 +153,285 @@ test('planResearchJobs passes maxCandidates and options into buildSweepTemplates
   assert.equal(sweeps.length, 2);
   assert.equal(sweeps[0].maxCandidates, 5);
   assert.equal(sweeps[1].maxCandidates, 5);
+});
+
+test('attachSweepCacheState calls readCache for sweep jobs only', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [{ id: 's1', keywords: ['k'] }],
+    },
+  });
+  const calls = [];
+  const jobs = await attachSweepCacheState({
+    jobs: plan.jobs,
+    readCache: (job) => {
+      calls.push(job.type);
+      return null;
+    },
+  });
+  assert.deepEqual(calls, ['sweep', 'sweep']);
+  assert.equal(jobs.filter((j) => j.type === 'company_resolution').length, 1);
+});
+
+test('attachSweepCacheState marks cache hits without browser', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [],
+    },
+  });
+  const sweepId = plan.jobs.find((j) => j.type === 'sweep').id;
+  const jobs = await attachSweepCacheState({
+    jobs: plan.jobs,
+    readCache: (job) => {
+      if (job.id === sweepId) {
+        return { candidates: [{ fullName: 'A', title: 'VP Platform Engineering' }] };
+      }
+      return null;
+    },
+  });
+  const hit = jobs.find((j) => j.id === sweepId);
+  assert.equal(hit.cacheHit, true);
+  assert.equal(hit.requiresBrowser, false);
+  assert.equal(hit.cacheCandidates.length, 1);
+});
+
+test('attachSweepCacheState treats thrown readCache as cache miss', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [],
+    },
+  });
+  const jobs = await attachSweepCacheState({
+    jobs: plan.jobs,
+    readCache: () => {
+      throw new Error('bad cache');
+    },
+  });
+  const sweep = jobs.find((j) => j.type === 'sweep');
+  assert.equal(sweep.cacheHit, false);
+  assert.equal(sweep.requiresBrowser, true);
+});
+
+test('executeBrowserSweepJobs skips cache-hit jobs and serializes driver calls', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [{ id: 's2', keywords: ['obs'] }],
+    },
+  });
+  const withCache = await attachSweepCacheState({
+    jobs: plan.jobs,
+    readCache: (job) => {
+      if (String(job.templateId) === 'broad-crawl') {
+        return { candidates: [{ fullName: 'Cached', title: 'Director SRE' }] };
+      }
+      return null;
+    },
+  });
+
+  const events = [];
+  const driver = {
+    async openPeopleSearch() {
+      events.push('open');
+    },
+    async applySearchTemplate(t) {
+      events.push(`tpl:${t.id}`);
+    },
+    async scrollAndCollectCandidates(account, template) {
+      events.push(`collect:${template.id}`);
+      return [{ fullName: 'Live', title: 'VP Platform Engineering', company: account.accountName }];
+    },
+  };
+
+  const lock = createBrowserWorkerLock();
+  const out = await executeBrowserSweepJobs({
+    jobs: withCache,
+    driver,
+    lock,
+    runId: 'run1',
+  });
+
+  assert.equal(out.browserJobsExecuted, 1);
+  assert.deepEqual(events.filter((e) => e.startsWith('collect:')), ['collect:sweep-s2']);
+});
+
+test('executeBrowserSweepJobs stops on rate limit when stopOnRateLimit is true', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [{ id: 's2', keywords: ['obs'] }],
+    },
+  });
+  let n = 0;
+  const driver = {
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      n += 1;
+      if (n === 1) {
+        const err = new Error('too many requests');
+        err.code = 'rate_limited';
+        throw err;
+      }
+      return [{ fullName: 'X', title: 'VP Platform Engineering' }];
+    },
+  };
+  const lock = createBrowserWorkerLock();
+  const out = await executeBrowserSweepJobs({
+    jobs: plan.jobs,
+    driver,
+    lock,
+    runId: 'run1',
+    stopOnRateLimit: true,
+  });
+  assert.equal(out.rateLimitHitCount, 1);
+  assert.equal(out.browserJobsExecuted, 0);
+  const skipped = out.results.filter((r) => r.status === 'skipped');
+  assert.ok(skipped.length >= 1);
+});
+
+test('scoreResearchCandidates dedupes and matches consolidate ordering across concurrency', async () => {
+  const icpConfig = {
+    titleExcludeKeywords: ['buildings'],
+    titleIncludeKeywords: ['platform'],
+    seniorityWeights: { vp: 10 },
+    roleFamilyWeights: { platform_engineering: 30 },
+  };
+  const coverageConfig = {
+    bucketRules: {
+      directObservabilityRoleFamilies: ['platform_engineering'],
+      adjacentRoleFamilies: [],
+    },
+  };
+  const rawResults = [
+    {
+      templateId: 'broad-crawl',
+      candidates: [
+        {
+          fullName: 'Jane',
+          title: 'VP Platform Engineering',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/foo',
+        },
+      ],
+    },
+    {
+      templateId: 'sweep-x',
+      candidates: [
+        {
+          fullName: 'Jane',
+          title: 'VP Platform Engineering',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/foo',
+        },
+        {
+          fullName: 'Bob',
+          title: 'Director Corporate Buildings Strategy',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/bar',
+        },
+      ],
+    },
+  ];
+
+  const one = await scoreResearchCandidates({
+    accountName: 'Acme',
+    rawResults,
+    icpConfig,
+    coverageConfig,
+    priorityModel: null,
+    localConcurrency: 1,
+  });
+  const four = await scoreResearchCandidates({
+    accountName: 'Acme',
+    rawResults,
+    icpConfig,
+    coverageConfig,
+    priorityModel: null,
+    localConcurrency: 4,
+  });
+
+  assert.equal(one.metrics.candidatesRaw, 3);
+  assert.equal(one.metrics.candidatesUnique, 2);
+  assert.equal(one.consolidated.candidates.length, four.consolidated.candidates.length);
+  assert.deepEqual(
+    one.consolidated.candidates.map((c) => c.fullName),
+    four.consolidated.candidates.map((c) => c.fullName),
+  );
+  assert.ok(one.rejected.some((c) => c.scoringEligible === false));
+});
+
+test('buildResearchPipelineArtifact includes browserConcurrency and metrics', () => {
+  const queue = buildResearchQueue({
+    accounts: [{ accountId: 'x', accountName: 'X' }],
+    runId: 'rid',
+  });
+  const plan = planResearchJobs({
+    queue,
+    coverageConfig: { broadCrawl: { enabled: true }, sweeps: [] },
+  });
+  const jobsWithCache = [
+    ...plan.jobs.map((j) => {
+      if (j.type !== 'sweep') return j;
+      return { ...j, requiresBrowser: false, cacheHit: true, cacheCandidates: [] };
+    }),
+  ];
+  const browserResults = {
+    results: [],
+    rateLimitHitCount: 0,
+    browserJobsExecuted: 0,
+  };
+  const scoringResults = {
+    metrics: {
+      candidatesRaw: 10,
+      candidatesUnique: 5,
+      selectedForList: 3,
+      manualReviewCount: 1,
+    },
+  };
+  const art = buildResearchPipelineArtifact({
+    queue,
+    plannedJobs: plan,
+    cacheResults: jobsWithCache,
+    browserResults,
+    scoringResults,
+    lockTelemetry: [],
+    startedAt: '2026-04-30T12:00:00.000Z',
+    finishedAt: '2026-04-30T12:01:40.000Z',
+    localConcurrency: 4,
+  });
+
+  assert.equal(art.browserConcurrency, 1);
+  assert.equal(art.localConcurrency, 4);
+  assert.equal(art.metrics.cacheHits, 1);
+  assert.equal(art.metrics.cacheMisses, 0);
+  assert.equal(art.metrics.browserJobsSkippedByCache, 1);
+  assert.equal(art.metrics.browserJobsExecuted, 0);
+  assert.equal(art.metrics.totalMs, 100000);
+  assert.equal(art.metrics.selectedForList, 3);
+  assert.equal(art.metrics.manualReviewCount, 1);
+  assert.equal(art.metrics.rateLimitHitCount, 0);
+  assert.equal(art.safety.liveSaveAllowed, false);
+  assert.equal(art.safety.liveConnectAllowed, false);
+  assert.equal(art.safety.browserWorkerLock, 'held_serially');
 });

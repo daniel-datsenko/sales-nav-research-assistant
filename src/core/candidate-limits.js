@@ -13,9 +13,22 @@ function hasCandidateLimit(template = {}) {
   return normalizeCandidateLimit(template.maxCandidates) !== null;
 }
 
+function normalizeText(value) {
+  return String(value || '').toLowerCase();
+}
+
 function limitCandidatesByTemplate(candidates = [], template = {}) {
   const limit = normalizeCandidateLimit(template.maxCandidates);
-  return limit === null ? candidates : candidates.slice(0, limit);
+  const titleExcludes = (template.titleExcludes || [])
+    .map((value) => normalizeText(value).trim())
+    .filter(Boolean);
+  const filtered = titleExcludes.length === 0
+    ? candidates
+    : candidates.filter((candidate) => {
+      const text = normalizeText(`${candidate.title || ''} ${candidate.headline || ''}`);
+      return !titleExcludes.some((keyword) => text.includes(keyword));
+    });
+  return limit === null ? filtered : filtered.slice(0, limit);
 }
 
 module.exports = {

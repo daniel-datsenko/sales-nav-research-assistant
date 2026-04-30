@@ -2,7 +2,11 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { readJson, writeJson } = require('../lib/json');
 const { resolveProjectPath, PRIORITY_ARTIFACTS_DIR, COVERAGE_ARTIFACTS_DIR } = require('../lib/paths');
-const { scoreCandidate } = require('./scoring');
+const {
+  classifyNonIcpTitleReason,
+  hasTechnicalAmbiguousQualifier,
+  scoreCandidate,
+} = require('./scoring');
 const { scoreCandidateWithPriorityModel } = require('./priority-score');
 const { buildCoverageSummary } = require('./coverage');
 const {
@@ -203,6 +207,7 @@ function shouldAdaptiveSkipRestSweep({
 function buildSweepTemplates(config, maxCandidatesOverride = null, options = {}) {
   const templates = [];
   const overrideLimit = normalizeCandidateLimit(maxCandidatesOverride);
+  const defaultTitleExcludes = config?.titleExcludes || [];
 
   if (config?.broadCrawl?.enabled) {
     const configuredLimit = normalizeCandidateLimit(config.broadCrawl.maxCandidates);
@@ -210,6 +215,8 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       id: 'broad-crawl',
       name: 'Broad Employee Crawl',
       keywords: [],
+      titleIncludes: config.broadCrawl.titleIncludes || [],
+      titleExcludes: config.broadCrawl.titleExcludes || defaultTitleExcludes,
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -224,6 +231,8 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
       id: `sweep-${sweep.id}`,
       name: `Coverage Sweep ${sweep.id}`,
       keywords: sweep.keywords || [],
+      titleIncludes: sweep.titleIncludes || [],
+      titleExcludes: sweep.titleExcludes || defaultTitleExcludes,
     };
     const limit = overrideLimit ?? configuredLimit;
     if (limit !== null) {
@@ -868,7 +877,13 @@ function isManagerOrAbove(seniority) {
 }
 
 function hasCoreTechnicalAdjacentScope(title) {
-  return /\b(cloud|ai|platform|architecture|architect|microservice|microservices)\b/.test(title);
+  if (/\b(cloud|ai|microservice|microservices)\b/.test(title)) {
+    return true;
+  }
+  if (/\b(platform|architecture|architect)\b/.test(title)) {
+    return hasTechnicalAmbiguousQualifier(title);
+  }
+  return false;
 }
 
 function hasEngineeringLeadershipScope(title) {
@@ -903,6 +918,10 @@ function getHardExclusionReason(candidate, options = {}) {
   }
   if (excludeTitleKeywords.some((keyword) => title.includes(keyword))) {
     return 'operator_excluded_title_keyword';
+  }
+  const nonIcpTitleReason = classifyNonIcpTitleReason(title);
+  if (nonIcpTitleReason) {
+    return nonIcpTitleReason;
   }
   if (/\b(hr|human resources|privacy|controlling|einkauf|procurement|finance|financial)\b/.test(title)) {
     return 'non_icp_business_function';
@@ -956,6 +975,13 @@ function classifyCoverageListSelection(candidate, options = {}) {
   const roleFamily = String(candidate.roleFamily || '').toLowerCase();
 
   if (candidate.coverageBucket === 'direct_observability') {
+    if (/\b(platform|architecture|architect)\b/.test(title) && !hasTechnicalAmbiguousQualifier(title)) {
+      return {
+        selected: false,
+        reason: 'direct_observability_needs_technical_qualifier',
+        rank: 0,
+      };
+    }
     return {
       selected: true,
       reason: 'direct_observability_always_include',

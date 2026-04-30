@@ -1045,6 +1045,170 @@ function getPrimarySafeCommand(artifact) {
   }
 }
 
+function numberOrZero(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function extractSpeedEvaluationMetrics(artifact = {}) {
+  const fastResolve = artifact.evaluationMetrics?.fastResolve || {};
+  const companyResolution = artifact.evaluationMetrics?.companyResolution || {};
+  return {
+    totalMs: numberOrZero(artifact.timings?.totalMs || artifact.totalMs || artifact.durationMs),
+    resolvedSafeToSave: numberOrZero(
+      fastResolve.resolvedSafeToSave
+      ?? fastResolve.bucketCounts?.resolved_safe_to_save
+      ?? artifact.bucketCounts?.resolved_safe_to_save
+      ?? artifact.resolvedSafeToSave
+      ?? artifact.resolvedLeads,
+    ),
+    manualReviewRate: numberOrZero(
+      fastResolve.manualReviewRate
+      ?? artifact.manualReviewRate,
+    ),
+    duplicateWarningRate: numberOrZero(
+      fastResolve.duplicateWarningRate
+      ?? fastResolve.duplicateRate
+      ?? artifact.duplicateWarningRate
+      ?? artifact.duplicateRate,
+    ),
+    companyResolutionBlockers: numberOrZero(
+      companyResolution.blockerCount
+      ?? companyResolution.aliasDisagreements
+      ?? companyResolution.failed
+      ?? companyResolution.needsManualReview
+      ?? companyResolution.blocked
+      ?? artifact.companyResolutionBlockers,
+    ),
+    overallRisk: artifact.evaluationMetrics?.overallRisk || artifact.overallRisk || 'unknown',
+  };
+}
+
+function buildAutoresearchSpeedEvaluation({
+  baseline = null,
+  candidate = null,
+  minSpeedupPercent = 25,
+  generatedAt = new Date().toISOString(),
+} = {}) {
+  const baselineMetrics = extractSpeedEvaluationMetrics(baseline || {});
+  const candidateMetrics = extractSpeedEvaluationMetrics(candidate || {});
+  const baselineMs = baselineMetrics.totalMs;
+  const candidateMs = candidateMetrics.totalMs;
+  const speedupPercent = baselineMs > 0 && candidateMs > 0
+    ? Math.round(((baselineMs - candidateMs) / baselineMs) * 1000) / 10
+    : 0;
+  const failedGates = [];
+
+  if (speedupPercent < Number(minSpeedupPercent || 0)) {
+    failedGates.push('speedup_below_threshold');
+  }
+  if (candidateMetrics.resolvedSafeToSave < baselineMetrics.resolvedSafeToSave) {
+    failedGates.push('resolved_safe_to_save_regressed');
+  }
+  if (candidateMetrics.manualReviewRate > baselineMetrics.manualReviewRate) {
+    failedGates.push('manual_review_rate_regressed');
+  }
+  if (candidateMetrics.duplicateWarningRate > baselineMetrics.duplicateWarningRate) {
+    failedGates.push('duplicate_warning_rate_regressed');
+  }
+  if (candidateMetrics.companyResolutionBlockers > baselineMetrics.companyResolutionBlockers) {
+    failedGates.push('company_resolution_blockers_regressed');
+  }
+
+  const qualityRegression = failedGates.some((gate) => gate !== 'speedup_below_threshold');
+  const decision = failedGates.length === 0
+    ? 'keep_candidate'
+    : (qualityRegression ? 'revert_candidate' : 'needs_more_evidence');
+
+  return {
+    generatedAt,
+    mode: 'read_only_speed_evaluation',
+    decision,
+    minSpeedupPercent: Number(minSpeedupPercent || 0),
+    failedGates,
+    speed: {
+      baselineMs,
+      candidateMs,
+      speedupPercent,
+    },
+    quality: {
+      baseline: baselineMetrics,
+      candidate: candidateMetrics,
+      qualityRegression,
+    },
+    safety: {
+      drySafe: true,
+      readOnly: true,
+      liveMutationAllowed: false,
+      autoExecute: false,
+    },
+    evidence: {
+      baselineArtifactPath: baseline?.artifactPath || null,
+      candidateArtifactPath: candidate?.artifactPath || null,
+    },
+  };
+}
+
+function formatPercent(value) {
+  return `${Math.round(numberOrZero(value) * 1000) / 10}%`;
+}
+
+function renderAutoresearchSpeedEvaluationMarkdown(evaluation = {}) {
+  const baseline = evaluation.quality?.baseline || {};
+  const candidate = evaluation.quality?.candidate || {};
+  const lines = [];
+  lines.push('# Autoresearch Speed Evaluation');
+  lines.push('');
+  lines.push(`- Generated at: \`${evaluation.generatedAt || new Date().toISOString()}\``);
+  lines.push(`- Execution mode: \`${evaluation.mode || 'read_only_speed_evaluation'}\``);
+  lines.push(`- Decision: \`${evaluation.decision || 'needs_more_evidence'}\``);
+  lines.push(`- Minimum speedup: \`${evaluation.minSpeedupPercent ?? 25}%\``);
+  lines.push(`- Actual speedup: \`${evaluation.speed?.speedupPercent ?? 0}%\``);
+  lines.push(`- Auto execute: \`${evaluation.safety?.autoExecute ? 'yes' : 'no'}\``);
+  lines.push('');
+  lines.push('## Speed');
+  lines.push(`- Baseline total: \`${evaluation.speed?.baselineMs || 0}ms\``);
+  lines.push(`- Candidate total: \`${evaluation.speed?.candidateMs || 0}ms\``);
+  lines.push('');
+  lines.push('## Quality Gate');
+  lines.push(`- Baseline resolved safe-to-save: \`${baseline.resolvedSafeToSave || 0}\``);
+  lines.push(`- Candidate resolved safe-to-save: \`${candidate.resolvedSafeToSave || 0}\``);
+  lines.push(`- Baseline manual review rate: \`${formatPercent(baseline.manualReviewRate)}\``);
+  lines.push(`- Candidate manual review rate: \`${formatPercent(candidate.manualReviewRate)}\``);
+  lines.push(`- Baseline duplicate warning rate: \`${formatPercent(baseline.duplicateWarningRate)}\``);
+  lines.push(`- Candidate duplicate warning rate: \`${formatPercent(candidate.duplicateWarningRate)}\``);
+  lines.push(`- Baseline company blockers: \`${baseline.companyResolutionBlockers || 0}\``);
+  lines.push(`- Candidate company blockers: \`${candidate.companyResolutionBlockers || 0}\``);
+  lines.push(`- Quality regression: \`${evaluation.quality?.qualityRegression ? 'yes' : 'no'}\``);
+  lines.push('');
+  lines.push('## Failed Gates');
+  const failed = evaluation.failedGates || [];
+  if (failed.length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const gate of failed) {
+      lines.push(`- \`${gate}\``);
+    }
+  }
+  lines.push('');
+  lines.push('## Safety Contract');
+  lines.push('- No Sales Navigator mutation is executed by this evaluation.');
+  lines.push('- This report only compares dry artifacts and quality metrics.');
+  lines.push('- Keep/revert decisions are advisory until reviewed by an operator.');
+  lines.push('');
+  lines.push('## Evidence');
+  if (evaluation.evidence?.baselineArtifactPath) {
+    lines.push(`- Baseline artifact: \`${evaluation.evidence.baselineArtifactPath}\``);
+  }
+  if (evaluation.evidence?.candidateArtifactPath) {
+    lines.push(`- Candidate artifact: \`${evaluation.evidence.candidateArtifactPath}\``);
+  }
+  if (!evaluation.evidence?.baselineArtifactPath && !evaluation.evidence?.candidateArtifactPath) {
+    lines.push('- `no artifact paths provided`');
+  }
+  return `${lines.join('\n').trim()}\n`;
+}
+
 function writeMvpAutoresearchRun(options = {}) {
   const artifact = buildMvpAutoresearchArtifact(options);
   const artifactPath = options.artifactPath || buildAutoresearchArtifactPath(new Date(artifact.generatedAt));
@@ -1088,6 +1252,8 @@ module.exports = {
   renderMvpGateReport,
   buildMvpSupervisorRunbook,
   renderMvpSupervisorRunbook,
+  buildAutoresearchSpeedEvaluation,
+  renderAutoresearchSpeedEvaluationMarkdown,
   buildRunnerCoverageTarget,
   buildRunnerCoverageByType,
   summarizeBackgroundEvidence,

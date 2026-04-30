@@ -103,6 +103,8 @@ const {
   renderMvpGateReport,
   buildMvpSupervisorRunbook,
   renderMvpSupervisorRunbook,
+  buildAutoresearchSpeedEvaluation,
+  renderAutoresearchSpeedEvaluationMarkdown,
   writeMvpAutoresearchRun,
 } = require('./core/autoresearch-mvp');
 const {
@@ -262,6 +264,9 @@ async function main() {
         break;
       case 'print-autoresearch-supervisor':
         await handlePrintAutoresearchSupervisor(values, logger);
+        break;
+      case 'autoresearch-speed-eval':
+        await handleAutoresearchSpeedEval(values, logger);
         break;
       case 'run-account-batch':
         await handleRunAccountBatch(getRepository(), values, logger);
@@ -3010,6 +3015,31 @@ async function handlePrintAutoresearchSupervisor(values, logger) {
   console.log(renderMvpSupervisorRunbook(buildMvpSupervisorRunbook(artifact)));
 }
 
+async function handleAutoresearchSpeedEval(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects')) {
+    throw new Error('autoresearch-speed-eval is read-only and refuses live-save, live-connect, or background connects');
+  }
+  const baselinePath = getString(values, 'baseline');
+  const candidatePath = getString(values, 'candidate');
+  if (!baselinePath || !candidatePath) {
+    throw new Error('autoresearch-speed-eval requires --baseline=path/to/baseline.json and --candidate=path/to/candidate.json');
+  }
+  const minSpeedupPercent = Number(getString(values, 'min-speedup-percent') || 25);
+  const baselineArtifactPath = path.isAbsolute(baselinePath) ? baselinePath : resolveProjectPath(baselinePath);
+  const candidateArtifactPath = path.isAbsolute(candidatePath) ? candidatePath : resolveProjectPath(candidatePath);
+  const baseline = {
+    ...readJson(baselineArtifactPath),
+    artifactPath: baselineArtifactPath,
+  };
+  const candidate = {
+    ...readJson(candidateArtifactPath),
+    artifactPath: candidateArtifactPath,
+  };
+  const evaluation = buildAutoresearchSpeedEvaluation({ baseline, candidate, minSpeedupPercent });
+  logger.info(`Speed evaluation decision: ${evaluation.decision}`);
+  console.log(renderAutoresearchSpeedEvaluationMarkdown(evaluation));
+}
+
 function loadAutoresearchArtifactForReadOnlyReport(values) {
   const explicitArtifactPath = getString(values, 'artifact');
   if (!explicitArtifactPath) {
@@ -3685,6 +3715,7 @@ Usage:
   node src/cli.js autoresearch-mvp [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
+  node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect

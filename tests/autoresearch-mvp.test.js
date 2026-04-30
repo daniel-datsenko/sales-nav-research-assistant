@@ -15,6 +15,8 @@ const {
   renderMvpGateReport,
   buildMvpSupervisorRunbook,
   renderMvpSupervisorRunbook,
+  buildAutoresearchSpeedEvaluation,
+  renderAutoresearchSpeedEvaluationMarkdown,
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
 const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
@@ -647,6 +649,143 @@ test('renderMvpSupervisorRunbook is operator-facing and suppresses unsafe comman
   assert.doesNotMatch(markdown, /--live-save/);
   assert.doesNotMatch(markdown, /--live-connect/);
   assert.match(markdown, /Latest autoresearch: `\/tmp\/mvp-autoresearch.json`/);
+});
+
+test('buildAutoresearchSpeedEvaluation keeps faster candidates only when quality does not regress', () => {
+  const baseline = {
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    timings: { totalMs: 120000 },
+    evaluationMetrics: {
+      fastResolve: {
+        resolvedSafeToSave: 40,
+        manualReviewRate: 0.12,
+        duplicateWarningRate: 0.03,
+      },
+      companyResolution: { blockerCount: 1 },
+      overallRisk: 'medium',
+    },
+  };
+  const candidate = {
+    generatedAt: '2026-04-24T07:00:00.000Z',
+    timings: { totalMs: 78000 },
+    evaluationMetrics: {
+      fastResolve: {
+        resolvedSafeToSave: 41,
+        manualReviewRate: 0.11,
+        duplicateWarningRate: 0.02,
+      },
+      companyResolution: { blockerCount: 1 },
+      overallRisk: 'low',
+    },
+  };
+
+  const evaluation = buildAutoresearchSpeedEvaluation({ baseline, candidate, minSpeedupPercent: 25 });
+
+  assert.equal(evaluation.mode, 'read_only_speed_evaluation');
+  assert.equal(evaluation.decision, 'keep_candidate');
+  assert.equal(evaluation.speed.speedupPercent, 35);
+  assert.equal(evaluation.quality.qualityRegression, false);
+  assert.equal(evaluation.safety.liveMutationAllowed, false);
+  assert.deepEqual(evaluation.failedGates, []);
+});
+
+test('buildAutoresearchSpeedEvaluation rejects faster candidates with lead-quality regressions', () => {
+  const baseline = {
+    timings: { totalMs: 100000 },
+    evaluationMetrics: {
+      fastResolve: {
+        resolvedSafeToSave: 20,
+        manualReviewRate: 0.1,
+        duplicateWarningRate: 0.02,
+      },
+      companyResolution: { blockerCount: 0 },
+    },
+  };
+  const candidate = {
+    timings: { totalMs: 50000 },
+    evaluationMetrics: {
+      fastResolve: {
+        resolvedSafeToSave: 18,
+        manualReviewRate: 0.2,
+        duplicateWarningRate: 0.05,
+      },
+      companyResolution: { blockerCount: 1 },
+    },
+  };
+
+  const evaluation = buildAutoresearchSpeedEvaluation({ baseline, candidate, minSpeedupPercent: 25 });
+
+  assert.equal(evaluation.decision, 'revert_candidate');
+  assert.equal(evaluation.quality.qualityRegression, true);
+  assert.match(evaluation.failedGates.join(' '), /resolved_safe_to_save_regressed/);
+  assert.match(evaluation.failedGates.join(' '), /manual_review_rate_regressed/);
+  assert.match(evaluation.failedGates.join(' '), /company_resolution_blockers_regressed/);
+});
+
+test('buildAutoresearchSpeedEvaluation rejects real evaluation metric duplicate and company regressions', () => {
+  const evaluation = buildAutoresearchSpeedEvaluation({
+    baseline: {
+      timings: { totalMs: 100000 },
+      evaluationMetrics: {
+        fastResolve: {
+          resolvedSafeToSave: 10,
+          manualReviewRate: 0,
+          duplicateRate: 0,
+        },
+        companyResolution: {
+          aliasDisagreements: 0,
+          aliasDisagreementRate: 0,
+        },
+      },
+    },
+    candidate: {
+      timings: { totalMs: 50000 },
+      evaluationMetrics: {
+        fastResolve: {
+          resolvedSafeToSave: 10,
+          manualReviewRate: 0,
+          duplicateRate: 0.5,
+        },
+        companyResolution: {
+          aliasDisagreements: 2,
+          aliasDisagreementRate: 0.5,
+        },
+      },
+    },
+    minSpeedupPercent: 25,
+  });
+
+  assert.equal(evaluation.decision, 'revert_candidate');
+  assert.match(evaluation.failedGates.join(' '), /duplicate_warning_rate_regressed/);
+  assert.match(evaluation.failedGates.join(' '), /company_resolution_blockers_regressed/);
+});
+
+test('renderAutoresearchSpeedEvaluationMarkdown is operator-facing and read-only', () => {
+  const markdown = renderAutoresearchSpeedEvaluationMarkdown(buildAutoresearchSpeedEvaluation({
+    baseline: {
+      artifactPath: 'runtime/artifacts/autoresearch/baseline.json',
+      timings: { totalMs: 90000 },
+      evaluationMetrics: {
+        fastResolve: { resolvedSafeToSave: 12, manualReviewRate: 0.1, duplicateWarningRate: 0 },
+        companyResolution: { blockerCount: 0 },
+      },
+    },
+    candidate: {
+      artifactPath: 'runtime/artifacts/autoresearch/candidate.json',
+      timings: { totalMs: 60000 },
+      evaluationMetrics: {
+        fastResolve: { resolvedSafeToSave: 12, manualReviewRate: 0.1, duplicateWarningRate: 0 },
+        companyResolution: { blockerCount: 0 },
+      },
+    },
+    minSpeedupPercent: 20,
+  }));
+
+  assert.match(markdown, /# Autoresearch Speed Evaluation/);
+  assert.match(markdown, /Decision: `keep_candidate`/);
+  assert.match(markdown, /Execution mode: `read_only_speed_evaluation`/);
+  assert.doesNotMatch(markdown, /--live-save|--live-connect|allow-background-connects/);
+  assert.match(markdown, /No Sales Navigator mutation is executed/);
 });
 
 test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {

@@ -37,6 +37,7 @@
     "build-background-territory-queue": "node src/cli.js build-background-territory-queue",
     "run-background-territory-loop": "node src/cli.js run-background-territory-loop",
     "autoresearch:mvp": "node src/cli.js autoresearch-mvp",
+    "autoresearch:gate": "node src/cli.js print-autoresearch-gate",
     "autobrowse:mvp": "node automation/autobrowse-mvp.js",
     "test-hybrid-account-search": "node src/cli.js test-account-search --driver=hybrid",
     "test": "node --test",

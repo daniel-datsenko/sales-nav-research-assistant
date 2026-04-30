@@ -12,6 +12,7 @@ const {
   buildMvpAutoresearchArtifact,
   renderMvpAutoresearchMarkdown,
   renderMvpOperatorDashboard,
+  renderMvpGateReport,
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
 const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
@@ -446,6 +447,115 @@ test('buildMvpAutoresearchArtifact includes execution gate in JSON and Markdown'
   assert.equal(artifact.executionGate.liveSaveEligible, false);
   assert.match(markdown, /## Execution Gate/);
   assert.match(markdown, /Decision:/);
+});
+
+test('renderMvpGateReport gives an operator-facing read-only gate summary', () => {
+  const report = renderMvpGateReport({
+    artifactPath: '/tmp/mvp-autoresearch.json',
+    reportPath: '/tmp/mvp-autoresearch.md',
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    executionGate: {
+      drySafe: true,
+      decision: 'blocked_until_company_resolution',
+      liveSaveEligible: false,
+      requiresOperatorApproval: false,
+      riskLevel: 'medium',
+      reasons: ['company_resolution_retry_pending', 'mutation_review_artifact_missing'],
+      allowedCommandTemplate: 'node src/cli.js run-company-resolution-retries --limit=3 --driver=hybrid --max-candidates=25',
+      checkpoints: ['do_not_run_live_save_until_gate_is_eligible'],
+    },
+    evaluationMetrics: {
+      overall: { riskLevel: 'medium', indicators: ['company_resolution_failure_rate'] },
+      fastResolve: { manualReviewRate: 0.25, duplicateRate: 0.1 },
+      background: { noiseRate: 0.2 },
+      companyResolution: { aliasDisagreementRate: 0.1 },
+    },
+    researchLoopPlan: {
+      drySafe: true,
+      steps: [
+        {
+          id: 'company-resolution-retry',
+          type: 'cli_command',
+          command: 'node src/cli.js run-company-resolution-retries --limit=3 --driver=hybrid --max-candidates=25',
+          reason: 'retry failed scoped company resolution',
+        },
+        { id: 'operator-review', type: 'manual_gate', command: null, reason: 'review blockers' },
+      ],
+    },
+  });
+
+  assert.match(report, /# Autoresearch Execution Gate/);
+  assert.match(report, /Decision: `blocked_until_company_resolution`/);
+  assert.match(report, /Live save eligible: `no`/);
+  assert.match(report, /Primary command: `node src\/cli\.js run-company-resolution-retries/);
+  assert.match(report, /Operator stance: `dry_run_only`/);
+  assert.match(report, /company_resolution_retry_pending/);
+  assert.match(report, /## Why Blocked or Gated/);
+  assert.match(report, /## Evidence/);
+  assert.doesNotMatch(report, /--live-save/);
+  assert.doesNotMatch(report, /--live-connect/);
+});
+
+test('renderMvpGateReport makes eligible live-save explicit but supervised', () => {
+  const report = renderMvpGateReport({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    executionGate: {
+      drySafe: true,
+      decision: 'eligible_for_live_save',
+      liveSaveEligible: true,
+      requiresOperatorApproval: true,
+      riskLevel: 'low',
+      reasons: [],
+      allowedCommandTemplate: 'node src/cli.js fast-list-import --source=<reviewed-source> --list-name=<reviewed-list> --live-save',
+      checkpoints: ['operator_confirms_mutation_review_before_live_save'],
+    },
+    evaluationMetrics: {
+      overall: { riskLevel: 'low', indicators: [] },
+      fastResolve: { manualReviewRate: 0, duplicateRate: 0 },
+      background: { noiseRate: 0 },
+      companyResolution: { aliasDisagreementRate: 0 },
+    },
+    researchLoopPlan: { drySafe: true, steps: [] },
+  });
+
+  assert.match(report, /Decision: `eligible_for_live_save`/);
+  assert.match(report, /Operator stance: `supervised_live_save_possible_after_human_approval`/);
+  assert.match(report, /Primary command: `node src\/cli\.js fast-list-import --source=<reviewed-source> --list-name=<reviewed-list> --live-save`/);
+  assert.match(report, /Required approval: `yes`/);
+});
+
+test('renderMvpGateReport suppresses unsafe commands in stale or malformed non-live artifacts', () => {
+  const report = renderMvpGateReport({
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    executionGate: {
+      drySafe: true,
+      decision: 'allow_dry_run_only',
+      liveSaveEligible: false,
+      requiresOperatorApproval: false,
+      riskLevel: 'low',
+      reasons: [],
+      allowedCommandTemplate: 'node src/cli.js fast-list-import --source=/tmp/leads.md --live-save',
+      checkpoints: [],
+    },
+    evaluationMetrics: { overall: { riskLevel: 'low', indicators: [] } },
+    researchLoopPlan: {
+      drySafe: true,
+      steps: [
+        {
+          id: 'unsafe-connect',
+          type: 'cli_command',
+          command: 'node src/cli.js run-background-territory-loop --allow-background-connects --live-connect',
+          reason: 'malformed stale artifact',
+        },
+      ],
+    },
+  });
+
+  assert.match(report, /unsafe_command_suppressed/);
+  assert.match(report, /unsafe command suppressed/);
+  assert.doesNotMatch(report, /--live-save/);
+  assert.doesNotMatch(report, /--live-connect/);
+  assert.doesNotMatch(report, /allow-background-connects/);
 });
 
 test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {

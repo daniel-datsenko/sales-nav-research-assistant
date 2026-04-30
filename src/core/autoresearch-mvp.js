@@ -641,6 +641,129 @@ function escapeMarkdownCell(value) {
   return String(value ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
+function renderMvpGateReport(artifact) {
+  const lines = [];
+  const gate = artifact?.executionGate || {};
+  const metrics = artifact?.evaluationMetrics || {};
+  const plan = artifact?.researchLoopPlan || {};
+  const decision = gate.decision || 'unknown';
+  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];
+  const checkpoints = Array.isArray(gate.checkpoints) ? gate.checkpoints : [];
+  const planSteps = Array.isArray(plan.steps) ? plan.steps : [];
+  const primaryCommand = sanitizeGateReportCommand(
+    gate.allowedCommandTemplate || getPrimarySafeCommand(artifact || {}),
+    { allowLiveSave: gate.decision === 'eligible_for_live_save', fallback: 'unsafe_command_suppressed_run_autoresearch_mvp' },
+  );
+  const stance = getGateOperatorStance(gate);
+
+  lines.push('# Autoresearch Execution Gate');
+  lines.push('');
+  if (!artifact) {
+    lines.push('- Decision: `unknown`');
+    lines.push('- Operator stance: `run_autoresearch_first`');
+    lines.push('- Primary command: `npm run autoresearch:mvp`');
+    lines.push('- Live save eligible: `no`');
+    lines.push('');
+    lines.push('## Evidence');
+    lines.push('- Latest autoresearch: `missing`');
+    return `${lines.join('\n').trim()}\n`;
+  }
+
+  lines.push(`- Generated at: \`${artifact.generatedAt || 'unknown'}\``);
+  lines.push(`- Decision: \`${decision}\``);
+  lines.push(`- Operator stance: \`${stance}\``);
+  lines.push(`- Live save eligible: \`${gate.liveSaveEligible ? 'yes' : 'no'}\``);
+  lines.push(`- Required approval: \`${gate.requiresOperatorApproval ? 'yes' : 'no'}\``);
+  lines.push(`- Risk level: \`${gate.riskLevel || metrics.overall?.riskLevel || 'unknown'}\``);
+  lines.push(`- Primary command: \`${primaryCommand}\``);
+  lines.push('');
+  lines.push('## Why Blocked or Gated');
+  if (reasons.length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const reason of reasons) {
+      lines.push(`- \`${reason}\``);
+    }
+  }
+  lines.push('');
+  lines.push('## Metrics Snapshot');
+  lines.push(`- Overall indicators: \`${metrics.overall?.indicators?.join(', ') || 'none'}\``);
+  lines.push(`- Fast manual review rate: \`${metrics.fastResolve?.manualReviewRate ?? 0}\``);
+  lines.push(`- Fast duplicate rate: \`${metrics.fastResolve?.duplicateRate ?? 0}\``);
+  lines.push(`- Background noise rate: \`${metrics.background?.noiseRate ?? 0}\``);
+  lines.push(`- Company alias disagreement rate: \`${metrics.companyResolution?.aliasDisagreementRate ?? 0}\``);
+  lines.push('');
+  lines.push('## Required Checkpoints');
+  if (checkpoints.length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const checkpoint of checkpoints) {
+      lines.push(`- \`${checkpoint}\``);
+    }
+  }
+  lines.push('');
+  lines.push('## Research Loop Steps');
+  if (planSteps.length === 0) {
+    lines.push('- `none`');
+  } else {
+    for (const step of planSteps) {
+      const safeStepCommand = sanitizeGateReportCommand(step.command, {
+        allowLiveSave: false,
+        fallback: 'unsafe_command_suppressed',
+      });
+      const command = step.command ? ` — \`${safeStepCommand}\`` : ' — manual gate only';
+      const suffix = step.command && safeStepCommand === 'unsafe_command_suppressed'
+        ? ' (unsafe command suppressed)'
+        : '';
+      lines.push(`- \`${step.id}\`: ${escapeMarkdownCell(step.reason || step.type || 'no reason')}${command}${suffix}`);
+    }
+  }
+  lines.push('');
+  lines.push('## Evidence');
+  lines.push(`- Latest autoresearch: \`${artifact.artifactPath || 'not recorded'}\``);
+  lines.push(`- Latest autoresearch report: \`${artifact.reportPath || 'not recorded'}\``);
+  lines.push(`- Gate dry-safe: \`${gate.drySafe ? 'yes' : 'no'}\``);
+  lines.push(`- Plan dry-safe: \`${plan.drySafe ? 'yes' : 'no'}\``);
+  lines.push('');
+  lines.push('## Operator Rule');
+  if (gate.liveSaveEligible) {
+    lines.push('- Live-save is still supervised: review the mutation artifact, confirm the exact source/list, then run only the rendered reviewed command.');
+  } else {
+    lines.push('- Do not run live-save, live-connect, or background connect modes until this gate is eligible and human-approved.');
+  }
+  return `${lines.join('\n').trim()}\n`;
+}
+
+function getGateOperatorStance(gate = {}) {
+  if (gate.decision === 'eligible_for_live_save') {
+    return 'supervised_live_save_possible_after_human_approval';
+  }
+  if (gate.decision === 'requires_operator_review') {
+    return 'operator_review_required';
+  }
+  if (gate.decision === 'blocked_until_company_resolution') {
+    return 'dry_run_only';
+  }
+  return 'dry_run_only';
+}
+
+function sanitizeGateReportCommand(command, { allowLiveSave = false, fallback = 'unsafe_command_suppressed' } = {}) {
+  const raw = String(command || '').trim();
+  if (!raw) {
+    return fallback;
+  }
+  if (/--live-connect|allow-background-connects/i.test(raw)) {
+    return fallback;
+  }
+  if (!allowLiveSave && /--live-save/i.test(raw)) {
+    return fallback;
+  }
+  if (/\b(?:pilot-live-save-batch|test-list-save|remove-lead-list-members)\b/i.test(raw)) {
+    return fallback;
+  }
+  return raw;
+}
+
 function renderMvpOperatorDashboard(artifact) {
   const lines = [];
   lines.push('# MVP Control Center');
@@ -813,6 +936,7 @@ module.exports = {
   findLatestAutoresearchArtifact,
   readLatestAutoresearchArtifact,
   renderMvpOperatorDashboard,
+  renderMvpGateReport,
   buildRunnerCoverageTarget,
   buildRunnerCoverageByType,
   summarizeBackgroundEvidence,

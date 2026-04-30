@@ -13,6 +13,8 @@ const {
   renderMvpAutoresearchMarkdown,
   renderMvpOperatorDashboard,
   renderMvpGateReport,
+  buildMvpSupervisorRunbook,
+  renderMvpSupervisorRunbook,
   writeMvpAutoresearchRun,
 } = require('../src/core/autoresearch-mvp');
 const { buildResearchLoopPlan } = require('../src/core/research-loop-planner');
@@ -556,6 +558,95 @@ test('renderMvpGateReport suppresses unsafe commands in stale or malformed non-l
   assert.doesNotMatch(report, /--live-save/);
   assert.doesNotMatch(report, /--live-connect/);
   assert.doesNotMatch(report, /allow-background-connects/);
+});
+
+test('buildMvpSupervisorRunbook maps execution gate decisions to read-only next steps', () => {
+  const cases = [
+    {
+      decision: 'allow_dry_run_only',
+      expectedAction: 'continue_dry_research',
+      command: 'npm run autoresearch:mvp',
+    },
+    {
+      decision: 'blocked_until_company_resolution',
+      expectedAction: 'run_company_resolution_retries',
+      command: 'node src/cli.js run-company-resolution-retries --limit=3 --driver=hybrid --max-candidates=25',
+    },
+    {
+      decision: 'requires_operator_review',
+      expectedAction: 'review_gate_and_mutation_artifacts',
+      command: 'npm run autoresearch:gate',
+    },
+    {
+      decision: 'eligible_for_live_save',
+      expectedAction: 'prepare_supervised_live_save',
+      command: 'node src/cli.js fast-list-import --source=<reviewed-source> --list-name=<reviewed-list> --live-save',
+      requiresHumanApproval: true,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const runbook = buildMvpSupervisorRunbook({
+      generatedAt: '2026-04-24T06:00:00.000Z',
+      executionGate: {
+        drySafe: true,
+        decision: testCase.decision,
+        liveSaveEligible: testCase.decision === 'eligible_for_live_save',
+        requiresOperatorApproval: testCase.requiresHumanApproval || testCase.decision === 'requires_operator_review',
+        riskLevel: testCase.decision === 'eligible_for_live_save' ? 'low' : 'medium',
+        reasons: testCase.decision === 'blocked_until_company_resolution' ? ['company_resolution_retry_pending'] : [],
+        allowedCommandTemplate: testCase.command,
+        checkpoints: ['confirm_no_live_connect_or_background_connect_flags'],
+      },
+      researchLoopPlan: {
+        drySafe: true,
+        steps: testCase.decision === 'blocked_until_company_resolution'
+          ? [{ id: 'company-resolution-retry', command: testCase.command, reason: 'retry company resolution' }]
+          : [],
+      },
+      evaluationMetrics: { overall: { riskLevel: 'medium', indicators: [] } },
+    });
+
+    assert.equal(runbook.executionMode, 'read_only_supervisor');
+    assert.equal(runbook.autoExecute, false);
+    assert.equal(runbook.nextAction, testCase.expectedAction);
+    assert.equal(runbook.primaryCommand, testCase.command);
+    assert.equal(runbook.requiresHumanApproval, Boolean(testCase.requiresHumanApproval || testCase.decision === 'requires_operator_review'));
+  }
+});
+
+test('renderMvpSupervisorRunbook is operator-facing and suppresses unsafe commands for non-live decisions', () => {
+  const runbook = buildMvpSupervisorRunbook({
+    artifactPath: '/tmp/mvp-autoresearch.json',
+    generatedAt: '2026-04-24T06:00:00.000Z',
+    executionGate: {
+      drySafe: true,
+      decision: 'allow_dry_run_only',
+      liveSaveEligible: false,
+      requiresOperatorApproval: false,
+      riskLevel: 'low',
+      reasons: ['mutation_review_artifact_missing'],
+      allowedCommandTemplate: 'node src/cli.js fast-list-import --source=/tmp/leads.md --live-save',
+      checkpoints: [],
+    },
+    researchLoopPlan: {
+      drySafe: true,
+      steps: [
+        { id: 'unsafe-connect', command: 'node src/cli.js run-background-territory-loop --live-connect', reason: 'malformed stale artifact' },
+      ],
+    },
+    evaluationMetrics: { overall: { riskLevel: 'low', indicators: [] } },
+  });
+  const markdown = renderMvpSupervisorRunbook(runbook);
+
+  assert.match(markdown, /# Autoresearch Supervisor Runbook/);
+  assert.match(markdown, /Execution mode: `read_only_supervisor`/);
+  assert.match(markdown, /Auto execute: `no`/);
+  assert.match(markdown, /Next action: `continue_dry_research`/);
+  assert.match(markdown, /unsafe_command_suppressed/);
+  assert.doesNotMatch(markdown, /--live-save/);
+  assert.doesNotMatch(markdown, /--live-connect/);
+  assert.match(markdown, /Latest autoresearch: `\/tmp\/mvp-autoresearch.json`/);
 });
 
 test('research loop planner emits deterministic dry-safe CLI DAG from autoresearch evidence', () => {

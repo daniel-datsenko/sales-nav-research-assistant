@@ -5,8 +5,8 @@ This roadmap turns the current Sales Navigator research workflow into a real int
 ## What the app already has
 
 - account-first LinkedIn Sales Navigator traversal
-- Playwright for fast discovery
-- Browser Harness for real-browser mutations such as save-to-list
+- Playwright for fast discovery and automated live mutations such as save-to-list
+- Browser Harness as an explicit manual diagnostic surface for fragile LinkedIn UI variants
 - SQLite state, approvals, checkpoints, and local dashboard
 - configurable ICP scoring and deep profile review
 

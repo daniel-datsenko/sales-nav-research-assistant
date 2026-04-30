@@ -949,7 +949,7 @@ async function handleFastResolveLeads(values, logger) {
 }
 
 async function handleTestConnect(values, logger) {
-  const driverName = getString(values, 'driver') || 'browser-harness';
+  const driverName = getString(values, 'driver') || 'playwright';
   const candidateUrl = getString(values, 'candidate-url');
   const fullName = getString(values, 'full-name') || 'Smoke Test Candidate';
   if (!candidateUrl) {
@@ -1045,7 +1045,7 @@ async function handleInspectConnectSurface(values, logger) {
 }
 
 async function handleConnectLeadList(repository, values, logger) {
-  const driverName = getString(values, 'driver') || 'browser-harness';
+  const driverName = getString(values, 'driver') || 'playwright';
   const listName = getString(values, 'list-name');
   const limit = Number(getString(values, 'limit') || Number.MAX_SAFE_INTEGER);
   if (!listName) {
@@ -3087,7 +3087,7 @@ async function handleRunAccountBatch(repository, values, logger) {
   const liveSave = getBoolean(values, 'liveSave', 'live-save');
   const liveConnect = getBoolean(values, 'liveConnect', 'live-connect');
   const pilotConfig = getString(values, 'pilot-config') ? loadPilotConfig(getString(values, 'pilot-config')) : null;
-  const driverName = getString(values, 'driver') || ((liveSave || liveConnect) ? 'hybrid' : 'playwright');
+  const driverName = getString(values, 'driver') || 'playwright';
   const peopleSearchUrl = getString(values, 'people-search-url') || 'https://www.linkedin.com/sales/search/people?viewAllFilters=true';
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
@@ -3436,7 +3436,7 @@ async function handlePilotConnectBatch(repository, values, logger) {
 
   const listPrefix = getString(values, 'list-prefix');
   const maxConnectsPerAccount = Number(getString(values, 'max-connects-per-account') || 1);
-  const driverName = getString(values, 'driver') || 'browser-harness';
+  const driverName = getString(values, 'driver') || 'playwright';
   const pilotConfig = loadPilotConfig(getString(values, 'pilot-config'));
   const driverOptions = buildDriverOptions(values, { dryRun: false }, {
     sessionMode: 'persistent',
@@ -3700,9 +3700,9 @@ Usage:
   node src/cli.js fast-list-import --source=/path/to/leads.md[,/path/to/coverage.json] [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
   node src/cli.js retry-failed-fast-list-import --artifact=/path/to/failed-fast-import.json [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
   node src/cli.js import-coverage --accounts=example-marketplace-a,example-saas-marketplace,olx-group [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
-  node src/cli.js test-connect --driver=browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"] --live-connect
+  node src/cli.js test-connect --driver=playwright|browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"] --live-connect
   node src/cli.js inspect-connect-surface --driver=playwright --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"]
-  node src/cli.js connect-lead-list --driver=browser-harness --list-name="Territory List" [--limit=25] --live-connect
+  node src/cli.js connect-lead-list --driver=playwright|browser-harness|hybrid --list-name="Territory List" [--limit=25] --live-connect
   node src/cli.js remove-lead-list-members --driver=playwright --list-name="Territory List" --names="Name A, Name B" --live-save
   node src/cli.js send-approved-connects [--run-id=<run-id>] [--limit=25]
   node src/cli.js reconcile-state
@@ -3722,7 +3722,7 @@ Usage:
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
-  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
+  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect
 `);

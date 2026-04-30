@@ -67,7 +67,7 @@ The repository already ships a substantial supervised pipeline: CLI orchestratio
 |--------|------|
 | `src/drivers/playwright-sales-nav.js` | Discovery-heavy flows; `saveCandidateToList`, company filter/scoping, URL checks for `/sales/lead/`. |
 | `src/drivers/browser-harness-sales-nav.js` | CDP-backed mutations; **already_saved** path checks selection **before** secondary clicks (lines ~418–426 region). |
-| `src/drivers/hybrid-sales-nav.js` | Playwright discovery + browser-harness mutations; `checkSessionHealth` ties mutation readiness to `allowMutations` and non-dry-run. |
+| `src/drivers/hybrid-sales-nav.js` | Playwright-backed discovery + mutations; Browser Harness is manual-only unless explicitly selected as `--driver=browser-harness`. |
 | `src/drivers/driver-adapter.js` | Adapter surface. |
 | `src/drivers/mock-driver.js` | Tests/offline. |
 

@@ -38,9 +38,17 @@ test('renderCoverageReviewMarkdown produces grouped markdown output', () => {
       totalRoleCount: 4,
       missingRoles: ['economic_buyer'],
     },
+    personaCoverage: {
+      buyer: { count: 0 },
+      operator: { count: 2 },
+      user: { count: 1 },
+      warnings: ['buyer_coverage_gap'],
+    },
   });
 
   assert.match(markdown, /# Final Coverage Review: Example Retail Brand SE/);
+  assert.match(markdown, /Buyer\/Operator\/User: buyer=0, operator=2, user=1/);
+  assert.match(markdown, /Persona warnings: buyer_coverage_gap/);
   assert.match(markdown, /## Direct Observability/);
   assert.match(markdown, /\*\*Example Operator Zimmer\*\*/);
   assert.match(markdown, /## Technical Adjacent/);

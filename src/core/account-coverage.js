@@ -436,6 +436,65 @@ function applyDeepReviewResult(candidate, rescored, priorityModel, reviewedBucke
   };
 }
 
+function classifyPersonaTier(candidate) {
+  const title = normalizeSelectionText(candidate.title || '');
+  const roleFamily = String(candidate.roleFamily || '').toLowerCase();
+  const seniority = String(candidate.seniority || '').toLowerCase();
+
+  if (
+    roleFamily === 'executive_engineering'
+    || /\b(cio|cto|cdo|chief information officer|chief technology officer|chief data officer)\b/.test(title)
+    || (
+      ['director', 'vp', 'head'].includes(seniority)
+      && /\b(data\s*&\s*ai|data and ai|directeur data|directrice data|director data|director de datos|direttore dati|direttrice dati|daten\s*&\s*ki|datos e ia|dati e ai|digital transformation|transformation digitale|digitale transformation|transformacion digital|transformación digital|trasformazione digitale|marketplace director|head of tech)\b/.test(title)
+    )
+  ) {
+    return 'buyer';
+  }
+
+  if (
+    ['platform_engineering', 'infrastructure', 'site_reliability', 'devops'].includes(roleFamily)
+    && ['manager', 'head', 'director', 'principal', 'lead', 'senior'].includes(seniority)
+  ) {
+    return ['lead', 'senior', 'individual_contributor'].includes(seniority) ? 'user' : 'operator';
+  }
+
+  if (/\b(responsable domaine|direction informatique|gouvernance si|it-governance|gobernanza ti|governo it|architecture des environnements|production informatique|produktion it|produccion ti|producción ti|produzione it)\b/.test(title)) {
+    return 'operator';
+  }
+
+  if (/\b(tech lead|technical lead|devops|devsecops|sre|engineer|ingenieur|ingénieur|ingeniero|ingegnere|consultant cloud|consultant observability|consultant observabilité)\b/.test(title)) {
+    return 'user';
+  }
+
+  return 'unknown';
+}
+
+function summarizePersonaCoverage(candidates = []) {
+  const summary = {
+    buyer: { count: 0 },
+    operator: { count: 0 },
+    user: { count: 0 },
+    unknown: { count: 0 },
+    warnings: [],
+  };
+
+  for (const candidate of candidates) {
+    const tier = candidate.personaTier || classifyPersonaTier(candidate);
+    const bucket = summary[tier] || summary.unknown;
+    bucket.count += 1;
+  }
+
+  if (summary.buyer.count === 0 && (summary.operator.count > 0 || summary.user.count > 0)) {
+    summary.warnings.push('buyer_coverage_gap');
+  }
+  if (summary.operator.count === 0 && summary.user.count > 0) {
+    summary.warnings.push('operator_coverage_gap');
+  }
+
+  return summary;
+}
+
 function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, coverageConfig, accountName }) {
   const byKey = new Map();
 
@@ -462,6 +521,11 @@ function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, c
           score: score.score,
           scoreBreakdown: score.breakdown,
           priorityModel: priority,
+          personaTier: classifyPersonaTier({
+            ...candidate,
+            roleFamily: score.roleFamily,
+            seniority: score.seniority,
+          }),
           coverageBucket: classifyCoverageBucket({
             roleFamily: score.roleFamily,
             score: score.score,
@@ -512,6 +576,7 @@ function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, c
     candidateCount: candidates.length,
     candidates,
     coverage,
+    personaCoverage: summarizePersonaCoverage(candidates),
   };
 }
 

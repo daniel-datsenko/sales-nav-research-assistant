@@ -34,6 +34,13 @@ If LinkedIn/Sales Navigator is not authenticated, explain the two safe paths:
 - Prefer dry-safe commands for first runs.
 - If browser/session state is missing, do not present that as a failure. It is a normal bootstrap step.
 
+## Agent Operating Context
+
+- Use `CONTEXT.md` for canonical project language before planning, implementing, or reviewing non-trivial work.
+- Read relevant ADRs in `docs/adr/` before changing safety gates, live-mutation paths, performance mechanisms, or agent workflows.
+- Use `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` when creating or triaging GitHub issues.
+- Use `docs/agents/ready-for-agent-brief.md` before handing work to an AFK implementation agent.
+
 ## Recommended First Commands
 
 ```bash

@@ -14,3 +14,10 @@ If setup is incomplete, offer two safe paths:
 - B) Finish setup first with `npm install`, tests, and `npm run bootstrap-session -- --driver=playwright --wait-minutes=10`.
 
 Never run `--live-save`, `--live-connect`, or background connect commands unless the operator explicitly requests that live action.
+
+## Agent Operating Context
+
+- Use `CONTEXT.md` for canonical project language before planning, implementing, or reviewing non-trivial work.
+- Read relevant ADRs in `docs/adr/` before changing safety gates, live-mutation paths, performance mechanisms, or agent workflows.
+- Use `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` when creating or triaging GitHub issues.
+- Use `docs/agents/ready-for-agent-brief.md` before handing work to an AFK implementation agent.

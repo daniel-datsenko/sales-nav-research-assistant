@@ -15,11 +15,13 @@ const {
   loadAccountAliasConfig,
   normalizeAccountAliasKey,
   normalizeCandidateKey,
+  normalizeResearchMode,
   normalizeSpeedProfile,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   writeAccountCoverageArtifact,
   selectDeepReviewCandidates,
+  buildPersonaCoverageFollowUpPlan,
   summarizeCoverageBuckets,
 } = require('../src/core/account-coverage');
 const { buildSweepCacheKey } = require('../src/core/sweep-cache');
@@ -74,6 +76,76 @@ test('buildSweepTemplates applies speed profiles without adding hidden candidate
     'sweep-data',
   ]);
   assert.equal(normalizeSpeedProfile('unknown'), 'balanced');
+});
+
+test('buildSweepTemplates persona-led mode orders keyword packs by persona layer', () => {
+  const templates = buildSweepTemplates({
+    broadCrawl: { enabled: true },
+    sweeps: [
+      { id: 'devops', keywords: ['DevOps'] },
+      { id: 'data-ai-buyers', keywords: ['CDO', 'Director Data'] },
+      { id: 'architecture-operators', keywords: ['Enterprise Architecture'] },
+      { id: 'security', keywords: ['security'] },
+    ],
+  }, null, { researchMode: 'persona-led', speedProfile: 'exhaustive' });
+
+  assert.deepEqual(templates.map((template) => `${template.id}:${template.personaLayer}`), [
+    'broad-crawl:broad',
+    'sweep-data-ai-buyers:buyer',
+    'sweep-architecture-operators:operator',
+    'sweep-devops:user',
+    'sweep-security:adjacent',
+  ]);
+  assert.equal(normalizeResearchMode('unknown'), 'persona-led');
+});
+
+test('buildSweepTemplates exhaustive research mode keeps all persona keyword packs', () => {
+  const templates = buildSweepTemplates({
+    broadCrawl: { enabled: true },
+    sweeps: [
+      { id: 'platform', keywords: ['platform engineering'] },
+      { id: 'security', keywords: ['security'] },
+      { id: 'data', keywords: ['data analytics'] },
+    ],
+  }, null, {
+    researchMode: 'exhaustive',
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+
+  assert.deepEqual(templates.map((template) => template.id), [
+    'broad-crawl',
+    'sweep-platform',
+    'sweep-security',
+    'sweep-data',
+  ]);
+});
+
+test('persona coverage flags many users without buyer as follow-up gap', () => {
+  const plan = buildPersonaCoverageFollowUpPlan({
+    buyer: { count: 0 },
+    operator: { count: 2 },
+    user: { count: 12 },
+    coverageGaps: ['buyer_coverage_gap'],
+  });
+
+  assert.equal(plan.status, 'coverage_incomplete');
+  assert.deepEqual(plan.missingLayers, ['buyer']);
+  assert.equal(plan.nextAction, 'run_buyer_follow_up_sweeps');
+  assert.equal(plan.followUpSweeps[0].personaLayer, 'buyer');
+  assert.ok(plan.followUpSweeps[0].keywords.includes('CDO'));
+});
+
+test('persona coverage sufficient produces no follow-up sweeps', () => {
+  const plan = buildPersonaCoverageFollowUpPlan({
+    buyer: { count: 1 },
+    operator: { count: 2 },
+    user: { count: 3 },
+    coverageGaps: [],
+  });
+
+  assert.equal(plan.status, 'coverage_sufficient');
+  assert.deepEqual(plan.followUpSweeps, []);
 });
 
 test('buildSweepTemplates preserves title guard metadata for driver-side filtering', () => {

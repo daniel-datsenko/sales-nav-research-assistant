@@ -1865,6 +1865,7 @@ async function handleAccountCoverage(values, logger) {
   const accountListName = getString(values, 'account-list');
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
+  const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const interSweepDelayMs = Number(getString(values, 'inter-sweep-delay-ms') || 0);
@@ -1896,6 +1897,7 @@ async function handleAccountCoverage(values, logger) {
       icpConfig,
       priorityModel,
       maxCandidates,
+      researchMode,
       speedProfile,
       adaptiveSweepPruning,
       reuseSweepCache,
@@ -1919,6 +1921,7 @@ async function handleAccountCoverage(values, logger) {
     const attemptedSweepCount = Math.max(0, templates.length - skippedPrunedCount);
     const succeededSweeps = Math.max(0, attemptedSweepCount - failedSweepIds.length);
     logger.info(`Sweeps: ${succeededSweeps}/${attemptedSweepCount} attempted succeeded${failedSweepIds.length ? `, ${failedSweepIds.length} failed (${failedSweepIds.join(', ')})` : ''}${skippedPrunedCount ? `, ${skippedPrunedCount} pruned (${result.adaptivePruning.skippedTemplates.join(', ')})` : ''}`);
+    logger.info(`Research mode: ${result.researchMode || researchMode}`);
     logger.info(`Speed profile: ${result.speedProfile}`);
     if (interSweepDelayMs > 0) {
       logger.info(`Inter-sweep delay: ${interSweepDelayMs}ms`);
@@ -1930,6 +1933,12 @@ async function handleAccountCoverage(values, logger) {
     logger.info(`Unique candidates: ${result.candidateCount}`);
     logger.info(`Coverage artifact: ${artifactPath}`);
     logger.info(`Buckets: direct=${bucketSummary.direct_observability}, adjacent=${bucketSummary.technical_adjacent}, broad_it=${bucketSummary.broad_it_stakeholder}, noise=${bucketSummary.likely_noise}`);
+    if (result.personaCoverage) {
+      logger.info(`Persona coverage: buyer=${result.personaCoverage.buyer?.count || 0}, operator=${result.personaCoverage.operator?.count || 0}, user=${result.personaCoverage.user?.count || 0}, status=${result.personaCoverage.status || 'unknown'}`);
+      if (result.personaCoverage.coverageGaps?.length) {
+        logger.warn(`Persona gaps: ${result.personaCoverage.coverageGaps.join(', ')}; next=${result.personaCoverage.nextAction || result.personaFollowUpPlan?.nextAction || 'review'}`);
+      }
+    }
 
     if (result.coverage) {
       logger.info(`Coverage: ${result.coverage.coveredRoleCount}/${result.coverage.totalRoleCount} roles covered`);
@@ -2807,6 +2816,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
   const peopleSearchUrl = getString(values, 'people-search-url') || 'https://www.linkedin.com/sales/search/people?viewAllFilters=true';
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
+  const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache') || !liveSave;
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
   if (liveSave && researchConcurrency > 1) {
@@ -2908,6 +2918,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
       priorityModel,
       peopleSearchUrl,
       maxCandidates,
+      researchMode,
       speedProfile,
       reuseSweepCache,
       liveSave,
@@ -3071,12 +3082,14 @@ async function handleParallelAccountResearch(values, logger) {
 
   const runIdBase = getString(values, 'run-id') || 'parallel-account-research';
   const localConcurrency = parsePositiveIntegerOption(getString(values, 'local-concurrency'), 4, 'local-concurrency');
+  const researchMode = getString(values, 'research-mode') || 'persona-led';
+  const speedProfile = getString(values, 'speed-profile') || 'balanced';
   const coverageConfigPath = getString(values, 'coverage-config');
   const coverageConfig = loadAccountCoverageConfig(coverageConfigPath);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
   const priorityModel = loadPriorityModel();
 
-  logger.info(`parallel-account-research: browserConcurrency=1 (fixed), localConcurrency=${localConcurrency}, accounts=${names.length}`);
+  logger.info(`parallel-account-research: browserConcurrency=1 (fixed), localConcurrency=${localConcurrency}, researchMode=${researchMode}, speedProfile=${speedProfile}, accounts=${names.length}`);
 
   /** @type {Array<object>} */
   const accountArtifacts = [];
@@ -3088,7 +3101,11 @@ async function handleParallelAccountResearch(values, logger) {
       accounts: [normalized],
       runId: `${runIdBase}:${normalized.accountKey}`,
     });
-    const plan = planResearchJobs({ queue, coverageConfig });
+    const plan = planResearchJobs({
+      queue,
+      coverageConfig,
+      options: { researchMode, speedProfile },
+    });
     const jobsWithCache = await attachSweepCacheState({
       jobs: plan.jobs,
       readCache: () => null,
@@ -3151,6 +3168,8 @@ async function handleParallelAccountResearch(values, logger) {
       startedAt,
       finishedAt: Date.now(),
       localConcurrency,
+      researchMode,
+      speedProfile,
     });
     accountArtifacts.push(artifact);
   }
@@ -3160,6 +3179,8 @@ async function handleParallelAccountResearch(values, logger) {
     mode: 'dry-safe',
     browserConcurrency: 1,
     localConcurrency,
+    researchMode,
+    speedProfile,
     accountCount: names.length,
     accounts: accountArtifacts,
   }, null, 2));
@@ -3212,6 +3233,7 @@ async function handleRunAccountBatch(repository, values, logger) {
   const peopleSearchUrl = getString(values, 'people-search-url') || 'https://www.linkedin.com/sales/search/people?viewAllFilters=true';
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
+  const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
@@ -3267,6 +3289,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         icpConfig,
         priorityModel,
         maxCandidates,
+        researchMode,
         speedProfile,
         adaptiveSweepPruning,
         reuseSweepCache,
@@ -3809,7 +3832,7 @@ Usage:
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]
-  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--inter-sweep-delay-ms=2000]
+  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--inter-sweep-delay-ms=2000]
   node src/cli.js resolve-company --account-name="Acme"
   node src/cli.js print-company-resolution [--account-name="Acme"]
   node src/cli.js retry-company-resolution-failures [--limit=3]
@@ -3843,7 +3866,7 @@ Usage:
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
-  node src/cli.js parallel-account-research --accounts="Account A, Account B" [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
+  node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect

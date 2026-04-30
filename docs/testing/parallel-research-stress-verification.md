@@ -41,7 +41,7 @@ Expected invariants for the smoke output:
 Run the executable dry-safe stress harness:
 
 ```bash
-npm run parallel-research:stress
+npm run --silent parallel-research:stress
 ```
 
 For a custom matrix:
@@ -50,14 +50,19 @@ For a custom matrix:
 node automation/parallel-research-stress.js \
   --accounts="Example AG, Example GmbH, Example SE" \
   --local-concurrency-values=1,2,4 \
+  --repeat=3 \
   --run-id-prefix=stress
 ```
+
+Use `--repeat=N` for merge-readiness flake detection. The harness expands every local-concurrency value for every repeat index and emits stable run IDs such as `stress-local-2-repeat-3`. The default is `--repeat=1`, which preserves the shorter run IDs used for quick smoke checks.
 
 Expected summary invariants:
 
 - top-level `ok` is `true`
 - `mode` is `dry-safe`
 - `browserConcurrencyInvariant` is `1`
+- `repeat` matches the requested repeat count
+- `runCount` equals `localConcurrencyValues.length * repeat`
 - each run has `ok: true`
 - each run has `browserConcurrency: 1`
 - each run has `browserJobsExecuted: 0`
@@ -108,15 +113,17 @@ Validate each extracted JSON artifact:
 
 ## Flake/repeat loop
 
-For docs or small pipeline changes, run at least one repeat loop before merge readiness:
+For docs or small pipeline changes, run at least one harness repeat loop before merge readiness:
 
 ```bash
-for i in 1 2 3; do
-  node --test tests/research-pipeline.test.js tests/browser-worker-lock.test.js tests/parallel-research-benchmark.test.js || exit 1
-done
+npm run --silent parallel-research:stress -- \
+  --accounts="Example AG, Example GmbH" \
+  --local-concurrency-values=1,2 \
+  --repeat=3 \
+  --run-id-prefix=merge-readiness
 ```
 
-For changes touching scheduler, lock, cache, scoring, or CLI behavior, increase to 5-10 iterations or add a deterministic benchmark fixture.
+For changes touching scheduler, lock, cache, scoring, or CLI behavior, increase to 5-10 iterations or add a deterministic benchmark fixture. Keep this dry-safe: do not add live/background flags to the repeat loop.
 
 ## Forbidden-path scan
 

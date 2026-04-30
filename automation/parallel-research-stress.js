@@ -33,6 +33,16 @@ function parseIntegerList(value, fallback, optionName = 'value') {
   return parsed;
 }
 
+function parsePositiveInteger(value, fallback, optionName = 'value') {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim();
+  const parsed = Number.parseInt(text, 10);
+  if (String(parsed) !== text || !Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${optionName} must be a positive integer`);
+  }
+  return parsed;
+}
+
 function assertNoLiveFlags(args = []) {
   const hit = args.find((arg) => {
     const name = String(arg).split('=')[0];
@@ -56,6 +66,7 @@ function buildParallelResearchStressPlan({
   accounts = DEFAULT_ACCOUNTS,
   localConcurrencyValues = DEFAULT_LOCAL_CONCURRENCY_VALUES,
   runIdPrefix = 'stress',
+  repeat = 1,
   extraArgs = [],
 } = {}) {
   assertNoLiveFlags(extraArgs);
@@ -65,6 +76,7 @@ function buildParallelResearchStressPlan({
   const normalizedConcurrency = Array.isArray(localConcurrencyValues)
     ? localConcurrencyValues.map((value) => Number.parseInt(value, 10)).filter((value) => Number.isInteger(value) && value > 0)
     : parseIntegerList(localConcurrencyValues, DEFAULT_LOCAL_CONCURRENCY_VALUES, 'local-concurrency-values');
+  const normalizedRepeat = parsePositiveInteger(repeat, 1, 'repeat');
   if (normalizedAccounts.length === 0) {
     throw new Error('accounts must include at least one value');
   }
@@ -73,25 +85,32 @@ function buildParallelResearchStressPlan({
   }
   const accountsArg = normalizedAccounts.join(', ');
   const prefix = String(runIdPrefix || 'stress');
-  const runs = normalizedConcurrency.map((localConcurrency) => {
-    const runId = `${prefix}-local-${localConcurrency}`;
-    return {
-      runId,
-      localConcurrency,
-      args: [
-        'src/cli.js',
-        'parallel-account-research',
-        `--accounts=${accountsArg}`,
-        `--local-concurrency=${localConcurrency}`,
-        `--run-id=${runId}`,
-        ...extraArgs,
-      ],
-    };
-  });
+  const runs = [];
+  for (const localConcurrency of normalizedConcurrency) {
+    for (let repeatIndex = 1; repeatIndex <= normalizedRepeat; repeatIndex += 1) {
+      const runId = normalizedRepeat === 1
+        ? `${prefix}-local-${localConcurrency}`
+        : `${prefix}-local-${localConcurrency}-repeat-${repeatIndex}`;
+      runs.push({
+        runId,
+        localConcurrency,
+        repeatIndex,
+        args: [
+          'src/cli.js',
+          'parallel-account-research',
+          `--accounts=${accountsArg}`,
+          `--local-concurrency=${localConcurrency}`,
+          `--run-id=${runId}`,
+          ...extraArgs,
+        ],
+      });
+    }
+  }
   return {
     accounts: normalizedAccounts,
     accountsArg,
     localConcurrencyValues: normalizedConcurrency,
+    repeat: normalizedRepeat,
     runs,
   };
 }
@@ -143,6 +162,7 @@ function runParallelResearchStressHarness({
   accounts = DEFAULT_ACCOUNTS,
   localConcurrencyValues = DEFAULT_LOCAL_CONCURRENCY_VALUES,
   runIdPrefix = 'stress',
+  repeat = 1,
   extraArgs = [],
   runner = defaultRunner,
 } = {}) {
@@ -151,6 +171,7 @@ function runParallelResearchStressHarness({
     accounts,
     localConcurrencyValues,
     runIdPrefix,
+    repeat,
     extraArgs,
   });
   const runs = [];
@@ -163,6 +184,7 @@ function runParallelResearchStressHarness({
       runs.push({
         runId: run.runId,
         localConcurrency: run.localConcurrency,
+        repeatIndex: run.repeatIndex,
         ok: false,
         failures: [`exit_status:${status}`],
         stderr,
@@ -178,12 +200,14 @@ function runParallelResearchStressHarness({
       runs.push({
         runId: run.runId,
         localConcurrency: run.localConcurrency,
+        repeatIndex: run.repeatIndex,
         ...validation,
       });
     } catch (error) {
       runs.push({
         runId: run.runId,
         localConcurrency: run.localConcurrency,
+        repeatIndex: run.repeatIndex,
         ok: false,
         failures: [`parse_or_validation_error:${error.message}`],
       });
@@ -195,6 +219,8 @@ function runParallelResearchStressHarness({
     browserConcurrencyInvariant: 1,
     accounts: plan.accounts,
     localConcurrencyValues: plan.localConcurrencyValues,
+    repeat: plan.repeat,
+    runCount: runs.length,
     runs,
   };
 }
@@ -207,6 +233,7 @@ function parseHarnessArgs(argv) {
     if (arg.startsWith('--local-concurrency-values=')) {
       options.localConcurrencyValues = parseIntegerList(arg.slice('--local-concurrency-values='.length), DEFAULT_LOCAL_CONCURRENCY_VALUES, 'local-concurrency-values');
     }
+    if (arg.startsWith('--repeat=')) options.repeat = parsePositiveInteger(arg.slice('--repeat='.length), 1, 'repeat');
     if (arg.startsWith('--run-id-prefix=')) options.runIdPrefix = arg.slice('--run-id-prefix='.length);
   }
   return options;

@@ -176,7 +176,7 @@ function inferRoleFamilyFromText(text) {
   if (/cloud/.test(value)) return 'cloud';
   if (/engineering|engineer|software/.test(value)) return 'engineering';
   if (/data|analytics/.test(value)) return 'data';
-  if (/technology|\bit\b|sap|system/.test(value)) return 'it_technology';
+  if (/technology|\bit\b|system/.test(value)) return 'it_technology';
   return 'unknown';
 }
 

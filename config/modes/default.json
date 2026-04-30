@@ -137,8 +137,7 @@
       "system",
       "technology",
       "analytics",
-      "operations",
-      "sap"
+      "operations"
     ],
     "savePolicy": "save_after_review",
     "connectPolicy": "approval_only",

@@ -38,7 +38,33 @@ Expected invariants for the smoke output:
 
 ## Concurrency stress matrix
 
-Run the dry-safe smoke with multiple local concurrency values. The CLI may print a human-readable `[cli] ...` line before the JSON payload, so capture raw stdout and extract the JSON object before parsing:
+Run the executable dry-safe stress harness:
+
+```bash
+npm run parallel-research:stress
+```
+
+For a custom matrix:
+
+```bash
+node automation/parallel-research-stress.js \
+  --accounts="Example AG, Example GmbH, Example SE" \
+  --local-concurrency-values=1,2,4 \
+  --run-id-prefix=stress
+```
+
+Expected summary invariants:
+
+- top-level `ok` is `true`
+- `mode` is `dry-safe`
+- `browserConcurrencyInvariant` is `1`
+- each run has `ok: true`
+- each run has `browserConcurrency: 1`
+- each run has `browserJobsExecuted: 0`
+
+The harness intentionally parses the mixed human/JSON output from `parallel-account-research`, so callers should consume the harness summary rather than redirecting the lower-level CLI directly.
+
+If debugging the lower-level CLI manually, remember that it may print a human-readable `[cli] ...` line before the JSON payload. Capture raw stdout and extract the JSON object before parsing:
 
 ```bash
 for c in 1 2 4; do

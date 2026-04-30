@@ -175,7 +175,11 @@ test('runParallelResearchStressHarness rejects invalid explicit stress inputs', 
   );
   assert.throws(
     () => runParallelResearchStressHarness({ localConcurrencyValues: [0] }),
-    /local-concurrency-values must include at least one positive integer/
+    /local-concurrency-values must contain positive integers/
+  );
+  assert.throws(
+    () => runParallelResearchStressHarness({ localConcurrencyValues: [1, 'bad'] }),
+    /local-concurrency-values must contain positive integers; invalid value: bad/
   );
   assert.throws(
     () => runParallelResearchStressHarness({ localConcurrencyValues: 'abc' }),

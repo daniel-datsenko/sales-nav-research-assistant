@@ -43,6 +43,8 @@ test('package scripts keep autoresearch dry-safe and expose release checks', () 
   assert.doesNotMatch(packageJson.scripts['parallel-account-research'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['parallel-research:stress'], 'node automation/parallel-research-stress.js');
   assert.doesNotMatch(packageJson.scripts['parallel-research:stress'], /--live-save|--live-connect|allow-background-connects/);
+  assert.equal(packageJson.scripts['parallel-research:stack-readiness'], 'node automation/parallel-research-stack-readiness.js');
+  assert.doesNotMatch(packageJson.scripts['parallel-research:stack-readiness'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['print-mvp-operator-dashboard'], 'node src/cli.js print-mvp-operator-dashboard');
 });
 
@@ -54,6 +56,16 @@ test('parallel-account-research CLI entry refuses live-save', () => {
   });
   assert.notEqual(r.status, 0);
   assert.match(`${r.stderr}${r.stdout}`, /refuses live-save/i);
+});
+
+test('parallel-account-research CLI rejects invalid local concurrency', () => {
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync(process.execPath, ['src/cli.js', 'parallel-account-research', '--accounts=Example', '--local-concurrency=bad'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(`${r.stderr}${r.stdout}`, /local-concurrency must be a positive integer/i);
 });
 
 test('parallel-account-research CLI is dry-safe plan-only without executing browser jobs', () => {

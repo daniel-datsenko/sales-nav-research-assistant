@@ -145,6 +145,29 @@ git diff --cached | grep -Ei '(token|secret|password|cookie|authorization|bearer
 
 This is a coarse scan. It may flag legitimate forbidden-flag documentation. Review any match manually and redact secrets as `[REDACTED]`.
 
+## Stack-wide merge-readiness gate
+
+Once the stacked PRs are ready for final review, run the dry-safe stack gate from the top stack branch:
+
+```bash
+npm run --silent parallel-research:stack-readiness -- \
+  --stress-repeat=3 \
+  --stress-accounts="Example AG, Example GmbH" \
+  --stress-local-concurrency-values=1,2,4
+```
+
+This gate runs:
+
+- `git diff --check`
+- `npm run test:release-readiness`
+- `npm test`
+- the repeat stress harness
+- forbidden-path scan from `origin/main...HEAD`
+- credential-like diff scan from `origin/main...HEAD`
+- stacked PR metadata checks for PRs 25, 28, 29, 31, and 32, including `OPEN`, expected base/head/title, and `MERGEABLE` status
+
+The gate is intentionally dry-safe and refuses `--live-save`, `--live-connect`, and `--allow-background-connects`. It emits a machine-readable JSON summary and should be followed by the requested final ChatGPT 5.5 full-stack review before any merge command.
+
 ## PR reporting requirements
 
 Every Parallel Research PR should state:

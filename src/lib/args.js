@@ -55,6 +55,7 @@ function parseCliArgs(argv) {
       'search-timeout-ms': { type: 'string' },
       'speed-profile': { type: 'string' },
       'research-concurrency': { type: 'string' },
+      'local-concurrency': { type: 'string' },
       'reuse-sweep-cache': { type: 'boolean' },
       'adaptive-sweep-pruning': { type: 'boolean' },
       'max-age-hours': { type: 'string' },

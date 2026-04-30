@@ -760,6 +760,46 @@ test('buildAutoresearchSpeedEvaluation rejects real evaluation metric duplicate 
   assert.match(evaluation.failedGates.join(' '), /company_resolution_blockers_regressed/);
 });
 
+test('buildAutoresearchSpeedEvaluation reads researchPipeline.metrics for pipeline artifacts', () => {
+  const baseline = {
+    researchPipeline: {
+      metrics: {
+        totalMs: 100000,
+        selectedForList: 30,
+        candidatesUnique: 100,
+        manualReviewCount: 10,
+        duplicateWarningRate: 0.03,
+      },
+    },
+  };
+  const candidate = {
+    researchPipeline: {
+      metrics: {
+        totalMs: 70000,
+        selectedForList: 31,
+        candidatesUnique: 100,
+        manualReviewCount: 9,
+        duplicateWarningRate: 0.02,
+      },
+    },
+  };
+
+  const evaluation = buildAutoresearchSpeedEvaluation({
+    baseline,
+    candidate,
+    minSpeedupPercent: 25,
+  });
+
+  assert.equal(evaluation.speed.baselineMs, 100000);
+  assert.equal(evaluation.speed.candidateMs, 70000);
+  assert.equal(evaluation.speed.speedupPercent, 30);
+  assert.equal(evaluation.decision, 'keep_candidate');
+  assert.equal(evaluation.quality.baseline.resolvedSafeToSave, 30);
+  assert.equal(evaluation.quality.candidate.resolvedSafeToSave, 31);
+  assert.ok(Math.abs(evaluation.quality.baseline.manualReviewRate - 0.1) < 1e-9);
+  assert.ok(Math.abs(evaluation.quality.candidate.manualReviewRate - 0.09) < 1e-9);
+});
+
 test('renderAutoresearchSpeedEvaluationMarkdown is operator-facing and read-only', () => {
   const markdown = renderAutoresearchSpeedEvaluationMarkdown(buildAutoresearchSpeedEvaluation({
     baseline: {

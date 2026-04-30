@@ -1053,24 +1053,47 @@ function numberOrZero(value) {
 function extractSpeedEvaluationMetrics(artifact = {}) {
   const fastResolve = artifact.evaluationMetrics?.fastResolve || {};
   const companyResolution = artifact.evaluationMetrics?.companyResolution || {};
+  const pipelineMetrics = artifact.researchPipeline?.metrics || null;
+  const flatPipelineMetrics = artifact.metrics?.browserConcurrency === 1 && artifact.metrics?.cacheHits != null
+    ? artifact.metrics
+    : null;
+  const mergedPipelineMetrics = pipelineMetrics || flatPipelineMetrics;
+
+  const candidatesUniqueForRate = numberOrZero(mergedPipelineMetrics?.candidatesUnique);
+  const manualReviewFromPipeline = (
+    mergedPipelineMetrics
+    && candidatesUniqueForRate > 0
+    && mergedPipelineMetrics.manualReviewCount != null
+  )
+    ? numberOrZero(mergedPipelineMetrics.manualReviewCount) / candidatesUniqueForRate
+    : null;
+
   return {
-    totalMs: numberOrZero(artifact.timings?.totalMs || artifact.totalMs || artifact.durationMs),
+    totalMs: numberOrZero(
+      artifact.timings?.totalMs
+      || artifact.totalMs
+      || artifact.durationMs
+      || mergedPipelineMetrics?.totalMs,
+    ),
     resolvedSafeToSave: numberOrZero(
       fastResolve.resolvedSafeToSave
       ?? fastResolve.bucketCounts?.resolved_safe_to_save
       ?? artifact.bucketCounts?.resolved_safe_to_save
       ?? artifact.resolvedSafeToSave
-      ?? artifact.resolvedLeads,
+      ?? artifact.resolvedLeads
+      ?? mergedPipelineMetrics?.selectedForList,
     ),
     manualReviewRate: numberOrZero(
       fastResolve.manualReviewRate
-      ?? artifact.manualReviewRate,
+      ?? artifact.manualReviewRate
+      ?? manualReviewFromPipeline,
     ),
     duplicateWarningRate: numberOrZero(
       fastResolve.duplicateWarningRate
       ?? fastResolve.duplicateRate
       ?? artifact.duplicateWarningRate
-      ?? artifact.duplicateRate,
+      ?? artifact.duplicateRate
+      ?? mergedPipelineMetrics?.duplicateWarningRate,
     ),
     companyResolutionBlockers: numberOrZero(
       companyResolution.blockerCount

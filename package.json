@@ -40,6 +40,7 @@
     "autoresearch:gate": "node src/cli.js print-autoresearch-gate",
     "autoresearch:supervisor": "node src/cli.js print-autoresearch-supervisor",
     "autoresearch:speed": "node src/cli.js autoresearch-speed-eval",
+    "parallel-account-research": "node src/cli.js parallel-account-research",
     "autobrowse:mvp": "node automation/autobrowse-mvp.js",
     "test-hybrid-account-search": "node src/cli.js test-account-search --driver=hybrid",
     "test": "node --test",

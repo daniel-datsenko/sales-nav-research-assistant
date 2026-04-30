@@ -39,7 +39,37 @@ test('package scripts keep autoresearch dry-safe and expose release checks', () 
   assert.doesNotMatch(packageJson.scripts['autoresearch:mvp'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['autoresearch:speed'], 'node src/cli.js autoresearch-speed-eval');
   assert.doesNotMatch(packageJson.scripts['autoresearch:speed'], /--live-save|--live-connect|allow-background-connects/);
+  assert.equal(packageJson.scripts['parallel-account-research'], 'node src/cli.js parallel-account-research');
+  assert.doesNotMatch(packageJson.scripts['parallel-account-research'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['print-mvp-operator-dashboard'], 'node src/cli.js print-mvp-operator-dashboard');
+});
+
+test('parallel-account-research CLI entry refuses live-save', () => {
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync(process.execPath, ['src/cli.js', 'parallel-account-research', '--accounts=Example', '--live-save'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(`${r.stderr}${r.stdout}`, /refuses live-save/i);
+});
+
+test('parallel-account-research CLI is dry-safe plan-only without executing browser jobs', () => {
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync(process.execPath, ['src/cli.js', 'parallel-account-research', '--accounts=Example', '--local-concurrency=2'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(r.status, 0, `${r.stderr}${r.stdout}`);
+  const jsonStart = r.stdout.indexOf('{');
+  assert.ok(jsonStart >= 0, r.stdout);
+  const payload = JSON.parse(r.stdout.slice(jsonStart));
+  assert.equal(payload.mode, 'dry-safe');
+  assert.equal(payload.browserConcurrency, 1);
+  assert.equal(payload.localConcurrency, 2);
+  assert.equal(payload.accounts[0].metrics.browserJobsExecuted, 0);
+  assert.ok(payload.accounts[0].metrics.cacheMisses > 0);
+  assert.equal(payload.accounts[0].browserResults.results.every((row) => row.reason === 'dry_safe_cli_plan_only'), true);
 });
 
 test('gitignore keeps local runtime and browser artifacts out of the shared repo', () => {

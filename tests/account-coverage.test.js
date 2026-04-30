@@ -473,6 +473,30 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
         seniority: 'individual_contributor',
         score: 99,
       },
+      {
+        fullName: 'Corporate Security',
+        title: 'Corporate Security Senior Event Resilience Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'security',
+        seniority: 'manager',
+        score: 99,
+      },
+      {
+        fullName: 'Commerce Cloud',
+        title: 'Salesforce Commerce Cloud Developer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'software_engineering',
+        seniority: 'individual_contributor',
+        score: 99,
+      },
+      {
+        fullName: 'Supply Chain',
+        title: 'Head of Supply Chain Projects',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'head',
+        score: 99,
+      },
     ],
   }, { minScore: 50 });
 

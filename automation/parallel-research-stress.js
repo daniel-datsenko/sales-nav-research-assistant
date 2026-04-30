@@ -24,13 +24,15 @@ function parseList(value, fallback, optionName = 'value') {
 
 function parseIntegerList(value, fallback, optionName = 'value') {
   if (value === undefined || value === null) return [...fallback];
-  const parts = parseList(value, [], optionName);
-  const parsed = parts.map((part) => Number.parseInt(part, 10));
-  const invalid = parts.find((part, index) => String(parsed[index]) !== part || !Number.isInteger(parsed[index]) || parsed[index] <= 0);
-  if (invalid) {
-    throw new Error(`${optionName} must contain positive integers; invalid value: ${invalid}`);
-  }
-  return parsed;
+  const parts = Array.isArray(value) ? value : parseList(value, [], optionName);
+  return parts.map((part) => {
+    const text = String(part).trim();
+    const parsed = Number.parseInt(text, 10);
+    if (String(parsed) !== text || !Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error(`${optionName} must contain positive integers; invalid value: ${part}`);
+    }
+    return parsed;
+  });
 }
 
 function parsePositiveInteger(value, fallback, optionName = 'value') {
@@ -73,9 +75,11 @@ function buildParallelResearchStressPlan({
   const normalizedAccounts = Array.isArray(accounts)
     ? accounts.map((account) => String(account).trim()).filter(Boolean)
     : parseList(accounts, DEFAULT_ACCOUNTS, 'accounts');
-  const normalizedConcurrency = Array.isArray(localConcurrencyValues)
-    ? localConcurrencyValues.map((value) => Number.parseInt(value, 10)).filter((value) => Number.isInteger(value) && value > 0)
-    : parseIntegerList(localConcurrencyValues, DEFAULT_LOCAL_CONCURRENCY_VALUES, 'local-concurrency-values');
+  const normalizedConcurrency = parseIntegerList(
+    localConcurrencyValues,
+    DEFAULT_LOCAL_CONCURRENCY_VALUES,
+    'local-concurrency-values'
+  );
   const normalizedRepeat = parsePositiveInteger(repeat, 1, 'repeat');
   if (normalizedAccounts.length === 0) {
     throw new Error('accounts must include at least one value');

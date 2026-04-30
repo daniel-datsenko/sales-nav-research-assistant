@@ -58,6 +58,16 @@ test('parallel-account-research CLI entry refuses live-save', () => {
   assert.match(`${r.stderr}${r.stdout}`, /refuses live-save/i);
 });
 
+test('parallel-account-research CLI rejects invalid local concurrency', () => {
+  const { spawnSync } = require('node:child_process');
+  const r = spawnSync(process.execPath, ['src/cli.js', 'parallel-account-research', '--accounts=Example', '--local-concurrency=bad'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(`${r.stderr}${r.stdout}`, /local-concurrency must be a positive integer/i);
+});
+
 test('parallel-account-research CLI is dry-safe plan-only without executing browser jobs', () => {
   const { spawnSync } = require('node:child_process');
   const r = spawnSync(process.execPath, ['src/cli.js', 'parallel-account-research', '--accounts=Example', '--local-concurrency=2'], {

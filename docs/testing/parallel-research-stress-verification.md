@@ -164,7 +164,7 @@ This gate runs:
 - the repeat stress harness
 - forbidden-path scan from `origin/main...HEAD`
 - credential-like diff scan from `origin/main...HEAD`
-- stacked PR metadata checks for PRs 25, 28, 29, and 31, including `OPEN`, expected base/head/title, and `MERGEABLE` status
+- stacked PR metadata checks for PRs 25, 28, 29, 31, and 32, including `OPEN`, expected base/head/title, and `MERGEABLE` status
 
 The gate is intentionally dry-safe and refuses `--live-save`, `--live-connect`, and `--allow-background-connects`. It emits a machine-readable JSON summary and should be followed by the requested final ChatGPT 5.5 full-stack review before any merge command.
 

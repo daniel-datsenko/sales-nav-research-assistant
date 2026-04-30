@@ -3070,7 +3070,7 @@ async function handleParallelAccountResearch(values, logger) {
   }
 
   const runIdBase = getString(values, 'run-id') || 'parallel-account-research';
-  const localConcurrency = Math.max(1, Number(getString(values, 'local-concurrency') || 4));
+  const localConcurrency = parsePositiveIntegerOption(getString(values, 'local-concurrency'), 4, 'local-concurrency');
   const coverageConfigPath = getString(values, 'coverage-config');
   const coverageConfig = loadAccountCoverageConfig(coverageConfigPath);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -3933,6 +3933,16 @@ function normalizeSeedFileRows(rows, ownerName) {
       const owner = String(row.owner_name).toLowerCase().trim();
       return owner === targetOwner || owner === reverseDisplayName(targetOwner).toLowerCase();
     });
+}
+
+function parsePositiveIntegerOption(value, fallback, optionName) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const text = String(value).trim();
+  const parsed = Number.parseInt(text, 10);
+  if (String(parsed) !== text || !Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${optionName} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function parseOptionalCandidateLimit(value) {

@@ -16,8 +16,8 @@ test('buildStackReadinessPlan emits deterministic dry-safe merge gates', () => {
   });
 
   assert.equal(plan.mode, 'dry-safe');
-  assert.equal(plan.stack.length, 4);
-  assert.deepEqual(plan.stack.map((entry) => entry.pr), [25, 28, 29, 31]);
+  assert.equal(plan.stack.length, 5);
+  assert.deepEqual(plan.stack.map((entry) => entry.pr), [25, 28, 29, 31, 32]);
   assert.deepEqual(plan.steps.map((step) => step.id), [
     'git-diff-check',
     'release-readiness',
@@ -63,7 +63,7 @@ test('runStackReadinessGate executes every planned command and returns machine-r
 
   assert.equal(summary.ok, true);
   assert.equal(summary.mode, 'dry-safe');
-  assert.equal(summary.stack.length, 4);
+  assert.equal(summary.stack.length, 5);
   assert.equal(summary.steps.length, 7);
   assert.deepEqual(summary.steps.map((step) => step.ok), [true, true, true, true, true, true, true]);
   assert.deepEqual(calls.map((call) => call.stepId), [

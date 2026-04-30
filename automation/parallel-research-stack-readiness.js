@@ -7,6 +7,7 @@ const DEFAULT_STACK = [
   { pr: 28, title: 'docs: add multi-agent operating context', base: 'feat/research-job-planner', head: 'docs/agent-operating-context-pr25' },
   { pr: 29, title: 'test: add parallel research stress harness', base: 'docs/agent-operating-context-pr25', head: 'feat/parallel-research-stress-harness' },
   { pr: 31, title: 'test: add repeat mode to parallel research stress harness', base: 'feat/parallel-research-stress-harness', head: 'feat/parallel-research-stress-repeat' },
+  { pr: 32, title: 'ci: add parallel research stack readiness gate', base: 'feat/parallel-research-stress-repeat', head: 'ci/parallel-research-stack-readiness' },
 ];
 
 const FORBIDDEN_LIVE_FLAGS = new Set([

@@ -43,6 +43,8 @@ test('package scripts keep autoresearch dry-safe and expose release checks', () 
   assert.doesNotMatch(packageJson.scripts['parallel-account-research'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['parallel-research:stress'], 'node automation/parallel-research-stress.js');
   assert.doesNotMatch(packageJson.scripts['parallel-research:stress'], /--live-save|--live-connect|allow-background-connects/);
+  assert.equal(packageJson.scripts['parallel-research:stack-readiness'], 'node automation/parallel-research-stack-readiness.js');
+  assert.doesNotMatch(packageJson.scripts['parallel-research:stack-readiness'], /--live-save|--live-connect|allow-background-connects/);
   assert.equal(packageJson.scripts['print-mvp-operator-dashboard'], 'node src/cli.js print-mvp-operator-dashboard');
 });
 

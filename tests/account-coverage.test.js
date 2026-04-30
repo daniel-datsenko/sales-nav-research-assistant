@@ -51,9 +51,20 @@ test('buildSweepTemplates applies speed profiles without adding hidden candidate
   };
 
   const fast = buildSweepTemplates(config, null, { speedProfile: 'fast' });
+  const fastAdaptive = buildSweepTemplates(config, null, {
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
   const balanced = buildSweepTemplates(config, null, { speedProfile: 'balanced' });
 
   assert.deepEqual(fast.map((template) => template.id), ['broad-crawl', 'sweep-platform']);
+  assert.deepEqual(fastAdaptive.map((template) => template.id), [
+    'broad-crawl',
+    'sweep-platform',
+    'sweep-security',
+    'sweep-data',
+  ]);
+  assert.equal(fastAdaptive.some((template) => Object.hasOwn(template, 'maxCandidates')), false);
   assert.equal(fast.some((template) => Object.hasOwn(template, 'maxCandidates')), false);
   assert.deepEqual(balanced.map((template) => template.id), [
     'broad-crawl',
@@ -921,4 +932,169 @@ test('findAccountAliasEntry tolerates legal suffix and punctuation variants', ()
     findAccountAliasEntry(config, 'Example Broadcast Studio').companyFilterAliases[0],
     'Example Broadcaster',
   );
+});
+
+test('runAccountCoverageWorkflow keeps adaptiveSweepPruning off unless explicitly opted in', async () => {
+  const coverageConfig = {
+    version: 'adaptive-default-off',
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform engineering'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Adaptive Default Off Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    maxCandidates: 3,
+    speedProfile: 'fast',
+  });
+
+  assert.equal(run.result.adaptivePruning.enabled, false);
+  assert.equal(run.result.adaptivePruning.triggered, false);
+});
+
+test('adaptive pruning (fast): skips remaining low-yield rest sweep after broad + priority', async () => {
+  const coverageConfig = {
+    version: 'adaptive-prune-fast',
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform engineering'], maxCandidates: 3 },
+      { id: 'security-noisy-rest', keywords: ['zzz-nonpriority-keyword'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const applyCalls = [];
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate(template) {
+      applyCalls.push(template.id);
+    },
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Adaptive Prune Fast Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    maxCandidates: 3,
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+
+  assert.deepEqual(applyCalls, ['broad-crawl', 'sweep-platform']);
+  assert.equal(run.result.adaptivePruning.enabled, true);
+  assert.equal(run.result.adaptivePruning.triggered, true);
+  assert.ok(run.result.adaptivePruning.reason.includes('low_yield'));
+  assert.deepEqual(run.result.adaptivePruning.skippedTemplates, ['sweep-security-noisy-rest']);
+  assert.deepEqual(run.result.adaptivePruning.executedTemplates, ['broad-crawl', 'sweep-platform']);
+  assert.equal(run.result.sweepErrors?.length || 0, 0);
+  assert.notEqual(run.result.resolutionStatus, 'needs_company_resolution');
+});
+
+test('adaptive pruning (exhaustive): runs every sweep and does not prune', async () => {
+  const coverageConfig = {
+    version: 'adaptive-prune-exhaustive',
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+      { id: 'data-rest', keywords: ['analytics_only_rest'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const applyCalls = [];
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate(template) {
+      applyCalls.push(template.id);
+    },
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Adaptive Prune Exhaustive Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    maxCandidates: 3,
+    speedProfile: 'exhaustive',
+    adaptiveSweepPruning: true,
+  });
+
+  assert.deepEqual(applyCalls, ['broad-crawl', 'sweep-platform', 'sweep-data-rest']);
+  assert.equal(run.result.adaptivePruning.enabled, false);
+  assert.equal(run.result.adaptivePruning.triggered, false);
+  assert.deepEqual(run.result.adaptivePruning.skippedTemplates || [], []);
+});
+
+test('adaptive pruning: skipped sweeps are not sweepErrors and do not force company-resolution summary', async () => {
+  const coverageConfig = {
+    version: 'adaptive-prune-clean',
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'architecture', keywords: ['architecture'], maxCandidates: 3 },
+      { id: 'noise-rest', keywords: ['zzz-rest-only'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Adaptive Prune Clean Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    maxCandidates: 3,
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+
+  assert.equal(run.sweepErrors.length, 0);
+  assert.equal(run.result.sweepErrors?.length || 0, 0);
+  assert.notEqual(run.result.resolutionStatus, 'needs_company_resolution');
 });

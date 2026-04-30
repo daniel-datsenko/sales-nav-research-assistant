@@ -1855,6 +1855,7 @@ async function handleAccountCoverage(values, logger) {
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
+  const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const interSweepDelayMs = Number(getString(values, 'inter-sweep-delay-ms') || 0);
   const coverageConfig = loadAccountCoverageConfig(getString(values, 'coverage-config') || null);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -1885,6 +1886,7 @@ async function handleAccountCoverage(values, logger) {
       priorityModel,
       maxCandidates,
       speedProfile,
+      adaptiveSweepPruning,
       reuseSweepCache,
       interSweepDelayMs,
       runId: 'account-coverage',
@@ -1902,8 +1904,10 @@ async function handleAccountCoverage(values, logger) {
     logger.info(`Driver: ${driverName}`);
     logger.info(`Account target: ${accountName}`);
     const failedSweepIds = (result.sweepErrors || []).map((error) => error.templateId).filter(Boolean);
-    const succeededSweeps = Math.max(0, templates.length - failedSweepIds.length);
-    logger.info(`Sweeps: ${succeededSweeps}/${templates.length} succeeded${failedSweepIds.length ? `, ${failedSweepIds.length} failed (${failedSweepIds.join(', ')})` : ''}`);
+    const skippedPrunedCount = result.adaptivePruning?.skippedTemplates?.length || 0;
+    const attemptedSweepCount = Math.max(0, templates.length - skippedPrunedCount);
+    const succeededSweeps = Math.max(0, attemptedSweepCount - failedSweepIds.length);
+    logger.info(`Sweeps: ${succeededSweeps}/${attemptedSweepCount} attempted succeeded${failedSweepIds.length ? `, ${failedSweepIds.length} failed (${failedSweepIds.join(', ')})` : ''}${skippedPrunedCount ? `, ${skippedPrunedCount} pruned (${result.adaptivePruning.skippedTemplates.join(', ')})` : ''}`);
     logger.info(`Speed profile: ${result.speedProfile}`);
     if (interSweepDelayMs > 0) {
       logger.info(`Inter-sweep delay: ${interSweepDelayMs}ms`);
@@ -3088,6 +3092,7 @@ async function handleRunAccountBatch(repository, values, logger) {
   const maxCandidates = parseOptionalCandidateLimit(getString(values, 'max-candidates'));
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
+  const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
   if ((liveSave || liveConnect) && researchConcurrency > 1) {
     throw new Error('research-concurrency > 1 is only allowed for read-only research; live-save/live-connect stay serial');
@@ -3142,6 +3147,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         priorityModel,
         maxCandidates,
         speedProfile,
+        adaptiveSweepPruning,
         reuseSweepCache,
         runId: 'run-account-batch',
         logger: {
@@ -3682,7 +3688,7 @@ Usage:
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]
-  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--speed-profile=balanced] [--reuse-sweep-cache] [--inter-sweep-delay-ms=2000]
+  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--inter-sweep-delay-ms=2000]
   node src/cli.js resolve-company --account-name="Acme"
   node src/cli.js print-company-resolution [--account-name="Acme"]
   node src/cli.js retry-company-resolution-failures [--limit=3]
@@ -3716,7 +3722,7 @@ Usage:
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
-  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--live-save] [--live-connect]
+  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect
 `);

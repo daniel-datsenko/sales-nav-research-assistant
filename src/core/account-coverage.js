@@ -131,7 +131,7 @@ function isPrioritySweep(template) {
   return PRIORITY_SWEEP_HINTS.some((hint) => haystack.includes(hint));
 }
 
-function applySpeedProfileToTemplates(templates, speedProfile = 'balanced') {
+function applySpeedProfileToTemplates(templates, speedProfile = 'balanced', profileOptions = {}) {
   const profile = normalizeSpeedProfile(speedProfile);
   if (profile === 'exhaustive') {
     return templates;
@@ -141,10 +141,59 @@ function applySpeedProfileToTemplates(templates, speedProfile = 'balanced') {
   const priority = templates.filter((template) => template.id !== 'broad-crawl' && isPrioritySweep(template));
   const rest = templates.filter((template) => template.id !== 'broad-crawl' && !isPrioritySweep(template));
 
+  const expandFastRestForAdaptivePruning = Boolean(profileOptions.adaptiveSweepPruning);
+
   if (profile === 'fast') {
+    if (expandFastRestForAdaptivePruning) {
+      return [...broad, ...priority, ...rest];
+    }
     return [...broad, ...priority];
   }
   return [...broad, ...priority, ...rest];
+}
+
+function isRestSweepTemplate(template) {
+  return template.id !== 'broad-crawl' && !isPrioritySweep(template);
+}
+
+function getAdaptivePruningThresholds(speedProfile) {
+  const profile = normalizeSpeedProfile(speedProfile);
+  if (profile === 'exhaustive') {
+    return null;
+  }
+  if (profile === 'fast') {
+    return { windowSize: 2, maxNewUniquesPerSweep: 0 };
+  }
+  return { windowSize: 3, maxNewUniquesPerSweep: 0 };
+}
+
+function broadCrawlFinishedBeforeIndex(templates, templateIndex) {
+  const broadIdx = templates.findIndex((template) => template.id === 'broad-crawl');
+  if (broadIdx === -1) {
+    return true;
+  }
+  return templateIndex > broadIdx;
+}
+
+function shouldAdaptiveSkipRestSweep({
+  template,
+  thresholds,
+  adaptiveEnabled,
+  executedUniqueAdds,
+  templates,
+  templateIndex,
+}) {
+  if (!adaptiveEnabled || !thresholds || !isRestSweepTemplate(template)) {
+    return false;
+  }
+  if (!broadCrawlFinishedBeforeIndex(templates, templateIndex)) {
+    return false;
+  }
+  if (executedUniqueAdds.length < thresholds.windowSize) {
+    return false;
+  }
+  const tail = executedUniqueAdds.slice(-thresholds.windowSize);
+  return tail.every((count) => count <= thresholds.maxNewUniquesPerSweep);
 }
 
 function buildSweepTemplates(config, maxCandidatesOverride = null, options = {}) {
@@ -179,7 +228,9 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
     templates.push(template);
   }
 
-  return applySpeedProfileToTemplates(templates, options.speedProfile || 'balanced');
+  return applySpeedProfileToTemplates(templates, options.speedProfile || 'balanced', {
+    adaptiveSweepPruning: options.adaptiveSweepPruning,
+  });
 }
 
 function classifySweepErrorCategory(error) {
@@ -494,6 +545,7 @@ async function runAccountCoverageWorkflow({
   priorityModel,
   maxCandidates = null,
   speedProfile = 'balanced',
+  adaptiveSweepPruning = false,
   reuseSweepCache = false,
   sweepCacheDir = DEFAULT_SWEEP_CACHE_DIR,
   runId = 'account-coverage',
@@ -504,7 +556,13 @@ async function runAccountCoverageWorkflow({
 }) {
   const normalizedSpeedProfile = normalizeSpeedProfile(speedProfile);
   const timings = createRunTimings(now);
-  const templates = buildSweepTemplates(coverageConfig, maxCandidates, { speedProfile: normalizedSpeedProfile });
+  const adaptivePruningRequested = Boolean(adaptiveSweepPruning);
+  const adaptivePruningActive = adaptivePruningRequested && normalizedSpeedProfile !== 'exhaustive';
+  const pruningThresholds = adaptivePruningActive ? getAdaptivePruningThresholds(normalizedSpeedProfile) : null;
+  const templates = buildSweepTemplates(coverageConfig, maxCandidates, {
+    speedProfile: normalizedSpeedProfile,
+    adaptiveSweepPruning: adaptivePruningRequested && normalizedSpeedProfile === 'fast',
+  });
   const aliasConfig = loadAccountAliasConfig();
   const aliasEntry = findAccountAliasEntry(aliasConfig, accountName);
   const priorCoverage = loadExistingAccountCoverageArtifact(accountName);
@@ -544,11 +602,48 @@ async function runAccountCoverageWorkflow({
   }, { now });
 
   let stopSweeps = false;
+  const adaptivePruningTelemetry = {
+    enabled: adaptivePruningActive,
+    triggered: false,
+    reason: null,
+    skippedTemplates: [],
+    executedTemplates: [],
+    uniqueCandidatesAddedByTemplate: {},
+    thresholds: pruningThresholds
+      ? { ...pruningThresholds, profile: normalizedSpeedProfile }
+      : null,
+    profile: normalizedSpeedProfile,
+  };
+  const executedUniqueAdds = [];
+
+  function registerSweepAdds(uniqueNew, templateId) {
+    adaptivePruningTelemetry.executedTemplates.push(templateId);
+    adaptivePruningTelemetry.uniqueCandidatesAddedByTemplate[templateId] = uniqueNew;
+    executedUniqueAdds.push(uniqueNew);
+  }
+
   for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
     if (stopSweeps) {
       break;
     }
     const template = templates[templateIndex];
+
+    if (
+      shouldAdaptiveSkipRestSweep({
+        template,
+        thresholds: pruningThresholds,
+        adaptiveEnabled: adaptivePruningActive,
+        executedUniqueAdds,
+        templates,
+        templateIndex,
+      })
+    ) {
+      adaptivePruningTelemetry.skippedTemplates.push(template.id);
+      adaptivePruningTelemetry.triggered = true;
+      adaptivePruningTelemetry.reason = adaptivePruningTelemetry.reason || 'low_yield_recent_window';
+      continue;
+    }
+
     const cacheKey = buildSweepCacheKey({
       account: activeAccount,
       accountName,
@@ -559,6 +654,7 @@ async function runAccountCoverageWorkflow({
     if (cacheHit && Array.isArray(cacheHit.candidates)) {
       cacheHits += 1;
       await timePhase(timings, `sweep:${template.id}`, async () => {
+        let uniqueNew = 0;
         rawResults.push({
           templateId: template.id,
           keywords: template.keywords || [],
@@ -566,8 +662,13 @@ async function runAccountCoverageWorkflow({
           cacheHit: true,
         });
         for (const candidate of cacheHit.candidates) {
-          seenCandidateKeys.add(normalizeCandidateKey(candidate));
+          const key = normalizeCandidateKey(candidate);
+          if (!seenCandidateKeys.has(key)) {
+            uniqueNew += 1;
+          }
+          seenCandidateKeys.add(key);
         }
+        registerSweepAdds(uniqueNew, template.id);
       }, {
         now,
         meta: {
@@ -595,6 +696,7 @@ async function runAccountCoverageWorkflow({
           rateLimitEvents,
           duplicateShortCircuitThreshold: coverageConfig.duplicateShortCircuitThreshold ?? 0.8,
         });
+        let uniqueNew = 0;
         rawResults.push({
           templateId: template.id,
           keywords: template.keywords || [],
@@ -602,8 +704,13 @@ async function runAccountCoverageWorkflow({
           cacheHit: false,
         });
         for (const candidate of candidates) {
-          seenCandidateKeys.add(normalizeCandidateKey(candidate));
+          const key = normalizeCandidateKey(candidate);
+          if (!seenCandidateKeys.has(key)) {
+            uniqueNew += 1;
+          }
+          seenCandidateKeys.add(key);
         }
+        registerSweepAdds(uniqueNew, template.id);
         if (reuseSweepCache) {
           writeSweepCache(sweepCacheDir, cacheKey, {
             accountName,
@@ -703,6 +810,7 @@ async function runAccountCoverageWorkflow({
   finalResult.cacheHits = cacheHits;
   finalResult.cacheMisses = cacheMisses;
   finalResult.speedProfile = normalizedSpeedProfile;
+  finalResult.adaptivePruning = adaptivePruningTelemetry;
   const bucketSummary = summarizeCoverageBuckets(finalResult.candidates);
 
   return {

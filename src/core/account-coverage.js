@@ -377,7 +377,7 @@ function classifyReviewedCoverageBucket(candidate, config) {
 }
 
 function selectDeepReviewCandidates(coverageResult, limit = 8) {
-  const titleHints = /(data|technology|sap|integration|engineer|software|system|platform|cloud|infrastructure|architecture|project|operations)/i;
+  const titleHints = /(data|technology|integration|engineer|software|system|platform|cloud|infrastructure|architecture|project|operations)/i;
   const bucketRank = {
     technical_adjacent: 0,
     likely_noise: 1,
@@ -863,6 +863,14 @@ function isManagerOrAbove(seniority) {
   return new Set(['manager', 'head', 'director', 'vp', 'principal']).has(String(seniority || '').toLowerCase());
 }
 
+function hasCoreTechnicalAdjacentScope(title) {
+  return /\b(cloud|ai|platform|architecture|architect|microservice|microservices)\b/.test(title);
+}
+
+function hasEngineeringLeadershipScope(title) {
+  return /\b(engineering|technology|technical|platform|cloud|architecture)\b.*\bleadership\b|\bleadership\b.*\b(engineering|technology|technical|platform|cloud|architecture)\b/.test(title);
+}
+
 function isSeniorPlatformLeader(candidate) {
   const seniority = String(candidate.seniority || '').toLowerCase();
   const roleFamily = String(candidate.roleFamily || '').toLowerCase();
@@ -873,6 +881,7 @@ function isSeniorPlatformLeader(candidate) {
       'devops',
       'site_reliability',
       'infrastructure',
+      'software_engineering',
     ]).has(roleFamily);
 }
 
@@ -956,6 +965,34 @@ function classifyCoverageListSelection(candidate, options = {}) {
   }
 
   if (candidate.coverageBucket === 'technical_adjacent') {
+    if (roleFamily === 'software_engineering') {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_software_engineering',
+        rank: 78,
+      };
+    }
+    if (roleFamily === 'executive_engineering') {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_executive_engineering',
+        rank: 82,
+      };
+    }
+    if (hasCoreTechnicalAdjacentScope(title)) {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_core_technical_scope',
+        rank: 76,
+      };
+    }
+    if (hasEngineeringLeadershipScope(title)) {
+      return {
+        selected: true,
+        reason: 'technical_adjacent_engineering_leadership',
+        rank: 74,
+      };
+    }
     if (isSeniorPlatformLeader(candidate)) {
       return {
         selected: true,

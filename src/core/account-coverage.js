@@ -22,6 +22,10 @@ const {
   readSweepCache,
   writeSweepCache,
 } = require('./sweep-cache');
+const {
+  buildLanguageSplitListNames,
+  splitCandidatesByProfileLanguage,
+} = require('./emea-territory');
 
 function loadAccountCoverageConfig(configPath) {
   return readJson(configPath || resolveProjectPath('config', 'account-coverage', 'default.json'));
@@ -903,6 +907,15 @@ function getHardExclusionReason(candidate, options = {}) {
   if (/\b(hr|human resources|privacy|controlling|einkauf|procurement|finance|financial)\b/.test(title)) {
     return 'non_icp_business_function';
   }
+  if (/\b(supply chain|procurement|buying|merchandising|logistics|transport)\b/.test(title)) {
+    return 'non_icp_operations_function';
+  }
+  if (/\b(salesforce commerce cloud|commerce cloud|ecommerce|e-commerce|digital commerce)\b/.test(title)) {
+    return 'commerce_platform_not_observability';
+  }
+  if (/\b(corporate security|event resilience|physical security|security risk|operational resilience)\b/.test(title)) {
+    return 'corporate_security_not_observability';
+  }
   if (
     roleFamily === 'data'
     && (/\b(bi|business intelligence|analyst)\b/.test(title) || (/\banalytics\b/.test(title) && !/\b(ai|cloud|platform)\b/.test(title)))
@@ -1062,6 +1075,35 @@ function selectCoverageListCandidates(result, options = {}) {
     });
 }
 
+function buildCoverageLanguageSplits(result, options = {}) {
+  const selectedCandidates = options.selectedOnly === false
+    ? (result?.candidates || [])
+    : selectCoverageListCandidates(result, options.selection || {});
+  const segment = options.segment || 'prospects';
+  const listNames = buildLanguageSplitListNames({
+    accountName: result?.accountName || options.accountName || 'Account',
+    segment,
+    prefix: options.prefix || null,
+  });
+  const split = splitCandidatesByProfileLanguage(selectedCandidates, {
+    primaryLanguage: options.primaryLanguage || 'de',
+  });
+
+  return {
+    policy: {
+      primaryLanguage: options.primaryLanguage || 'de',
+      de: 'German profile language',
+      en: 'English and other profile languages',
+    },
+    listNames,
+    buckets: {
+      de: split.de,
+      en: split.en,
+    },
+    meta: split.meta,
+  };
+}
+
 function writeAccountCoverageArtifact(accountName, coverageResult) {
   const artifactPath = buildCoverageArtifactPath(accountName);
   writeJson(artifactPath, coverageResult);
@@ -1076,6 +1118,7 @@ module.exports = {
   classifySweepErrorCategory,
   consolidateCoverageCandidates,
   buildCoverageArtifactPath,
+  buildCoverageLanguageSplits,
   findAccountAliasEntry,
   loadAccountCoverageConfig,
   loadAccountAliasConfig,

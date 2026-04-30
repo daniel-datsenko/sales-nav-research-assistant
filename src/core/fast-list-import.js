@@ -17,6 +17,9 @@ const {
   loadLearnedCompanyTargets,
 } = require('./company-resolution');
 const {
+  selectCoverageListCandidates,
+} = require('./account-coverage');
+const {
   applyIdentityResolution,
   extractPublicLinkedInSlug,
   inferFullNameFromLinkedInSlug,
@@ -690,13 +693,17 @@ function normalizeImportScore(value) {
 }
 
 function normalizeImportRowsFromParsedArtifact(parsed = {}, options = {}) {
-  const rows = Array.isArray(parsed.candidates)
+  const shouldUseCoverageSelection = options.useCoverageSelection === true && Array.isArray(parsed.candidates);
+  const selectedCoverageRows = shouldUseCoverageSelection
+    ? selectCoverageListCandidates(parsed, options.listCandidateSelection || {})
+    : null;
+  const rows = selectedCoverageRows || (Array.isArray(parsed.candidates)
     ? parsed.candidates
     : Array.isArray(parsed.leads)
       ? parsed.leads
       : Array.isArray(parsed.results)
         ? parsed.results
-        : [];
+        : []);
   const bucket = String(options.bucket || '').trim();
   const minScore = normalizeImportScore(options.minScore);
   const fallbackAccountName = parsed.accountName || parsed.account?.name || parsed.account || '';
@@ -909,6 +916,7 @@ function loadCoverageImportPlan({
     bucket,
     minScore,
     coverageDir,
+    useCoverageSelection: true,
   });
   return {
     ...plan,

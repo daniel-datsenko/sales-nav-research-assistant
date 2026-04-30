@@ -5,10 +5,69 @@
     "enabled": true
   },
   "sweeps": [
-    { "id": "platform", "keywords": ["platform"] },
-    { "id": "infrastructure", "keywords": ["infrastructure"] },
-    { "id": "devops", "keywords": ["devops"] },
-    { "id": "observability", "keywords": ["observability"] }
+    {
+      "id": "platform",
+      "keywords": [
+        "platform"
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "keywords": [
+        "infrastructure"
+      ]
+    },
+    {
+      "id": "devops",
+      "keywords": [
+        "devops"
+      ]
+    },
+    {
+      "id": "observability",
+      "keywords": [
+        "observability"
+      ]
+    },
+    {
+      "id": "emea-hidden-platform",
+      "keywords": [
+        "FinOps",
+        "CCOE",
+        "Cloud Governance",
+        "Observability Leader",
+        "Data Platform Lead",
+        "MLOps",
+        "AIOps",
+        "DevSecOps",
+        "Kubernetes",
+        "Terraform",
+        "Datadog",
+        "Dynatrace",
+        "Prometheus",
+        "Grafana",
+        "Technical Lead",
+        "Responsable Technique",
+        "Leiter Cloud",
+        "Direttore Tecnico",
+        "Jefe de Plataforma"
+      ]
+    },
+    {
+      "id": "emea-language-localized-titles",
+      "keywords": [
+        "Responsable Plateforme",
+        "Directeur Technique",
+        "Ing\u00e9nieur Cloud",
+        "Leiter Plattform",
+        "Cloud Kompetenzzentrum",
+        "Responsabile Piattaforma",
+        "Direttore Tecnico",
+        "Jefe de Plataforma",
+        "Director T\u00e9cnico",
+        "Ingeniero Cloud"
+      ]
+    }
   ],
   "bucketRules": {
     "directObservabilityRoleFamilies": [

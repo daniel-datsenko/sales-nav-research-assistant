@@ -199,6 +199,16 @@ test('loadCoverageImportPlan builds a list import plan from account coverage art
         score: 80,
         salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/vera-platform',
       },
+      {
+        fullName: 'Noisy Supply Chain',
+        title: 'Head of Supply Chain Projects',
+        company: 'Example Marketplace A',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'unknown',
+        seniority: 'head',
+        score: 0,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/noisy-supply-chain',
+      },
     ],
   }));
   fs.writeFileSync(path.join(coverageDir, 'example-saas-marketplace.json'), JSON.stringify({
@@ -207,9 +217,22 @@ test('loadCoverageImportPlan builds a list import plan from account coverage art
       {
         fullName: 'David Cloud',
         company: 'Example SaaS Marketplace',
+        title: 'Head of Cloud Platform',
         coverageBucket: 'technical_adjacent',
+        roleFamily: 'platform_engineering',
+        seniority: 'head',
         score: 50,
         salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/david-cloud',
+      },
+      {
+        fullName: 'Corporate Security',
+        company: 'Example SaaS Marketplace',
+        title: 'Corporate Security Senior Event Resilience Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'security',
+        seniority: 'manager',
+        score: 70,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/corporate-security',
       },
     ],
   }));
@@ -224,7 +247,69 @@ test('loadCoverageImportPlan builds a list import plan from account coverage art
   assert.equal(plan.listName, 'DD_CEE_Sweep3_2026-04-28');
   assert.equal(plan.sourceType, 'coverage_artifacts');
   assert.equal(plan.detectedRows, 1);
-  assert.equal(plan.leads[0].fullName, 'Vera Platform');
+  assert.deepEqual(plan.leads.map((lead) => lead.fullName), ['Vera Platform']);
+});
+
+test('loadCoverageImportPlan uses curated coverage selection by default for live-save safety', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const coverageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'coverage-import-curated-'));
+  fs.writeFileSync(path.join(coverageDir, 'cartier.json'), JSON.stringify({
+    accountName: 'Cartier',
+    candidates: [
+      {
+        fullName: 'Platform Owner',
+        title: 'Director of Platform Engineering',
+        company: 'Cartier',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        seniority: 'director',
+        score: 80,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/platform-owner',
+      },
+      {
+        fullName: 'Magali Lapière',
+        title: 'Head of Supply Chain Projects',
+        company: 'Cartier',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'unknown',
+        seniority: 'head',
+        score: 0,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/supply-chain',
+      },
+      {
+        fullName: 'Venkat S',
+        title: 'Salesforce Commerce Cloud Developer',
+        company: 'Cartier',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'unknown',
+        seniority: 'individual_contributor',
+        score: 0,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/commerce-cloud',
+      },
+      {
+        fullName: 'Alexander M.',
+        title: 'Cartier Corporate Security Senior Event Resilience Manager',
+        company: 'Cartier',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'security',
+        seniority: 'manager',
+        score: 28,
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/corporate-security',
+      },
+    ],
+  }));
+
+  const plan = loadCoverageImportPlan({
+    accounts: 'cartier',
+    coverageDir,
+    listName: 'PR18 EMEA Test',
+  });
+
+  assert.deepEqual(plan.leads.map((lead) => lead.fullName), ['Platform Owner']);
+  assert.equal(plan.detectedRows, 1);
+  assert.equal(plan.resolvedLeads, 1);
 });
 
 test('loadFailedFastListImportPlan builds a retry-only plan from failed save rows', () => {

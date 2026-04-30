@@ -182,3 +182,58 @@ test('scoreCandidate keeps security and data compound titles out of platform eng
   assert.ok(dataArchitect.score < icpConfig.saveToListThreshold);
   assert.ok(securityEngineer.score < icpConfig.saveToListThreshold);
 });
+
+test('scoreCandidate recognizes SDR-sourced EMEA platform personas and profile signals', () => {
+  const candidates = [
+    {
+      title: 'Responsable Plateforme Cloud',
+      headline: 'Leads CCOE, Cloud Governance and Terraform standards across EMEA',
+      expectedRoleFamily: 'platform_engineering',
+    },
+    {
+      title: 'Leiter Cloud Kompetenzzentrum',
+      headline: 'Owns FinOps, Kubernetes, Prometheus and observability platform adoption',
+      expectedRoleFamily: 'platform_engineering',
+    },
+    {
+      title: 'Responsabile Osservabilità e Piattaforma',
+      headline: 'Runs Datadog migration, OpenTelemetry, Grafana and SRE practices',
+      expectedRoleFamily: 'site_reliability',
+    },
+    {
+      title: 'Jefe de Plataforma de Datos',
+      headline: 'Owns Data Platform, MLOps, AIOps and cloud infrastructure',
+      expectedRoleFamily: 'data',
+    },
+  ];
+
+  for (const candidate of candidates) {
+    const result = scoreCandidate(candidate, icpConfig);
+    assert.equal(result.eligible, true, candidate.title);
+    assert.equal(result.roleFamily, candidate.expectedRoleFamily, candidate.title);
+    assert.ok(result.score >= icpConfig.saveToListThreshold, `${candidate.title} score ${result.score}`);
+    assert.ok(
+      result.breakdown.observabilitySignals.length
+        + result.breakdown.championSignals.length
+        + result.breakdown.profileReviewSignals.length >= 2,
+      candidate.title,
+    );
+  }
+});
+
+test('scoreCandidate hard-excludes common EMEA commercial and operational false positives', () => {
+  const titles = [
+    'Facilities Manager Cloud Campus',
+    'Head of Fleet Technology',
+    'Responsable Achats Cloud',
+    'Direttore Vendite Cloud',
+    'HSEQ Manager Technology',
+    'Category Manager Datadog Procurement',
+  ];
+
+  for (const title of titles) {
+    const result = scoreCandidate({ title, headline: 'Mentions cloud and platform vendors' }, icpConfig);
+    assert.equal(result.eligible, false, title);
+    assert.equal(result.score, 0, title);
+  }
+});

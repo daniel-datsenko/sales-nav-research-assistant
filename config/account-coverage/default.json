@@ -5,22 +5,141 @@
     "enabled": true
   },
   "sweeps": [
-    { "id": "architecture", "keywords": ["architecture"] },
-    { "id": "security", "keywords": ["security"] },
-    { "id": "cloud", "keywords": ["cloud"] },
-    { "id": "data", "keywords": ["data"] },
-    { "id": "infrastructure", "keywords": ["infrastructure"] },
-    { "id": "platform", "keywords": ["platform"] },
-    { "id": "engineering", "keywords": ["engineering"] },
-    { "id": "software", "keywords": ["software"] },
-    { "id": "devops", "keywords": ["devops"] },
-    { "id": "technology", "keywords": ["technology"] },
-    { "id": "it", "keywords": ["it"] },
-    { "id": "system", "keywords": ["system"] },
-    { "id": "integration", "keywords": ["integration"] },
-    { "id": "operations", "keywords": ["operations"] },
-    { "id": "reliability", "keywords": ["reliability"] },
-    { "id": "monitoring", "keywords": ["monitoring"] }
+    {
+      "id": "architecture",
+      "keywords": [
+        "architecture"
+      ]
+    },
+    {
+      "id": "security",
+      "keywords": [
+        "security"
+      ]
+    },
+    {
+      "id": "cloud",
+      "keywords": [
+        "cloud"
+      ]
+    },
+    {
+      "id": "data",
+      "keywords": [
+        "data"
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "keywords": [
+        "infrastructure"
+      ]
+    },
+    {
+      "id": "platform",
+      "keywords": [
+        "platform"
+      ]
+    },
+    {
+      "id": "engineering",
+      "keywords": [
+        "engineering"
+      ]
+    },
+    {
+      "id": "software",
+      "keywords": [
+        "software"
+      ]
+    },
+    {
+      "id": "devops",
+      "keywords": [
+        "devops"
+      ]
+    },
+    {
+      "id": "technology",
+      "keywords": [
+        "technology"
+      ]
+    },
+    {
+      "id": "it",
+      "keywords": [
+        "it"
+      ]
+    },
+    {
+      "id": "system",
+      "keywords": [
+        "system"
+      ]
+    },
+    {
+      "id": "integration",
+      "keywords": [
+        "integration"
+      ]
+    },
+    {
+      "id": "operations",
+      "keywords": [
+        "operations"
+      ]
+    },
+    {
+      "id": "reliability",
+      "keywords": [
+        "reliability"
+      ]
+    },
+    {
+      "id": "monitoring",
+      "keywords": [
+        "monitoring"
+      ]
+    },
+    {
+      "id": "emea-hidden-platform",
+      "keywords": [
+        "FinOps",
+        "CCOE",
+        "Cloud Governance",
+        "Observability Leader",
+        "Data Platform Lead",
+        "MLOps",
+        "AIOps",
+        "DevSecOps",
+        "Kubernetes",
+        "Terraform",
+        "Datadog",
+        "Dynatrace",
+        "Prometheus",
+        "Grafana",
+        "Technical Lead",
+        "Responsable Technique",
+        "Leiter Cloud",
+        "Direttore Tecnico",
+        "Jefe de Plataforma"
+      ]
+    },
+    {
+      "id": "emea-language-localized-titles",
+      "keywords": [
+        "Responsable Plateforme",
+        "Directeur Technique",
+        "Ing\u00e9nieur Cloud",
+        "Leiter Plattform",
+        "Cloud Kompetenzzentrum",
+        "Responsabile Piattaforma",
+        "Direttore Tecnico",
+        "Jefe de Plataforma",
+        "Director T\u00e9cnico",
+        "Ingeniero Cloud"
+      ]
+    }
   ],
   "bucketRules": {
     "directObservabilityRoleFamilies": [

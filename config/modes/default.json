@@ -22,7 +22,13 @@
       "cloud",
       "security",
       "technology",
-      "it"
+      "it",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_best_fit",
     "connectPolicy": "approval_only",
@@ -37,14 +43,21 @@
       "champions-core",
       "decision-makers",
       "account-platform-sweep",
-      "account-security-sweep"
+      "account-security-sweep",
+      "emea-hidden-platform-personas"
     ],
     "titleBias": [
       "platform",
       "engineering",
       "director",
       "head",
-      "manager"
+      "manager",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_ranked_batches",
     "connectPolicy": "approval_only",
@@ -59,7 +72,8 @@
       "champions-core",
       "account-platform-sweep",
       "account-cloud-sweep",
-      "account-architecture-sweep"
+      "account-architecture-sweep",
+      "emea-hidden-platform-personas"
     ],
     "titleBias": [
       "platform",
@@ -68,7 +82,13 @@
       "cloud",
       "infrastructure",
       "software",
-      "system"
+      "system",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_best_fit",
     "connectPolicy": "approval_only",
@@ -83,7 +103,8 @@
       "champions-core",
       "account-cloud-sweep",
       "account-security-sweep",
-      "account-data-sweep"
+      "account-data-sweep",
+      "emea-hidden-platform-personas"
     ],
     "titleBias": [
       "sre",
@@ -92,7 +113,13 @@
       "infrastructure",
       "cloud",
       "data",
-      "system"
+      "system",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_best_fit",
     "connectPolicy": "approval_only",
@@ -115,7 +142,13 @@
       "chief",
       "cto",
       "technology",
-      "engineering"
+      "engineering",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_top_tier",
     "connectPolicy": "approval_only",
@@ -130,14 +163,21 @@
       "account-platform-sweep",
       "account-architecture-sweep",
       "account-security-sweep",
-      "account-data-sweep"
+      "account-data-sweep",
+      "emea-hidden-platform-personas"
     ],
     "titleBias": [
       "architecture",
       "system",
       "technology",
       "analytics",
-      "operations"
+      "operations",
+      "finops",
+      "ccoe",
+      "cloud governance",
+      "mlops",
+      "aiops",
+      "technical lead"
     ],
     "savePolicy": "save_after_review",
     "connectPolicy": "approval_only",

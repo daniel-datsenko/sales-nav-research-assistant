@@ -464,12 +464,30 @@ test('selectCoverageListCandidates force-includes CIO CTO and microservices buil
         seniority: 'senior',
         score: 10,
       },
+      {
+        fullName: 'Chief Data Analytics',
+        title: 'Chief Data & Analytics Officer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'vp',
+        score: 4,
+      },
+      {
+        fullName: 'Out Of Network Chief Data',
+        title: 'Chief Data Officer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'vp',
+        score: 80,
+        outOfNetwork: true,
+      },
     ],
   }, { minScore: 50 });
 
-  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Microservices Lead', 'Company CIO']);
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Microservices Lead', 'Chief Data Analytics', 'Company CIO']);
   assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
     'microservices_observability_path',
+    'executive_cto_cio_always_include',
     'executive_cto_cio_always_include',
   ]);
 });
@@ -502,6 +520,14 @@ test('selectCoverageListCandidates narrows technical adjacent to ICP-positive su
         score: 18,
       },
       {
+        fullName: 'Head AI',
+        title: 'Head of Artificial Intelligence',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'executive_engineering',
+        seniority: 'head',
+        score: 14,
+      },
+      {
         fullName: 'BI Analyst',
         title: 'Senior BI Analyst',
         coverageBucket: 'technical_adjacent',
@@ -522,10 +548,12 @@ test('selectCoverageListCandidates narrows technical adjacent to ICP-positive su
 
   assert.deepEqual(selected.map((candidate) => candidate.fullName), [
     'VP Cloud',
+    'Head AI',
     'Head Cloud AI',
     'Principal Data AI',
   ]);
   assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
+    'technical_adjacent_executive_engineering',
     'technical_adjacent_executive_engineering',
     'technical_adjacent_core_technical_scope',
     'technical_adjacent_core_technical_scope',

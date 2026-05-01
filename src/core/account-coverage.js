@@ -506,10 +506,10 @@ function classifyPersonaTier(candidate) {
 
   if (
     roleFamily === 'executive_engineering'
-    || /\b(cio|cto|cdo|chief information officer|chief technology officer|chief data officer)\b/.test(title)
+    || /\b(cio|cto|cdo|chief information officer|chief technology officer|chief data officer|chief data\s*&\s*analytics officer|chief analytics officer|chief ai officer|chief artificial intelligence officer)\b/.test(title)
     || (
       ['director', 'vp', 'head'].includes(seniority)
-      && /\b(data\s*&\s*ai|data and ai|directeur data|directrice data|director data|director de datos|direttore dati|direttrice dati|daten\s*&\s*ki|datos e ia|dati e ai|digital transformation|transformation digitale|digitale transformation|transformacion digital|transformación digital|trasformazione digitale|marketplace director|head of tech)\b/.test(title)
+      && /\b(data\s*&\s*ai|data and ai|data\s*&\s*analytics|data and analytics|artificial intelligence|head of ai|director of ai|vp ai|directeur data|directrice data|director data|director de datos|direttore dati|direttrice dati|daten\s*&\s*ki|datos e ia|dati e ai|digital transformation|transformation digitale|digitale transformation|transformacion digital|transformación digital|trasformazione digitale|marketplace director|head of tech)\b/.test(title)
     )
   ) {
     return 'buyer';
@@ -1097,7 +1097,7 @@ function normalizeSelectionText(value) {
 
 function hasExecutiveTechnologyTitle(candidate) {
   const text = normalizeSelectionText(`${candidate.title || ''} ${candidate.headline || ''}`);
-  return /\b(chief information officer|chief technology officer|cio|cto)\b/.test(text);
+  return /\b(chief information officer|chief technology officer|chief data officer|chief data\s*&\s*analytics officer|chief analytics officer|chief ai officer|chief artificial intelligence officer|cio|cto|cdo)\b/.test(text);
 }
 
 function hasMicroservicesObservabilityTitle(candidate) {

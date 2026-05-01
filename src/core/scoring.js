@@ -53,6 +53,7 @@ function detectRoleFamily(candidate, icpConfig = {}) {
 
   if (matchesAnyText(title, multilingual.observabilityOperator)) return 'site_reliability';
   if (matchesAnyText(text, multilingual.executiveDataBuyer)) return 'executive_engineering';
+  if (/\b(chief (data|analytics|ai|artificial intelligence)(\s*&\s*|\s+and\s+)?(analytics|ai|artificial intelligence)? officer|chief data\s*&\s*analytics officer|head of (ai|artificial intelligence)|director of (ai|artificial intelligence)|vp (of )?(ai|artificial intelligence|data|analytics))\b/.test(text)) return 'executive_engineering';
   if (matchesAnyText(text, multilingual.platformOperator)) return 'platform_engineering';
   if (/\b(platform engineering|director of platform engineering|head of cloud|head of platform|cloud technology|platform operations|technology foundation operations)\b/.test(text)) return 'platform_engineering';
   if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur des systemes d'information|directrice des systemes d'information|dsi|directeur informatique|directrice informatique|director tecnico|directora tecnica|director de tecnologia|directora de tecnologia|direttore tecnico|direttrice tecnica|direttore tecnologia|direttrice tecnologia)\b/.test(text)) return 'executive_engineering';
@@ -82,7 +83,7 @@ function detectSeniority(candidate, icpConfig = {}) {
   const text = normalizeText(candidate.title);
   const multilingual = getMultilingualPersonaSignals(icpConfig);
 
-  if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur informatique|directrice informatique|dsi|director tecnico|directora tecnica|direttore tecnico|direttrice tecnica)\b/.test(text)) return 'vp';
+  if (/\b(chief information officer|chief technology officer|chief data officer|chief data\s*&\s*analytics officer|chief analytics officer|chief ai officer|chief artificial intelligence officer|cio|cto|cdo|directeur technique|directrice technique|directeur informatique|directrice informatique|dsi|director tecnico|directora tecnica|direttore tecnico|direttrice tecnica)\b/.test(text)) return 'vp';
   if (/vice president|\bvp\b/.test(text)) return 'vp';
   if (matchesAnyText(text, multilingual.seniorityDirector)) return 'director';
   if (/director|directeur|directrice|direktor|direktorin|direttore|direttrice|directora/.test(text)) return 'director';

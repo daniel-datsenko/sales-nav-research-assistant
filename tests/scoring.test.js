@@ -145,6 +145,31 @@ test('scoreCandidate recognizes CIO and CTO titles as executive engineering', ()
   assert.notEqual(ciso.roleFamily, 'executive_engineering');
 });
 
+test('scoreCandidate recognizes data analytics and AI executives as buyer-tier engineering', () => {
+  const chiefDataAnalytics = scoreCandidate({
+    title: 'Chief Data & Analytics Officer',
+    headline: 'Owns enterprise data, analytics platforms and AI strategy',
+  }, icpConfig);
+  const headOfArtificialIntelligence = scoreCandidate({
+    title: 'Head of Artificial Intelligence',
+    headline: 'Leads AI platforms and production model operations',
+  }, icpConfig);
+  const directorDataAiFactory = scoreCandidate({
+    title: 'Director of Data & AI Factory',
+    headline: 'Owns data products, AI delivery and platform teams',
+  }, icpConfig);
+
+  assert.equal(chiefDataAnalytics.roleFamily, 'executive_engineering');
+  assert.equal(chiefDataAnalytics.seniority, 'vp');
+  assert.ok(chiefDataAnalytics.score >= icpConfig.saveToListThreshold);
+  assert.equal(headOfArtificialIntelligence.roleFamily, 'executive_engineering');
+  assert.equal(headOfArtificialIntelligence.seniority, 'head');
+  assert.ok(headOfArtificialIntelligence.score >= icpConfig.saveToListThreshold);
+  assert.equal(directorDataAiFactory.roleFamily, 'executive_engineering');
+  assert.equal(directorDataAiFactory.seniority, 'director');
+  assert.ok(directorDataAiFactory.score >= icpConfig.saveToListThreshold);
+});
+
 test('scoreCandidate recognizes microservices builders as platform engineering', () => {
   const developer = scoreCandidate({
     title: 'Senior Microservices Developer',

@@ -1,6 +1,7 @@
 const {
   buildSweepTemplates,
   normalizeCandidateKey,
+  resolveSweepTemplateOptions,
   selectCoverageListCandidates,
   classifyCoverageBucket,
   classifySweepErrorCategory,
@@ -67,7 +68,12 @@ function planResearchJobs({
   const accounts = [...(queue?.accounts || [])];
   accounts.sort((a, b) => a.accountKey.localeCompare(b.accountKey));
 
-  const templates = buildSweepTemplates(coverageConfig, maxCandidates, options);
+  const sweepTemplateOptions = resolveSweepTemplateOptions({
+    researchMode: options.researchMode,
+    speedProfile: options.speedProfile,
+    adaptiveSweepPruning: options.adaptiveSweepPruning,
+  });
+  const templates = buildSweepTemplates(coverageConfig, maxCandidates, sweepTemplateOptions);
 
   /** @type {Array<Record<string, unknown>>} */
   const jobs = [];

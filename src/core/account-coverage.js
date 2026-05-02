@@ -141,6 +141,31 @@ function normalizeResearchMode(value = 'persona-led') {
   return RESEARCH_MODES.has(mode) ? mode : 'persona-led';
 }
 
+/**
+ * Normalize research mode, sweep speed profile, and adaptive pruning for buildSweepTemplates.
+ * Mirrors runAccountCoverageWorkflow: exhaustive research mode forces an exhaustive sweep template
+ * set and disables fast-path adaptive pruning expansion regardless of nominal speedProfile.
+ */
+function resolveSweepTemplateOptions({
+  researchMode,
+  speedProfile,
+  adaptiveSweepPruning,
+} = {}) {
+  const normalizedResearchMode = normalizeResearchMode(researchMode);
+  const normalizedSpeedProfile = normalizeSpeedProfile(speedProfile);
+  const effectiveSpeedProfile = normalizedResearchMode === 'exhaustive'
+    ? 'exhaustive'
+    : normalizedSpeedProfile;
+  const adaptiveRequested = Boolean(adaptiveSweepPruning);
+  const adaptiveSweepPruningForTemplates = adaptiveRequested && effectiveSpeedProfile === 'fast';
+
+  return {
+    researchMode: normalizedResearchMode,
+    speedProfile: effectiveSpeedProfile,
+    adaptiveSweepPruning: adaptiveSweepPruningForTemplates,
+  };
+}
+
 function inferPersonaLayerForSweep(sweep = {}) {
   const text = [
     sweep.id,
@@ -792,18 +817,17 @@ async function runAccountCoverageWorkflow({
   logger = null,
   now = Date.now,
 }) {
-  const normalizedSpeedProfile = normalizeSpeedProfile(speedProfile);
-  const normalizedResearchMode = normalizeResearchMode(researchMode);
-  const effectiveSpeedProfile = normalizedResearchMode === 'exhaustive' ? 'exhaustive' : normalizedSpeedProfile;
   const timings = createRunTimings(now);
   const adaptivePruningRequested = Boolean(adaptiveSweepPruning);
+  const sweepTemplateOptions = resolveSweepTemplateOptions({
+    researchMode,
+    speedProfile,
+    adaptiveSweepPruning,
+  });
+  const { researchMode: normalizedResearchMode, speedProfile: effectiveSpeedProfile } = sweepTemplateOptions;
   const adaptivePruningActive = adaptivePruningRequested && effectiveSpeedProfile !== 'exhaustive';
   const pruningThresholds = adaptivePruningActive ? getAdaptivePruningThresholds(effectiveSpeedProfile) : null;
-  const templates = buildSweepTemplates(coverageConfig, maxCandidates, {
-    speedProfile: effectiveSpeedProfile,
-    researchMode: normalizedResearchMode,
-    adaptiveSweepPruning: adaptivePruningRequested && effectiveSpeedProfile === 'fast',
-  });
+  const templates = buildSweepTemplates(coverageConfig, maxCandidates, sweepTemplateOptions);
   const aliasConfig = loadAccountAliasConfig();
   const aliasEntry = findAccountAliasEntry(aliasConfig, accountName);
   const priorCoverage = loadExistingAccountCoverageArtifact(accountName);
@@ -1387,6 +1411,7 @@ module.exports = {
   normalizeCandidateKey,
   normalizeResearchMode,
   normalizeSpeedProfile,
+  resolveSweepTemplateOptions,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   selectDeepReviewCandidates,

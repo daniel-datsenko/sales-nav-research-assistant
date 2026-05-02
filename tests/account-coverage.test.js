@@ -17,6 +17,7 @@ const {
   normalizeCandidateKey,
   normalizeResearchMode,
   normalizeSpeedProfile,
+  resolveSweepTemplateOptions,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   writeAccountCoverageArtifact,
@@ -99,7 +100,24 @@ test('buildSweepTemplates persona-led mode orders keyword packs by persona layer
   assert.equal(normalizeResearchMode('unknown'), 'persona-led');
 });
 
+test('resolveSweepTemplateOptions forces exhaustive sweep set when researchMode is exhaustive', () => {
+  const resolved = resolveSweepTemplateOptions({
+    researchMode: 'exhaustive',
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+  assert.equal(resolved.researchMode, 'exhaustive');
+  assert.equal(resolved.speedProfile, 'exhaustive');
+  assert.equal(resolved.adaptiveSweepPruning, false);
+});
+
 test('buildSweepTemplates exhaustive research mode keeps all persona keyword packs', () => {
+  const sweepOpts = resolveSweepTemplateOptions({
+    researchMode: 'exhaustive',
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+  assert.equal(sweepOpts.adaptiveSweepPruning, false);
   const templates = buildSweepTemplates({
     broadCrawl: { enabled: true },
     sweeps: [
@@ -107,11 +125,7 @@ test('buildSweepTemplates exhaustive research mode keeps all persona keyword pac
       { id: 'security', keywords: ['security'] },
       { id: 'data', keywords: ['data analytics'] },
     ],
-  }, null, {
-    researchMode: 'exhaustive',
-    speedProfile: 'fast',
-    adaptiveSweepPruning: true,
-  });
+  }, null, sweepOpts);
 
   assert.deepEqual(templates.map((template) => template.id), [
     'broad-crawl',
@@ -1383,7 +1397,51 @@ test('adaptive pruning (exhaustive): runs every sweep and does not prune', async
   assert.deepEqual(run.result.adaptivePruning.skippedTemplates || [], []);
 });
 
-test('adaptive pruning: skipped sweeps are not sweepErrors and do not force company-resolution summary', async () => {
+test('researchMode exhaustive overrides fast speedProfile for sweep planning and disables adaptive pruning', async () => {
+  const coverageConfig = {
+    version: 'exhaustive-plus-fast-mode',
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+      { id: 'data-rest', keywords: ['analytics_only_rest'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const applyCalls = [];
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate(template) {
+      applyCalls.push(template.id);
+    },
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Exhaustive Mode Fast Profile Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    maxCandidates: 3,
+    researchMode: 'exhaustive',
+    speedProfile: 'fast',
+    adaptiveSweepPruning: true,
+  });
+
+  assert.deepEqual(applyCalls, ['broad-crawl', 'sweep-platform', 'sweep-data-rest']);
+  assert.equal(run.speedProfile, 'exhaustive');
+  assert.equal(run.researchMode, 'exhaustive');
+  assert.equal(run.result.adaptivePruning.enabled, false);
+});
+
+test('adaptive pruning clean run does not turn skipped sweeps into resolution blockers', async () => {
   const coverageConfig = {
     version: 'adaptive-prune-clean',
     broadCrawl: { enabled: true, maxCandidates: 3 },

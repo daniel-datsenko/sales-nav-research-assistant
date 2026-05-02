@@ -10,6 +10,7 @@ const {
   planResearchJobs,
   scoreResearchCandidates,
 } = require('../src/core/research-pipeline');
+const { buildSweepTemplates, resolveSweepTemplateOptions } = require('../src/core/account-coverage');
 const { createBrowserWorkerLock } = require('../src/core/browser-worker-lock');
 
 test('buildResearchQueue creates deterministic account jobs with dry-safe defaults', () => {
@@ -153,6 +154,44 @@ test('planResearchJobs passes maxCandidates and options into buildSweepTemplates
   assert.equal(sweeps.length, 2);
   assert.equal(sweeps[0].maxCandidates, 5);
   assert.equal(sweeps[1].maxCandidates, 5);
+});
+
+test('planResearchJobs matches exhaustive account-coverage sweep parity when speedProfile is fast', () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true },
+    sweeps: [
+      { id: 'platform', keywords: ['platform engineering'] },
+      { id: 'security', keywords: ['security'] },
+      { id: 'data', keywords: ['data analytics'] },
+    ],
+  };
+  const queue = buildResearchQueue({
+    accounts: [{ accountId: 'a1', accountName: 'Example AG' }],
+    runId: 'r',
+  });
+
+  const baseline = planResearchJobs({
+    queue,
+    coverageConfig,
+    options: { researchMode: 'exhaustive', speedProfile: 'exhaustive' },
+  });
+  const plan = planResearchJobs({
+    queue,
+    coverageConfig,
+    options: { researchMode: 'exhaustive', speedProfile: 'fast' },
+  });
+
+  const sweepTemplateIds = (p) => (
+    p.jobs.filter((job) => job.type === 'sweep').map((job) => job.templateId)
+  );
+  assert.deepEqual(sweepTemplateIds(plan), sweepTemplateIds(baseline));
+
+  const expected = buildSweepTemplates(
+    coverageConfig,
+    null,
+    resolveSweepTemplateOptions({ researchMode: 'exhaustive', speedProfile: 'fast' }),
+  ).map((template) => template.id);
+  assert.deepEqual([...sweepTemplateIds(plan)].sort(), [...expected].sort());
 });
 
 test('attachSweepCacheState calls readCache for sweep jobs only', async () => {

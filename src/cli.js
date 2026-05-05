@@ -76,6 +76,10 @@ const {
   renderSdrResearchIntro,
 } = require('./core/sdr-workflow');
 const {
+  isRetryableSaveError,
+  verifyFastListSaveRow,
+} = require('./core/fast-list-import');
+const {
   attachSweepCacheState,
   buildResearchPipelineArtifact,
   buildResearchQueue,
@@ -3302,6 +3306,7 @@ async function handleRunAccountBatch(repository, values, logger) {
   const consolidatedListName = explicitConsolidatedListName || templateConsolidatedListName || null;
   const liveSave = getBoolean(values, 'liveSave', 'live-save');
   const liveConnect = getBoolean(values, 'liveConnect', 'live-connect');
+  const skipSaveVerification = getBoolean(values, 'skipSaveVerification', 'skip-save-verification');
   const allowUnverifiedConnectContinue = getBoolean(values, 'allow-unverified-connect-continue');
   const pilotConfig = getString(values, 'pilot-config') ? loadPilotConfig(getString(values, 'pilot-config')) : null;
   const driverName = getString(values, 'driver') || 'playwright';
@@ -3359,7 +3364,9 @@ async function handleRunAccountBatch(repository, values, logger) {
     }
 
     const results = [];
-    for (const accountName of accountNames) {
+    for (let accountIndex = 0; accountIndex < accountNames.length; accountIndex += 1) {
+      const accountName = accountNames[accountIndex];
+      logger.info(`Account ${accountIndex + 1}/${accountNames.length} started: ${accountName}`);
       const listName = consolidatedListName || buildAccountBatchListName(accountName, listPrefix);
       const coverageRun = await runAccountCoverageWorkflow({
         driver,
@@ -3375,11 +3382,15 @@ async function handleRunAccountBatch(repository, values, logger) {
         reuseSweepCache,
         runId: 'run-account-batch',
         logger: {
+          info(message) {
+            logger.info(`${accountName} | ${message}`);
+          },
           warn(message) {
             logger.warn(summarizeErrorMessage(message));
           },
         },
       });
+      logger.info(`${accountName} | selection started`);
       const coverageArtifactPath = writeAccountCoverageArtifact(accountName, coverageRun.result);
       const selectionOptions = {
         reportOnlyOutOfNetwork: getBoolean(values, 'reportOnlyOutOfNetwork', 'report-only-out-of-network'),
@@ -3403,38 +3414,66 @@ async function handleRunAccountBatch(repository, values, logger) {
         .filter((candidate) => candidate.listSelectionReason === 'strong_but_not_auto_saved')
         .slice(0, 10)
         .map((candidate) => toSdrReportCandidate(candidate));
+      const notSavedExamples = annotatedCoverageCandidates
+        .filter((candidate) => !candidate.selectedForList && candidate.listSelectionReason !== 'strong_but_not_auto_saved')
+        .sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
+        .slice(0, 10)
+        .map((candidate) => toSdrReportCandidate(candidate, 'review_if_persona_looks_relevant'));
+      const manualReviewCandidates = annotatedCoverageCandidates
+        .filter((candidate) => candidate.manualReviewSuggested || candidate.listSelectionReason === 'relative_rank_manual_review')
+        .slice(0, 10)
+        .map((candidate) => toSdrReportCandidate(candidate, 'review_before_save'));
       const saveResults = [];
       const connectResults = [];
 
       if (liveSave && selectedForListSave.length > 0) {
+        logger.info(`${accountName} | live save started: ${selectedForListSave.length} leads`);
         await driver.ensureList(listName, {
           runId: 'run-account-batch',
           accountKey: accountName,
           dryRun: false,
         });
 
-        for (const candidate of selectedForListSave) {
+        for (let saveIndex = 0; saveIndex < selectedForListSave.length; saveIndex += 1) {
+          const candidate = selectedForListSave[saveIndex];
+          const saveRow = await saveBatchCandidateWithRetry({
+            driver,
+            candidate,
+            listName,
+            accountName,
+            readLeadListSnapshot: null,
+          });
+          saveResults.push(saveRow);
+          logger.info(`${accountName} | save ${saveIndex + 1}/${selectedForListSave.length}: ${candidate.fullName} -> ${saveRow.status}`);
+        }
+        if (!skipSaveVerification) {
+          logger.info(`${accountName} | list verification started`);
+          let snapshot = null;
+          let snapshotError = null;
           try {
-            const saveResult = await driver.saveCandidateToList(
-              candidate,
-              { listName, externalRef: null },
-              { runId: 'run-account-batch', accountKey: accountName, dryRun: false },
-            );
-            saveResults.push({
-              fullName: candidate.fullName,
-              status: saveResult.status,
-              note: saveResult.note || null,
-              title: candidate.title || null,
-            });
+            snapshot = await readLeadListSnapshotStrict(driver, listName);
           } catch (error) {
-            saveResults.push({
-              fullName: candidate.fullName,
-              status: 'failed',
-              note: summarizeErrorMessage(error.message),
-              title: candidate.title || null,
+            snapshotError = error;
+          }
+          for (let saveIndex = 0; saveIndex < saveResults.length; saveIndex += 1) {
+            const candidate = selectedForListSave[saveIndex];
+            saveResults[saveIndex] = await verifyFastListSaveRow({
+              row: saveResults[saveIndex],
+              lead: {
+                ...candidate,
+                accountName,
+              },
+              listName,
+              readLeadListSnapshot: async () => {
+                if (snapshotError) {
+                  throw snapshotError;
+                }
+                return snapshot;
+              },
             });
           }
         }
+        logger.info(`${accountName} | list verification ${skipSaveVerification ? 'skipped' : 'finished'}`);
       }
 
       const connectCandidates = liveSave ? selectedForListSave : listCandidates;
@@ -3525,6 +3564,8 @@ async function handleRunAccountBatch(repository, values, logger) {
         coverageArtifactPath,
         candidateCount: coverageRun.result.candidateCount,
         resolutionStatus: coverageRun.result.resolutionStatus || null,
+        companyScope: coverageRun.result.companyScope || null,
+        relativeRankFallbackApplied: annotatedCoverageCandidates.some((candidate) => candidate.relativeRankFallbackApplied),
         attemptedSweepsCount: coverageRun.templates.length,
         failedSweepsCount: coverageRun.sweepErrors.length,
         coverageStatus: deriveSdrCoverageStatus({
@@ -3537,6 +3578,8 @@ async function handleRunAccountBatch(repository, values, logger) {
         strongButNotAutoSavedCount: strongButNotAutoSavedCandidates.length,
         outOfNetworkCount: strongButNotAutoSavedCandidates.length,
         strongButNotAutoSavedCandidates,
+        notSavedExamples,
+        manualReviewCandidates,
         notSavedReasonCounts,
         sdrSummary: summarizeSdrResearchOutcome({
           candidateCount: coverageRun.result.candidateCount,
@@ -3547,6 +3590,7 @@ async function handleRunAccountBatch(repository, values, logger) {
           attemptedSweepsCount: coverageRun.templates.length,
           failedSweepsCount: coverageRun.sweepErrors.length,
           resolutionStatus: coverageRun.result.resolutionStatus || null,
+          relativeRankFallbackApplied: annotatedCoverageCandidates.some((candidate) => candidate.relativeRankFallbackApplied),
           saveResults,
         }),
         saveResults,
@@ -3602,6 +3646,77 @@ async function handleSdrResearch(repository, values, logger) {
   await handleRunAccountBatch(repository, batchValues, logger);
 }
 
+async function saveBatchCandidateWithRetry({
+  driver,
+  candidate,
+  listName,
+  accountName,
+  readLeadListSnapshot = null,
+  maxRetries = 2,
+} = {}) {
+  let lastMessage = null;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
+    try {
+      const saveResult = await driver.saveCandidateToList(
+        candidate,
+        { listName, externalRef: null },
+        { runId: 'run-account-batch', accountKey: accountName, dryRun: false },
+      );
+      const baseRow = {
+        fullName: candidate.fullName,
+        status: saveResult.status || 'saved',
+        note: saveResult.note || null,
+        title: candidate.title || null,
+        selectionMode: saveResult.selectionMode || null,
+        score: candidate.score ?? null,
+        scoreBreakdown: candidate.scoreBreakdown || null,
+        coverageBucket: candidate.coverageBucket || null,
+        personaTier: candidate.personaTier || null,
+        salesNavigatorUrl: candidate.salesNavigatorUrl || candidate.profileUrl || null,
+        attempt,
+      };
+      return await verifyFastListSaveRow({
+        row: baseRow,
+        lead: {
+          ...candidate,
+          accountName,
+        },
+        listName,
+        readLeadListSnapshot,
+      });
+    } catch (error) {
+      lastMessage = summarizeErrorMessage(error.message);
+      if (attempt <= maxRetries && isRetryableSaveError(lastMessage)) {
+        const backoffMs = 500 * attempt;
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+        continue;
+      }
+      return {
+        fullName: candidate.fullName,
+        title: candidate.title || null,
+        status: isRetryableSaveError(lastMessage) ? 'manual_review' : 'failed',
+        note: lastMessage,
+        failureCategory: isRetryableSaveError(lastMessage) ? 'save_ui_manual_review' : 'failed_runtime',
+        nextAction: isRetryableSaveError(lastMessage) ? 'manual_review_before_retry' : 'inspect_runtime_error',
+        score: candidate.score ?? null,
+        scoreBreakdown: candidate.scoreBreakdown || null,
+        coverageBucket: candidate.coverageBucket || null,
+        personaTier: candidate.personaTier || null,
+        salesNavigatorUrl: candidate.salesNavigatorUrl || candidate.profileUrl || null,
+        attempt,
+      };
+    }
+  }
+  return {
+    fullName: candidate.fullName,
+    title: candidate.title || null,
+    status: 'manual_review',
+    note: lastMessage || 'save retry exhausted',
+    failureCategory: 'save_ui_manual_review',
+    nextAction: 'manual_review_before_retry',
+  };
+}
+
 function buildCandidateReportKey(candidate = {}) {
   return String(candidate.salesNavigatorUrl || candidate.profileUrl || `${candidate.fullName || ''}|${candidate.title || ''}`)
     .trim()
@@ -3618,6 +3733,10 @@ function toSdrReportCandidate(candidate, nextAction = 'review_strong_not_saved')
     fullName: candidate.fullName || 'Unknown lead',
     title: candidate.title || null,
     coverageBucket: candidate.coverageBucket || null,
+    personaTier: candidate.personaTier || null,
+    score: candidate.score ?? null,
+    scoreBreakdown: candidate.scoreBreakdown || null,
+    topScoreComponents: candidate.topScoreComponents || null,
     reason: candidate.listSelectionReason || null,
     nextAction,
     salesNavigatorUrl: candidate.salesNavigatorUrl || candidate.profileUrl || null,

@@ -256,6 +256,55 @@ test('scoreCandidate keeps qualified technical architecture and platform roles e
   }
 });
 
+test('scoreCandidate recognizes German seniority titles when paired with platform signals', () => {
+  const candidates = [
+    ['Abteilungsleiter Platforms', 'director'],
+    ['Bereichsleiter Cloud Infrastruktur', 'director'],
+    ['Leiter Plattform und Monitoring', 'head', 'site_reliability'],
+    ['Hauptabteilungsleiter DevOps', 'director'],
+    ['Teamleiter Site Reliability', 'lead'],
+    ['Geschäftsbereichsleiter Cloud Platform', 'director'],
+  ];
+
+  for (const [title, seniority, expectedRoleFamily = 'platform_engineering'] of candidates) {
+    const result = scoreCandidate({
+      title,
+      headline: 'Owns production platform reliability and infrastructure',
+    }, icpConfig);
+
+    assert.equal(result.eligible, true, title);
+    assert.equal(result.roleFamily, expectedRoleFamily, title);
+    assert.equal(result.seniority, seniority, title);
+    assert.ok(result.score >= icpConfig.saveToListThreshold, `${title} score ${result.score}`);
+  }
+});
+
+test('scoreCandidate demotes buyer-looking false positives unless they carry observability signals', () => {
+  const falsePositiveTitles = [
+    'Director Value Engineering',
+    'Director Master Data Management',
+    'Head of Data Protection & IT Law',
+    'VP Corporate Security, Safety & Forensics',
+    'Compliance Officer',
+  ];
+
+  for (const title of falsePositiveTitles) {
+    const result = scoreCandidate({ title, headline: 'Business function leader' }, icpConfig);
+
+    assert.equal(result.eligible, false, title);
+    assert.equal(result.score, 0, title);
+    assert.equal(result.breakdown.nonIcpTitleReason, 'false_positive_buyer_function', title);
+  }
+
+  const technicalException = scoreCandidate({
+    title: 'Director Value Engineering Observability Platform',
+    headline: 'Owns platform adoption for observability and SRE teams',
+  }, icpConfig);
+
+  assert.equal(technicalException.eligible, true);
+  assert.ok(technicalException.score >= icpConfig.saveToListThreshold);
+});
+
 test('scoreCandidate recognizes multilingual EMEA buyer and operator personas', () => {
   const candidates = [
     {

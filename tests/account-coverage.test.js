@@ -748,6 +748,33 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
   ]);
 });
 
+test('annotateCoverageCandidatesForListSelection surfaces relative-rank manual review when nothing passes threshold', () => {
+  const annotated = annotateCoverageCandidatesForListSelection({
+    candidates: [
+      {
+        fullName: 'Low Score Platform',
+        title: 'Platform Analyst',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'platform_engineering',
+        score: 24,
+      },
+      {
+        fullName: 'Lower Score IT',
+        title: 'IT Specialist',
+        coverageBucket: 'likely_noise',
+        roleFamily: 'infrastructure',
+        score: 12,
+      },
+    ],
+  }, { minScore: 50, relativeRankFallbackLimit: 1 });
+
+  assert.equal(annotated[0].selectedForList, false);
+  assert.equal(annotated[0].listSelectionReason, 'relative_rank_manual_review');
+  assert.equal(annotated[0].manualReviewSuggested, true);
+  assert.equal(annotated[0].relativeRankFallbackApplied, true);
+  assert.equal(annotated[1].listSelectionReason, 'bucket_not_included');
+});
+
 test('consolidateCoverageCandidates adds buyer operator user coverage warnings', () => {
   const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -1009,9 +1036,62 @@ test('runAccountCoverageWorkflow upgrades failed company resolution when live sw
 
   assert.equal(run.result.candidateCount, 1);
   assert.equal(run.result.companyResolution.status, 'resolved_by_live_scope');
-  assert.equal(run.result.companyResolution.confidence, 1);
+  assert.equal(run.result.companyResolution.confidence, 0.9);
   assert.equal(run.result.companyResolution.recommendedAction, 'run_people_sweeps');
   assert.deepEqual(run.result.companyResolution.selectedTargets, ['Live Scoped Unknown Account']);
+});
+
+test('runAccountCoverageWorkflow filters cross-company contamination before list selection', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [
+        {
+          fullName: 'EDEKA Platform Lead',
+          title: 'Head of Platform Engineering',
+          company: 'EDEKA DIGITAL GmbH',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/edeka-platform',
+        },
+        {
+          fullName: 'Wrong Bank Lead',
+          title: 'Head of Platform Engineering',
+          company: 'Deutsche Bank',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/wrong-bank',
+        },
+        {
+          fullName: 'Wrong Club Lead',
+          title: 'Head of Platform Engineering',
+          company: 'Dynamics e.V.',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/wrong-club',
+        },
+      ];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'EDEKA',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+  });
+
+  assert.equal(run.result.companyScope.warning, 'cross_company_contamination_detected');
+  assert.equal(run.result.resolutionStatus, 'needs_company_scope_review');
+  assert.deepEqual(run.result.companyScope.unrelatedCompanies, ['Deutsche Bank', 'Dynamics e.V.']);
+  assert.deepEqual(run.result.candidates.map((candidate) => candidate.fullName), ['EDEKA Platform Lead']);
+  assert.equal(run.result.companyResolution.selectedTargets.includes('Deutsche Bank'), false);
 });
 
 test('runAccountCoverageWorkflow falls back to the last successful artifact when live coverage is empty', async () => {
@@ -1310,6 +1390,11 @@ test('findAccountAliasEntry tolerates legal suffix and punctuation variants', ()
   assert.equal(
     findAccountAliasEntry(config, 'Example Broadcast Studio').companyFilterAliases[0],
     'Example Broadcaster',
+  );
+  assert.equal(
+    findAccountAliasEntry(config, 'EDEKA DIGITAL').targets
+      .some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'),
+    true,
   );
 });
 

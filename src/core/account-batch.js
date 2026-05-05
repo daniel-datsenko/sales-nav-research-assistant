@@ -171,11 +171,12 @@ function summarizeBatchResult(result) {
   const saveResults = result.saveResults
     || (result.status ? [{ fullName: result.fullName || 'Unknown lead', status: result.status, note: result.note || null }] : []);
   const connectResults = result.connectResults || [];
-  const failedSaveStatuses = new Set(['failed', 'failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state']);
+  const successSaveStatuses = new Set(['saved', 'already_saved', 'results_row_fallback_saved', 'saved_and_verified', 'already_saved_verified']);
+  const failedSaveStatuses = new Set(['failed', 'failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state', 'missing_after_save', 'wrong_identity_detected']);
   return {
     saveAttemptCount: saveResults.length,
-    saveSuccessCount: saveResults.filter((item) => ['saved', 'already_saved', 'results_row_fallback_saved'].includes(item.status)).length,
-    saveFailureCount: saveResults.filter((item) => failedSaveStatuses.has(item.status)).length,
+    saveSuccessCount: saveResults.filter((item) => successSaveStatuses.has(item.status)).length,
+    saveFailureCount: saveResults.filter((item) => failedSaveStatuses.has(item.status) || failedSaveStatuses.has(item.failureCategory)).length,
     connectAttemptCount: connectResults.length,
     connectSentCount: connectResults.filter((item) => item.status === 'sent').length,
     connectFailureCount: connectResults.filter((item) => item.status === 'failed').length,
@@ -187,7 +188,7 @@ function deriveSdrCoverageStatus({
   failedSweepsCount = 0,
   resolutionStatus = null,
 } = {}) {
-  if (resolutionStatus === 'needs_company_resolution') {
+  if (resolutionStatus === 'needs_company_resolution' || resolutionStatus === 'needs_company_scope_review') {
     return 'needs_company_scope_review';
   }
   const attempted = Number(attemptedSweepsCount || 0);
@@ -222,11 +223,12 @@ function summarizeSdrResearchOutcome(result = {}) {
     selectedForLiveSave: Number(result.selectedForListSaveCount || 0),
     savedVerified: saveResults.filter((item) => verifiedSaveStatuses.has(item.status)).length,
     saveClickedUnverified: saveResults.filter((item) => clickedUnverifiedStatuses.has(item.status)).length,
-    failedSave: saveResults.filter((item) => failedSaveStatuses.has(item.status)).length,
+    failedSave: saveResults.filter((item) => failedSaveStatuses.has(item.status) || failedSaveStatuses.has(item.failureCategory)).length,
     manualReview: saveResults.filter((item) => manualReviewStatuses.has(item.status)).length,
     strongButNotAutoSaved: Number(result.strongButNotAutoSavedCount || 0),
     outOfNetwork: Number(result.outOfNetworkCount ?? result.strongButNotAutoSavedCount ?? 0),
     notAutoSaved: Math.max(0, Number(result.candidateCount || 0) - Number(result.listCandidateCount || 0)),
+    relativeRankFallbackApplied: Boolean(result.relativeRankFallbackApplied),
     attemptedSweeps: Number(result.attemptedSweepsCount || 0),
     failedSweeps: Number(result.failedSweepsCount || 0),
     coverageStatus,
@@ -244,10 +246,55 @@ function summarizeSdrResearchOutcome(result = {}) {
   if (summary.failedSave > 0 || summary.manualReview > 0) {
     summary.nextActions.push('manual_review');
   }
+  if (summary.relativeRankFallbackApplied) {
+    summary.nextActions.push('review_relative_rank_candidates');
+  }
   if (summary.nextActions.length === 0) {
     summary.nextActions.push('no_action');
   }
   return summary;
+}
+
+function isSaveDiscrepancy(item = {}) {
+  return new Set([
+    'save_clicked_unverified',
+    'missing_after_save',
+    'wrong_identity_detected',
+    'save_unverified_unknown',
+  ]).has(item.status) || new Set([
+    'missing_after_save',
+    'wrong_identity_detected',
+    'save_readback_unavailable',
+    'save_unverified',
+  ]).has(item.failureCategory);
+}
+
+function formatScoreContext(item = {}) {
+  const parts = [];
+  if (item.score !== undefined && item.score !== null) {
+    parts.push(`score=${item.score}`);
+  }
+  if (item.coverageBucket) {
+    parts.push(`bucket=${item.coverageBucket}`);
+  }
+  if (item.personaTier) {
+    parts.push(`tier=${item.personaTier}`);
+  }
+  const components = item.topScoreComponents
+    || summarizeTopScoreComponents(item.scoreBreakdown);
+  if (components.length > 0) {
+    parts.push(`score_breakdown=${components.map((entry) => `${entry.component}:${entry.value}`).join(',')}`);
+  }
+  return parts;
+}
+
+function summarizeTopScoreComponents(scoreBreakdown, limit = 3) {
+  const components = scoreBreakdown?.components || {};
+  return Object.entries(components)
+    .filter(([, value]) => Number(value) !== 0)
+    .map(([component, value]) => ({ component, value: Number(value) }))
+    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value))
+    .slice(0, limit);
 }
 
 function deriveConnectOperatorGuidance(item = {}) {
@@ -370,6 +417,12 @@ function renderAccountBatchReportMarkdown(payload) {
     }
     lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | out_of_network=\`${sdrSummary.outOfNetwork}\` | failed_sweeps=\`${sdrSummary.failedSweeps}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
+    if (result.companyScope?.warning) {
+      lines.push(`- Company scope warning: \`${result.companyScope.warning}\` (${(result.companyScope.unrelatedCompanies || []).join(', ') || 'unknown company'})`);
+    }
+    if (result.relativeRankFallbackApplied) {
+      lines.push('- Manual review fallback: `top candidates shown because no candidate passed the normal save threshold`');
+    }
     if (sdrSummary.attemptedSweeps > 0) {
       lines.push(`- Sweeps: \`${sdrSummary.attemptedSweeps - sdrSummary.failedSweeps}/${sdrSummary.attemptedSweeps} succeeded\``);
     }
@@ -404,6 +457,7 @@ function renderAccountBatchReportMarkdown(payload) {
         if (item.note) {
           noteParts.push(item.note);
         }
+        noteParts.push(...formatScoreContext(item));
         const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
         lines.push(`- ${item.fullName}: \`${item.status}\`${note}`);
       }
@@ -443,6 +497,33 @@ function renderAccountBatchReportMarkdown(payload) {
       lines.push('');
     }
 
+    const saveDiscrepancies = (result.saveResults || []).filter(isSaveDiscrepancy).slice(0, 10);
+    if (saveDiscrepancies.length > 0) {
+      lines.push(`### Save Discrepancies`);
+      for (const item of saveDiscrepancies) {
+        const noteParts = [];
+        if (item.title) {
+          noteParts.push(item.title);
+        }
+        if (item.failureCategory) {
+          noteParts.push(`reason=${item.failureCategory}`);
+        }
+        if (item.verificationStatus) {
+          noteParts.push(`verification=${item.verificationStatus}`);
+        }
+        if (item.nextAction) {
+          noteParts.push(`next=${item.nextAction}`);
+        }
+        if (item.note) {
+          noteParts.push(item.note);
+        }
+        noteParts.push(...formatScoreContext(item));
+        const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
+        lines.push(`- ${item.fullName}: \`${item.status}\`${note}`);
+      }
+      lines.push('');
+    }
+
     const strongNotSaved = (result.strongButNotAutoSavedCandidates || []).slice(0, 10);
     if (strongNotSaved.length > 0) {
       lines.push(`### Strong but not auto-saved`);
@@ -457,6 +538,7 @@ function renderAccountBatchReportMarkdown(payload) {
         if (item.nextAction) {
           noteParts.push(`next=${item.nextAction}`);
         }
+        noteParts.push(...formatScoreContext(item));
         const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
         lines.push(`- ${item.fullName}: \`${item.coverageBucket || 'unknown'}\`${note}`);
       }
@@ -468,6 +550,48 @@ function renderAccountBatchReportMarkdown(payload) {
       lines.push(`### Not Saved Reasons`);
       for (const [reason, count] of Object.entries(notSavedReasons)) {
         lines.push(`- ${reason}: \`${count}\``);
+      }
+      lines.push('');
+    }
+
+    const notSavedExamples = (result.notSavedExamples || []).slice(0, 10);
+    if (notSavedExamples.length > 0) {
+      lines.push(`### Not Saved Examples`);
+      for (const item of notSavedExamples) {
+        const noteParts = [];
+        if (item.title) {
+          noteParts.push(item.title);
+        }
+        if (item.reason) {
+          noteParts.push(`reason=${item.reason}`);
+        }
+        if (item.nextAction) {
+          noteParts.push(`next=${item.nextAction}`);
+        }
+        noteParts.push(...formatScoreContext(item));
+        const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
+        lines.push(`- ${item.fullName}: \`${item.coverageBucket || 'unknown'}\`${note}`);
+      }
+      lines.push('');
+    }
+
+    const reviewCandidates = (result.manualReviewCandidates || []).slice(0, 10);
+    if (reviewCandidates.length > 0) {
+      lines.push(`### Review Before Saving`);
+      for (const item of reviewCandidates) {
+        const noteParts = [];
+        if (item.title) {
+          noteParts.push(item.title);
+        }
+        if (item.reason) {
+          noteParts.push(`reason=${item.reason}`);
+        }
+        if (item.nextAction) {
+          noteParts.push(`next=${item.nextAction}`);
+        }
+        noteParts.push(...formatScoreContext(item));
+        const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
+        lines.push(`- ${item.fullName}: \`${item.coverageBucket || 'unknown'}\`${note}`);
       }
       lines.push('');
     }

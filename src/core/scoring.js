@@ -20,6 +20,12 @@ function classifyNonIcpTitleReason(value) {
   if (/\b(global travel retail|commercial integration|business development|client relations|international client relations|workforce management)\b/.test(text)) {
     return 'non_icp_commercial_or_operations_function';
   }
+  if (
+    /\b(value engineering|value consulting|master data management|stammdaten|mdm|data protection|datenschutz|it law|legal|corporate security|forensics|forensik|safety|compliance officer)\b/.test(text)
+    && !/\b(observability|observabilitat|monitoring|platform|plattform|sre|site reliability|devops)\b/.test(text)
+  ) {
+    return 'false_positive_buyer_function';
+  }
 
   return null;
 }
@@ -56,6 +62,7 @@ function detectRoleFamily(candidate, icpConfig = {}) {
   if (/\b(chief (data|analytics|ai|artificial intelligence)(\s*&\s*|\s+and\s+)?(analytics|ai|artificial intelligence)? officer|chief data\s*&\s*analytics officer|head of (ai|artificial intelligence)|director of (ai|artificial intelligence)|vp (of )?(ai|artificial intelligence|data|analytics))\b/.test(text)) return 'executive_engineering';
   if (matchesAnyText(text, multilingual.platformOperator)) return 'platform_engineering';
   if (/\b(platform engineering|director of platform engineering|head of cloud|head of platform|cloud technology|platform operations|technology foundation operations)\b/.test(text)) return 'platform_engineering';
+  if (/\b(abteilungsleiter|bereichsleiter|geschaftsbereichsleiter|hauptabteilungsleiter|teamleiter)\b/.test(text) && /\b(platforms?|plattform|cloud|infrastructure|infrastruktur|sre|site reliability|devops|monitoring|observability|observabilitat)\b/.test(text)) return 'platform_engineering';
   if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur des systemes d'information|directrice des systemes d'information|dsi|directeur informatique|directrice informatique|director tecnico|directora tecnica|director de tecnologia|directora de tecnologia|direttore tecnico|direttrice tecnica|direttore tecnologia|direttrice tecnologia)\b/.test(text)) return 'executive_engineering';
   if (/\b(mlops|aiops|dataops|ai platform|data platform|plateforme de donnees|plataforma de datos|datenplattform|data piattaforma|piattaforma dati)\b/.test(text)) return 'data';
   if (/microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text)) return 'platform_engineering';
@@ -87,6 +94,8 @@ function detectSeniority(candidate, icpConfig = {}) {
   if (/vice president|\bvp\b/.test(text)) return 'vp';
   if (matchesAnyText(text, multilingual.seniorityDirector)) return 'director';
   if (/director|directeur|directrice|direktor|direktorin|direttore|direttrice|directora/.test(text)) return 'director';
+  if (/\b(abteilungsleiter|bereichsleiter|geschaftsbereichsleiter|hauptabteilungsleiter)\b/.test(text)) return 'director';
+  if (/\b(teamleiter)\b/.test(text)) return 'lead';
   if (/head|leiter|leiterin|jefe|responsable|responsabili?e/.test(text)) return 'head';
   if (/manager|gestionnaire/.test(text)) return 'manager';
   if (/staff/.test(text)) return 'staff';

@@ -48,8 +48,31 @@ function findCompanyAliasEntry(aliasConfig, accountName) {
   }
 
   const normalizedTarget = normalizeCompanyName(accountName);
-  const matchingKey = Object.keys(accounts).find((key) => normalizeCompanyName(key) === normalizedTarget);
+  const matchingKey = Object.keys(accounts).find((key) => {
+    if (normalizeCompanyName(key) === normalizedTarget) {
+      return true;
+    }
+    return companyAliasEntryMatchesName(accounts[key], normalizedTarget);
+  });
   return matchingKey ? accounts[matchingKey] : {};
+}
+
+function companyAliasEntryMatchesName(entry = {}, normalizedTarget = '') {
+  if (!normalizedTarget) {
+    return false;
+  }
+  const values = [
+    ...(entry.accountSearchAliases || []),
+    ...(entry.companyFilterAliases || []),
+    ...(entry.parentAliases || []),
+    ...(entry.subsidiaryAliases || []),
+    ...(entry.targets || []).flatMap((target) => [
+      target.linkedinName,
+      target.name,
+      target.companyName,
+    ]),
+  ].filter(Boolean);
+  return values.some((value) => normalizeCompanyName(value) === normalizedTarget);
 }
 
 function loadCompanyAliasConfig(configPath = null) {
@@ -103,6 +126,7 @@ function buildCompanyResolution({
   const resolvedAliasConfig = aliasConfig || loadCompanyAliasConfig();
   const resolvedLearnedRegistry = learnedRegistry || loadLearnedCompanyTargets();
   const name = String(accountName || account?.accountName || account?.name || '').trim();
+  const searchDiagnostics = buildCompanyResolutionSearchDiagnostics(name);
   const aliasEntry = findCompanyAliasEntry(resolvedAliasConfig, name);
   const learnedEntry = findCompanyAliasEntry(resolvedLearnedRegistry, name);
   const evidence = [];
@@ -176,8 +200,34 @@ function buildCompanyResolution({
     generatedAt: now.toISOString(),
     recommendedAction,
     evidence,
+    searchVariantsTried: searchDiagnostics.variants,
+    manualSearchUrls: searchDiagnostics.urls,
     targets: selectedTargets.map(normalizeTargetForArtifact),
     allCandidates: targets.slice(0, 10).map(normalizeTargetForArtifact),
+  };
+}
+
+function buildCompanyResolutionSearchDiagnostics(accountName) {
+  const raw = String(accountName || '').replace(/\s+/g, ' ').trim();
+  const titleCase = raw.toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+  const slug = raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const variants = [...new Set([
+    raw,
+    titleCase,
+    raw.toUpperCase(),
+    slug,
+  ].filter(Boolean))];
+  const primary = variants[0] || '';
+  return {
+    variants,
+    urls: {
+      linkedinCompanySearchUrl: primary
+        ? `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(primary)}`
+        : null,
+      salesNavigatorCompanySearchUrl: primary
+        ? `https://www.linkedin.com/sales/search/company?keywords=${encodeURIComponent(primary)}`
+        : null,
+    },
   };
 }
 
@@ -389,6 +439,15 @@ function renderCompanyResolutionMarkdown(resolution = {}) {
   lines.push(`- Confidence: \`${resolution.confidence ?? 0}\``);
   lines.push(`- Recommended action: \`${resolution.recommendedAction || 'unknown'}\``);
   lines.push(`- Evidence: \`${(resolution.evidence || []).join(', ') || 'none'}\``);
+  if ((resolution.searchVariantsTried || []).length > 0) {
+    lines.push(`- Search variants tried: \`${resolution.searchVariantsTried.join(', ')}\``);
+  }
+  if (resolution.manualSearchUrls?.linkedinCompanySearchUrl) {
+    lines.push(`- Manual LinkedIn company search: ${resolution.manualSearchUrls.linkedinCompanySearchUrl}`);
+  }
+  if (resolution.manualSearchUrls?.salesNavigatorCompanySearchUrl) {
+    lines.push(`- Manual Sales Navigator company search: ${resolution.manualSearchUrls.salesNavigatorCompanySearchUrl}`);
+  }
   lines.push('');
   lines.push('## Targets');
   if ((resolution.targets || []).length === 0) {
@@ -471,6 +530,7 @@ module.exports = {
   classifyCompanyResolutionStatus,
   companyNameFromLinkedInUrl,
   findCompanyAliasEntry,
+  buildCompanyResolutionSearchDiagnostics,
   findLatestCompanyResolutionArtifact,
   getCompanyResolutionRecommendedAction,
   loadCompanyAliasConfig,

@@ -120,8 +120,38 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
         listCandidateCount: 8,
         selectedForListSaveCount: 3,
         saveResults: [
-          { fullName: 'Philipp Weidinger', status: 'saved' },
+          {
+            fullName: 'Philipp Weidinger',
+            status: 'saved_and_verified',
+            score: 64,
+            coverageBucket: 'direct_observability',
+            personaTier: 'operator',
+            scoreBreakdown: { components: { roleScore: 18, seniorityScore: 16, observabilityScore: 24 } },
+          },
           { fullName: 'Ralf Koppitz', status: 'failed', note: 'selector issue' },
+          {
+            fullName: 'Missing Save',
+            title: 'Platform Lead',
+            status: 'save_clicked_unverified',
+            failureCategory: 'missing_after_save',
+            verificationStatus: 'missing_after_save',
+            nextAction: 'retry_or_manual_review_list_membership',
+            note: 'save clicked but missing from list',
+            score: 58,
+            coverageBucket: 'direct_observability',
+            personaTier: 'operator',
+          },
+        ],
+        notSavedExamples: [
+          {
+            fullName: 'Dropped Candidate',
+            title: 'IT Platform Specialist',
+            coverageBucket: 'technical_adjacent',
+            score: 24,
+            reason: 'below_icp_selection_threshold',
+            nextAction: 'review_if_persona_looks_relevant',
+            scoreBreakdown: { components: { roleScore: 16, seniorityScore: 8 } },
+          },
         ],
         connectResults: [],
       },
@@ -133,11 +163,15 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
   assert.match(markdown, /List name template: `Research \{date\}`/);
   assert.match(markdown, /Max list saves per account: `3`/);
   assert.match(markdown, /Selected for live save: `3`/);
-  assert.match(markdown, /SDR summary: found=`20` \| selected=`8` \| saved_verified=`0` \| save_unverified=`1` \| failed_save=`1` \| manual_review=`0` \| out_of_network=`0` \| failed_sweeps=`0` \| not_auto_saved=`12`/);
+  assert.match(markdown, /SDR summary: found=`20` \| selected=`8` \| saved_verified=`1` \| save_unverified=`1` \| failed_save=`2` \| manual_review=`0` \| out_of_network=`0` \| failed_sweeps=`0` \| not_auto_saved=`12`/);
   assert.match(markdown, /Coverage status: `completed`/);
   assert.match(markdown, /Next action: `verify_list_membership, manual_review`/);
-  assert.match(markdown, /Philipp Weidinger: `saved`/);
+  assert.match(markdown, /Philipp Weidinger: `saved_and_verified` - score=64 \| bucket=direct_observability \| tier=operator \| score_breakdown=observabilityScore:24,roleScore:18,seniorityScore:16/);
   assert.match(markdown, /Ralf Koppitz: `failed` - selector issue/);
+  assert.match(markdown, /### Save Discrepancies/);
+  assert.match(markdown, /Missing Save: `save_clicked_unverified` - Platform Lead \| reason=missing_after_save \| verification=missing_after_save \| next=retry_or_manual_review_list_membership/);
+  assert.match(markdown, /### Not Saved Examples/);
+  assert.match(markdown, /Dropped Candidate: `technical_adjacent` - IT Platform Specialist \| reason=below_icp_selection_threshold \| next=review_if_persona_looks_relevant \| score=24/);
 });
 
 test('summarizeSdrResearchOutcome explains found vs saved gaps for SDRs', () => {
@@ -166,6 +200,7 @@ test('summarizeSdrResearchOutcome explains found vs saved gaps for SDRs', () => 
     strongButNotAutoSaved: 4,
     outOfNetwork: 4,
     notAutoSaved: 24,
+    relativeRankFallbackApplied: false,
     attemptedSweeps: 20,
     failedSweeps: 8,
     coverageStatus: 'needs_company_scope_review',
@@ -196,6 +231,11 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
         selectedForListSaveCount: 6,
         attemptedSweepsCount: 20,
         failedSweepsCount: 8,
+        relativeRankFallbackApplied: true,
+        companyScope: {
+          warning: 'cross_company_contamination_detected',
+          unrelatedCompanies: ['Deutsche Bank'],
+        },
         strongButNotAutoSavedCount: 2,
         saveResults: [],
         strongButNotAutoSavedCandidates: [
@@ -203,8 +243,22 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
             fullName: 'Nicolas di Giuseppe',
             title: 'Senior Engineering Manager - AI & Scheduling Squads',
             coverageBucket: 'direct_observability',
+            score: 72,
+            personaTier: 'operator',
+            scoreBreakdown: { components: { roleScore: 18, seniorityScore: 12, observabilityScore: 24 } },
             reason: 'strong_but_not_auto_saved',
             nextAction: 'review_strong_not_saved',
+          },
+        ],
+        manualReviewCandidates: [
+          {
+            fullName: 'Relative Rank Candidate',
+            title: 'IT Platform Specialist',
+            coverageBucket: 'broad_it_stakeholder',
+            score: 24,
+            reason: 'relative_rank_manual_review',
+            nextAction: 'review_before_save',
+            scoreBreakdown: { components: { roleScore: 16, seniorityScore: 8 } },
           },
         ],
         notSavedReasonCounts: {
@@ -217,11 +271,15 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
 
   assert.match(markdown, /SDR summary: found=`30` \| selected=`6` .* out_of_network=`2` \| failed_sweeps=`8`/);
   assert.match(markdown, /Coverage status: `needs_company_scope_review`/);
+  assert.match(markdown, /Company scope warning: `cross_company_contamination_detected` \(Deutsche Bank\)/);
+  assert.match(markdown, /Manual review fallback: `top candidates shown because no candidate passed the normal save threshold`/);
   assert.match(markdown, /Sweeps: `12\/20 succeeded`/);
-  assert.match(markdown, /Next action: `retry_company_scope, review_strong_not_saved`/);
+  assert.match(markdown, /Next action: `retry_company_scope, review_strong_not_saved, review_relative_rank_candidates`/);
   assert.match(markdown, /### Strong but not auto-saved/);
-  assert.match(markdown, /Nicolas di Giuseppe: `direct_observability` - Senior Engineering Manager - AI & Scheduling Squads \| reason=strong_but_not_auto_saved \| next=review_strong_not_saved/);
+  assert.match(markdown, /Nicolas di Giuseppe: `direct_observability` - Senior Engineering Manager - AI & Scheduling Squads \| reason=strong_but_not_auto_saved \| next=review_strong_not_saved \| score=72 \| bucket=direct_observability \| tier=operator/);
   assert.match(markdown, /strong_but_not_auto_saved: `2`/);
+  assert.match(markdown, /### Review Before Saving/);
+  assert.match(markdown, /Relative Rank Candidate: `broad_it_stakeholder` - IT Platform Specialist \| reason=relative_rank_manual_review \| next=review_before_save \| score=24/);
 });
 
 test('renderAccountBatchReportMarkdown supports smoke-style artifacts with direct status fields', () => {

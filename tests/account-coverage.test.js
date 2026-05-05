@@ -6,6 +6,7 @@ const { readJson } = require('../src/lib/json');
 const { resolveProjectPath } = require('../src/lib/paths');
 const { buildPriorityModelV1 } = require('../src/core/priority-score');
 const {
+  annotateCoverageCandidatesForListSelection,
   applyDeepReviewResult,
   buildSweepTemplates,
   buildCoverageLanguageSplits,
@@ -498,11 +499,52 @@ test('selectCoverageListCandidates force-includes CIO CTO and microservices buil
     ],
   }, { minScore: 50 });
 
-  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Microservices Lead', 'Chief Data Analytics', 'Company CIO']);
+  assert.deepEqual(selected.map((candidate) => candidate.fullName), ['Microservices Lead', 'Out Of Network Chief Data', 'Chief Data Analytics', 'Company CIO']);
   assert.deepEqual(selected.map((candidate) => candidate.listSelectionReason), [
     'microservices_observability_path',
     'executive_cto_cio_always_include',
     'executive_cto_cio_always_include',
+    'executive_cto_cio_always_include',
+  ]);
+});
+
+test('report-only out-of-network mode surfaces strong candidates without selecting them', () => {
+  const annotated = annotateCoverageCandidatesForListSelection({
+    candidates: [
+      {
+        fullName: 'Out Of Network SRE',
+        title: 'Head of SRE',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'site_reliability',
+        score: 70,
+        outOfNetwork: true,
+      },
+      {
+        fullName: 'Reachable Platform',
+        title: 'Director of Platform Engineering',
+        coverageBucket: 'direct_observability',
+        roleFamily: 'platform_engineering',
+        score: 64,
+        outOfNetwork: false,
+      },
+    ],
+  }, { reportOnlyOutOfNetwork: true });
+
+  assert.deepEqual(annotated.map((candidate) => ({
+    fullName: candidate.fullName,
+    selectedForList: candidate.selectedForList,
+    reason: candidate.listSelectionReason,
+  })), [
+    {
+      fullName: 'Out Of Network SRE',
+      selectedForList: false,
+      reason: 'strong_but_not_auto_saved',
+    },
+    {
+      fullName: 'Reachable Platform',
+      selectedForList: true,
+      reason: 'direct_observability_always_include',
+    },
   ]);
 });
 

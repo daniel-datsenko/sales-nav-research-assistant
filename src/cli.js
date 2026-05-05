@@ -21,6 +21,7 @@ const {
   writePriorityModelArtifact,
 } = require('./core/priority-score');
 const {
+  annotateCoverageCandidatesForListSelection,
   loadAccountCoverageConfig,
   buildSweepTemplates,
   loadPriorityModel,
@@ -62,12 +63,18 @@ const {
 const {
   applyGeoFocusToCandidates,
   buildAccountBatchListName,
+  deriveSdrCoverageStatus,
   limitBatchCandidates,
   parseAccountNames,
   renderAccountBatchListNameTemplate,
+  summarizeSdrResearchOutcome,
   writeAccountBatchArtifact,
   writeAccountBatchReport,
 } = require('./core/account-batch');
+const {
+  buildSdrResearchBatchValues,
+  renderSdrResearchIntro,
+} = require('./core/sdr-workflow');
 const {
   attachSweepCacheState,
   buildResearchPipelineArtifact,
@@ -289,6 +296,9 @@ async function main() {
         break;
       case 'run-account-batch':
         await handleRunAccountBatch(getRepository(), values, logger);
+        break;
+      case 'sdr-research':
+        await handleSdrResearch(getRepository(), values, logger);
         break;
       case 'pilot-live-save-batch':
         await handlePilotLiveSaveBatch(values, logger);
@@ -3371,11 +3381,28 @@ async function handleRunAccountBatch(repository, values, logger) {
         },
       });
       const coverageArtifactPath = writeAccountCoverageArtifact(accountName, coverageRun.result);
+      const selectionOptions = {
+        reportOnlyOutOfNetwork: getBoolean(values, 'reportOnlyOutOfNetwork', 'report-only-out-of-network'),
+      };
+      const annotatedCoverageCandidates = annotateCoverageCandidatesForListSelection(coverageRun.result, selectionOptions);
       const listCandidates = applyGeoFocusToCandidates(
-        selectCoverageListCandidates(coverageRun.result),
+        annotatedCoverageCandidates.filter((candidate) => candidate.selectedForList),
         pilotConfig?.geoFocus || null,
       );
       const selectedForListSave = limitBatchCandidates(listCandidates, maxListSavesPerAccount);
+      const selectedForListSaveKeys = new Set(selectedForListSave.map(buildCandidateReportKey));
+      const notSavedReasonCounts = {};
+      for (const candidate of annotatedCoverageCandidates) {
+        if (!candidate.selectedForList) {
+          incrementReasonCount(notSavedReasonCounts, candidate.listSelectionReason);
+        } else if (liveSave && !selectedForListSaveKeys.has(buildCandidateReportKey(candidate))) {
+          incrementReasonCount(notSavedReasonCounts, 'not_selected_due_to_batch_cap');
+        }
+      }
+      const strongButNotAutoSavedCandidates = annotatedCoverageCandidates
+        .filter((candidate) => candidate.listSelectionReason === 'strong_but_not_auto_saved')
+        .slice(0, 10)
+        .map((candidate) => toSdrReportCandidate(candidate));
       const saveResults = [];
       const connectResults = [];
 
@@ -3397,12 +3424,14 @@ async function handleRunAccountBatch(repository, values, logger) {
               fullName: candidate.fullName,
               status: saveResult.status,
               note: saveResult.note || null,
+              title: candidate.title || null,
             });
           } catch (error) {
             saveResults.push({
               fullName: candidate.fullName,
               status: 'failed',
               note: summarizeErrorMessage(error.message),
+              title: candidate.title || null,
             });
           }
         }
@@ -3495,8 +3524,29 @@ async function handleRunAccountBatch(repository, values, logger) {
         listName,
         coverageArtifactPath,
         candidateCount: coverageRun.result.candidateCount,
+        resolutionStatus: coverageRun.result.resolutionStatus || null,
+        attemptedSweepsCount: coverageRun.templates.length,
+        failedSweepsCount: coverageRun.sweepErrors.length,
+        coverageStatus: deriveSdrCoverageStatus({
+          attemptedSweepsCount: coverageRun.templates.length,
+          failedSweepsCount: coverageRun.sweepErrors.length,
+          resolutionStatus: coverageRun.result.resolutionStatus || null,
+        }),
         listCandidateCount: listCandidates.length,
         selectedForListSaveCount: selectedForListSave.length,
+        strongButNotAutoSavedCount: strongButNotAutoSavedCandidates.length,
+        strongButNotAutoSavedCandidates,
+        notSavedReasonCounts,
+        sdrSummary: summarizeSdrResearchOutcome({
+          candidateCount: coverageRun.result.candidateCount,
+          listCandidateCount: listCandidates.length,
+          selectedForListSaveCount: selectedForListSave.length,
+          strongButNotAutoSavedCount: strongButNotAutoSavedCandidates.length,
+          attemptedSweepsCount: coverageRun.templates.length,
+          failedSweepsCount: coverageRun.sweepErrors.length,
+          resolutionStatus: coverageRun.result.resolutionStatus || null,
+          saveResults,
+        }),
         saveResults,
         connectResults,
       });
@@ -3534,6 +3584,42 @@ async function handleRunAccountBatch(repository, values, logger) {
   } finally {
     await driver.close().catch(() => {});
   }
+}
+
+async function handleSdrResearch(repository, values, logger) {
+  const startedAt = new Date().toISOString();
+  const batchValues = buildSdrResearchBatchValues(values, { startedAt });
+  const accountNames = parseAccountNames(batchValues['account-names']);
+  logger.info(renderSdrResearchIntro({
+    accountNames,
+    listName: batchValues['consolidate-list-name'],
+    liveSave: getBoolean(batchValues, 'liveSave', 'live-save'),
+    researchMode: getString(batchValues, 'research-mode') || 'persona-led',
+    speedProfile: getString(batchValues, 'speed-profile') || 'balanced',
+  }).trim());
+  await handleRunAccountBatch(repository, batchValues, logger);
+}
+
+function buildCandidateReportKey(candidate = {}) {
+  return String(candidate.salesNavigatorUrl || candidate.profileUrl || `${candidate.fullName || ''}|${candidate.title || ''}`)
+    .trim()
+    .toLowerCase();
+}
+
+function incrementReasonCount(counts, reason) {
+  const key = reason || 'not_selected';
+  counts[key] = (counts[key] || 0) + 1;
+}
+
+function toSdrReportCandidate(candidate, nextAction = 'review_strong_not_saved') {
+  return {
+    fullName: candidate.fullName || 'Unknown lead',
+    title: candidate.title || null,
+    coverageBucket: candidate.coverageBucket || null,
+    reason: candidate.listSelectionReason || null,
+    nextAction,
+    salesNavigatorUrl: candidate.salesNavigatorUrl || candidate.profileUrl || null,
+  };
 }
 
 async function handlePilotLiveSaveBatch(values, logger) {
@@ -3996,6 +4082,7 @@ Usage:
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
   node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
+  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--live-save]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect] [--allow-unverified-connect-continue]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect [--allow-unverified-connect-continue]

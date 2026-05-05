@@ -8,12 +8,14 @@ const {
   buildAccountBatchArtifactPath,
   buildAccountBatchReportPath,
   buildAccountBatchListName,
+  deriveSdrCoverageStatus,
   deriveConnectOperatorGuidance,
   formatAccountBatchDuration,
   limitBatchCandidates,
   parseAccountNames,
   renderAccountBatchReportMarkdown,
   renderAccountBatchListNameTemplate,
+  summarizeSdrResearchOutcome,
 } = require('../src/core/account-batch');
 const { ACCOUNT_BATCH_ARTIFACTS_DIR } = require('../src/lib/paths');
 
@@ -131,8 +133,94 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
   assert.match(markdown, /List name template: `Research \{date\}`/);
   assert.match(markdown, /Max list saves per account: `3`/);
   assert.match(markdown, /Selected for live save: `3`/);
+  assert.match(markdown, /SDR summary: found=`20` \| selected=`8` \| saved_verified=`0` \| save_unverified=`1` \| failed_save=`1` \| manual_review=`0` \| not_auto_saved=`12`/);
+  assert.match(markdown, /Coverage status: `completed`/);
+  assert.match(markdown, /Next action: `verify_list_membership, manual_review`/);
   assert.match(markdown, /Philipp Weidinger: `saved`/);
   assert.match(markdown, /Ralf Koppitz: `failed` - selector issue/);
+});
+
+test('summarizeSdrResearchOutcome explains found vs saved gaps for SDRs', () => {
+  const summary = summarizeSdrResearchOutcome({
+    candidateCount: 30,
+    listCandidateCount: 6,
+    selectedForListSaveCount: 6,
+    strongButNotAutoSavedCount: 4,
+    attemptedSweepsCount: 20,
+    failedSweepsCount: 8,
+    saveResults: [
+      { status: 'saved_and_verified' },
+      { status: 'saved' },
+      { status: 'failed' },
+    ],
+  });
+
+  assert.deepEqual(summary, {
+    found: 30,
+    selectedForList: 6,
+    selectedForLiveSave: 6,
+    savedVerified: 1,
+    saveClickedUnverified: 1,
+    failedSave: 1,
+    manualReview: 0,
+    strongButNotAutoSaved: 4,
+    notAutoSaved: 24,
+    attemptedSweeps: 20,
+    failedSweeps: 8,
+    coverageStatus: 'needs_company_scope_review',
+    nextActions: ['retry_company_scope', 'review_strong_not_saved', 'verify_list_membership', 'manual_review'],
+  });
+});
+
+test('deriveSdrCoverageStatus separates clean runs from scope-review runs', () => {
+  assert.equal(deriveSdrCoverageStatus({ attemptedSweepsCount: 20, failedSweepsCount: 0 }), 'completed');
+  assert.equal(deriveSdrCoverageStatus({ attemptedSweepsCount: 20, failedSweepsCount: 2 }), 'completed_with_sweep_warnings');
+  assert.equal(deriveSdrCoverageStatus({ attemptedSweepsCount: 20, failedSweepsCount: 8 }), 'needs_company_scope_review');
+  assert.equal(deriveSdrCoverageStatus({ resolutionStatus: 'needs_company_resolution' }), 'needs_company_scope_review');
+});
+
+test('renderAccountBatchReportMarkdown shows strong report-only candidates and not-saved reasons', () => {
+  const markdown = renderAccountBatchReportMarkdown({
+    generatedAt: '2026-05-05T10:00:00Z',
+    driver: 'playwright',
+    liveSave: true,
+    liveConnect: false,
+    accountNames: ['Skello'],
+    results: [
+      {
+        accountName: 'Skello',
+        listName: 'SDR Research Skello',
+        candidateCount: 30,
+        listCandidateCount: 6,
+        selectedForListSaveCount: 6,
+        attemptedSweepsCount: 20,
+        failedSweepsCount: 8,
+        strongButNotAutoSavedCount: 2,
+        saveResults: [],
+        strongButNotAutoSavedCandidates: [
+          {
+            fullName: 'Nicolas di Giuseppe',
+            title: 'Senior Engineering Manager - AI & Scheduling Squads',
+            coverageBucket: 'direct_observability',
+            reason: 'strong_but_not_auto_saved',
+            nextAction: 'review_strong_not_saved',
+          },
+        ],
+        notSavedReasonCounts: {
+          strong_but_not_auto_saved: 2,
+          below_icp_selection_threshold: 22,
+        },
+      },
+    ],
+  });
+
+  assert.match(markdown, /SDR summary: found=`30` \| selected=`6`/);
+  assert.match(markdown, /Coverage status: `needs_company_scope_review`/);
+  assert.match(markdown, /Sweeps: `12\/20 succeeded`/);
+  assert.match(markdown, /Next action: `retry_company_scope, review_strong_not_saved`/);
+  assert.match(markdown, /### Strong but not auto-saved/);
+  assert.match(markdown, /Nicolas di Giuseppe: `direct_observability` - Senior Engineering Manager - AI & Scheduling Squads \| reason=strong_but_not_auto_saved \| next=review_strong_not_saved/);
+  assert.match(markdown, /strong_but_not_auto_saved: `2`/);
 });
 
 test('renderAccountBatchReportMarkdown supports smoke-style artifacts with direct status fields', () => {

@@ -85,6 +85,27 @@ Print the current release contract:
 npm run print-mvp-release-contract
 ```
 
+## SDR Quick Action
+
+For day-to-day SDR testing, start here. Give the tool three to five accounts and let it research, explain the result, and optionally create the Sales Navigator list.
+
+Dry-safe research:
+
+```bash
+npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
+```
+
+Research and create/update one Sales Navigator list:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Thales Group, Skello, Oodrive" \
+  --list-name="SDR Research - Thales Skello Oodrive" \
+  --live-save
+```
+
+This command never sends connection invitations. It uses the persistent browser session, creates the list only when `--live-save` is explicit, and reports what was found, saved, not saved, and what needs review.
+
 ## Environment Setup
 
 Create a local `.env` from `.env.example` if you need live integrations:
@@ -134,6 +155,8 @@ npm run run-background-territory-loop -- --driver=playwright --limit=1
 ```
 
 ### Research Several Accounts Into One List
+
+For SDRs, prefer `npm run sdr-research`. Use the lower-level batch command only when you need advanced options.
 
 Use `--consolidate-list-name` when you want one shared Sales Navigator list instead of one list per account:
 

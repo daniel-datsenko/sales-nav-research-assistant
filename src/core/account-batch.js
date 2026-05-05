@@ -225,6 +225,7 @@ function summarizeSdrResearchOutcome(result = {}) {
     failedSave: saveResults.filter((item) => failedSaveStatuses.has(item.status)).length,
     manualReview: saveResults.filter((item) => manualReviewStatuses.has(item.status)).length,
     strongButNotAutoSaved: Number(result.strongButNotAutoSavedCount || 0),
+    outOfNetwork: Number(result.outOfNetworkCount ?? result.strongButNotAutoSavedCount ?? 0),
     notAutoSaved: Math.max(0, Number(result.candidateCount || 0) - Number(result.listCandidateCount || 0)),
     attemptedSweeps: Number(result.attemptedSweepsCount || 0),
     failedSweeps: Number(result.failedSweepsCount || 0),
@@ -367,7 +368,7 @@ function renderAccountBatchReportMarkdown(payload) {
     if (result.selectedForListSaveCount !== undefined) {
       lines.push(`- Selected for live save: \`${result.selectedForListSaveCount}\``);
     }
-    lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
+    lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | out_of_network=\`${sdrSummary.outOfNetwork}\` | failed_sweeps=\`${sdrSummary.failedSweeps}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
     if (sdrSummary.attemptedSweeps > 0) {
       lines.push(`- Sweeps: \`${sdrSummary.attemptedSweeps - sdrSummary.failedSweeps}/${sdrSummary.attemptedSweeps} succeeded\``);

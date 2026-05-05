@@ -1,12 +1,12 @@
 # First Run Onboarding
 
-Sales Navigator Research Assistant is a local, supervised tool. It can plan and research in dry-safe mode before login, but it cannot write to a real Sales Navigator list until the local machine has dependencies installed and a visible LinkedIn/Sales Navigator session is authenticated.
+Sales Navigator Research Assistant runs on the user's machine and controls their own browser. It can prepare research before LinkedIn login, but it cannot create a real Sales Navigator list until setup is finished and the user is logged in.
 
 ## Friendly First Message
 
-Use this when a new SDR/operator opens the repo in an agent:
+Use this when a new SDR opens the repo in an agent:
 
-> You are setting up Sales Navigator Research Assistant. I will first check your local install, dependencies, and browser login state. Dry-safe research can run immediately once dependencies are installed. Real Sales Navigator list saves or connect actions require an explicit operator decision and a visible authenticated browser session.
+> I will quickly check whether the tool is installed and whether LinkedIn is logged in. If something is missing, I will guide you through it. I will not save leads or send connection requests unless you explicitly ask me to.
 
 Then run:
 
@@ -18,7 +18,7 @@ npm run doctor
 
 Say:
 
-> The repo is here, but dependencies are not installed yet. I can install them, run the test suite, and then we can bootstrap your browser session.
+> The repo is here, but the tool is not installed yet. I can install it, run the checks, and then help you log in to LinkedIn.
 
 Run:
 
@@ -32,14 +32,14 @@ npm run test:release-readiness
 
 Say:
 
-> Dry-safe research can still run, but I cannot write to a real Sales Navigator list until we bootstrap a visible browser session.
+> I can prepare research, but I cannot create a real Sales Navigator list until LinkedIn is logged in.
 
 Offer two safe paths:
 
-- A) Produce a research Markdown/calling-list artifact now; Sales Navigator push happens after setup.
-- B) Finish setup first with `npm run bootstrap-session -- --driver=playwright --wait-minutes=10`, then run the browser-backed workflow.
+- A) Prepare the research file now; create the Sales Navigator list later.
+- B) Log in first, then create the Sales Navigator list directly.
 
-## What Must Stay Explicit
+## Actions That Must Stay Explicit
 
 - `--live-save`
 - `--live-connect`
@@ -47,3 +47,7 @@ Offer two safe paths:
 - removing leads from live lists
 
 These actions should never happen as part of a first-run setup or unattended bootstrap.
+
+In SDR-facing language, say:
+
+> I can research accounts safely. Saving leads or sending connection requests is a separate action and I will ask before doing it.

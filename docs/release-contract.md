@@ -1,18 +1,18 @@
 # Supervised MVP Release Contract
 
-The first release target is a supervised MVP, not a broad autonomous Sales Navigator automation product.
+The first release is a supervised SDR assistant, not a fully automatic LinkedIn machine.
 
 ## Defaults
 
-- `lists-first` is the default operating model.
-- Background research is dry-safe by default.
-- Live list saves require `--live-save`.
-- Connect actions require explicit supervised live-connect command paths.
-- Background connects are disabled unless explicitly configured and approved.
+- Build lists first.
+- Background research should not change Sales Navigator.
+- Real list saves must be explicitly requested.
+- Connection requests must be explicitly supervised.
+- Background connection requests stay off unless separately approved.
 
 ## Final Connect States
 
-Every connect attempt should end in one of these operator states:
+Every connection request attempt should end in one clear state:
 
 - `sent`
 - `already_sent`
@@ -22,20 +22,20 @@ Every connect attempt should end in one of these operator states:
 - `manual_review`
 - `skipped_by_policy`
 
-`email_required` means skip the prospect. Do not research emails, do not retry in the same run, and do not treat this as a bug.
+`email_required` means skip the prospect. Do not search for emails and do not retry in the same run.
 
 ## Account Scope
 
-Company resolution must prefer exact or high-confidence LinkedIn/Sales Navigator targets. Low-confidence company matches should stop as review states instead of silently sweeping the wrong entity.
+The tool should use the right LinkedIn company page. If it is unsure, it should stop for review instead of researching the wrong company.
 
 ## Runner States
 
-Environment failures must stay separate from account logic:
+Browser/login problems must stay separate from account quality:
 
-- `environment_blocked` means browser/session/harness health prevented the run.
-- `timed_out` is an account-level coverage outcome.
-- `all_sweeps_failed` means account scoping or filters likely need company resolution.
+- `environment_blocked`: browser or login setup blocked the run.
+- `timed_out`: this account took too long.
+- `all_sweeps_failed`: the company name or Sales Navigator filter probably needs review.
 
 ## Release-Ready Definition
 
-The MVP is release-ready when discovery, company resolution, list planning, guarded list save, deterministic connect statuses, operator reports, and dry-safe background evidence work without requiring raw-log interpretation.
+The MVP is release-ready when an SDR can research accounts, create reviewed lists, understand the report, and know what to do next without reading raw logs.

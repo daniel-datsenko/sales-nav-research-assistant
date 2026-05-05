@@ -1233,6 +1233,19 @@ function classifyCoverageListSelection(candidate, options = {}) {
   const title = normalizeSelectionText(candidate.title || '');
   const seniority = String(candidate.seniority || '').toLowerCase();
   const roleFamily = String(candidate.roleFamily || '').toLowerCase();
+  const reportOnlyOutOfNetwork = Boolean(options.reportOnlyOutOfNetwork || options.excludeOutOfNetwork);
+
+  if (
+    reportOnlyOutOfNetwork
+    && candidate.outOfNetwork
+    && includeBuckets.has(candidate.coverageBucket)
+  ) {
+    return {
+      selected: false,
+      reason: 'strong_but_not_auto_saved',
+      rank: 0,
+    };
+  }
 
   if (candidate.coverageBucket === 'direct_observability') {
     if (/\b(platform|architecture|architect)\b/.test(title) && !hasTechnicalAmbiguousQualifier(title)) {
@@ -1334,7 +1347,7 @@ function classifyCoverageListSelection(candidate, options = {}) {
   };
 }
 
-function selectCoverageListCandidates(result, options = {}) {
+function annotateCoverageCandidatesForListSelection(result, options = {}) {
   return (result?.candidates || [])
     .map((candidate) => {
       const selection = classifyCoverageListSelection(candidate, options);
@@ -1345,7 +1358,11 @@ function selectCoverageListCandidates(result, options = {}) {
         topScoreComponents: summarizeTopScoreComponents(candidate.scoreBreakdown),
         selectedForList: selection.selected,
       };
-    })
+    });
+}
+
+function selectCoverageListCandidates(result, options = {}) {
+  return annotateCoverageCandidatesForListSelection(result, options)
     .filter((candidate) => candidate.selectedForList)
     .sort((left, right) => {
       const rankDiff = (right.listSelectionRank || 0) - (left.listSelectionRank || 0);
@@ -1397,6 +1414,7 @@ function writeAccountCoverageArtifact(accountName, coverageResult) {
 }
 
 module.exports = {
+  annotateCoverageCandidatesForListSelection,
   applyDeepReviewResult,
   buildSweepTemplates,
   classifyCoverageBucket,

@@ -39,17 +39,27 @@ Wait for confirmation before continuing.
 
 ### Step 2 — Run account coverage
 
-**Always use `account-coverage`, never `test-account-search`.**
+**For normal SDR requests, use `sdr-research`, never `test-account-search`.**
 
 `test-account-search` is a setup smoke-test capped at 5 results. It is not for SDR use. `account-coverage` runs 21 keyword sweeps per account and returns 30-60 qualified leads.
 
-Run accounts sequentially — they share the same browser profile and will conflict in parallel:
+Run the friendly SDR wrapper first. It keeps the persistent browser session, researches accounts sequentially, and can create one Sales Navigator list when live-save is explicitly requested:
 
 ```bash
-npm run account-coverage -- --account-name="Account Name" --driver=playwright
+npm run sdr-research -- --accounts="Account A, Account B, Account C" --driver=playwright
 ```
 
-While each account runs, tell the SDR what's happening in plain language:
+If the SDR asked for a Sales Navigator list, add `--live-save` and let the command create the list:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Account A, Account B, Account C" \
+  --list-name="SDR Research - Account A Account B Account C" \
+  --driver=playwright \
+  --live-save
+```
+
+While it runs, tell the SDR what's happening in plain language:
 
 - "Searching for contacts at [Account]..."
 - "Found [N] contacts at [Account]. Moving on to [next account]..."
@@ -59,28 +69,19 @@ Never show raw CLI output, sweep names, bucket names, or internal flags.
 
 ### Step 3 — Create the Sales Navigator list
 
-When an SDR asks for a "LinkedIn list", "Sales Nav list", or says "add them to a list" — always create it live in the browser. Showing a table in chat is not the deliverable.
+When an SDR asks for a "LinkedIn list", "Sales Nav list", or says "add them to a list" — use `sdr-research --live-save`. Showing a table in chat is not the deliverable.
 
 Derive the list name automatically from SDR name + accounts + date if not specified. Never ask for the list name unless genuinely unclear.
 
-Always include `--allow-list-create` — do not wait for the list to exist first:
-
-```bash
-npm run import-coverage -- \
-  --accounts="account-slug-a,account-slug-b,account-slug-c" \
-  --list-name="[SDR Name] - [Account A] / [Account B] / [Account C]" \
-  --driver=playwright \
-  --live-save \
-  --allow-list-create
-```
-
-Account slugs are the lowercase, hyphenated versions of the account names (e.g. "Thales Group" → `thales-group`).
+`sdr-research` sets the safe list-create flag automatically when `--live-save` is present. Do not use connect flags with this command; it rejects them by design.
 
 ### Step 4 — Close with a clear next step
 
 After the list is created, tell the SDR:
 
 - How many contacts were saved and across which accounts
+- How many strong contacts were found but not auto-saved, and why
+- Whether any account needs company-scope review
 - That the list is now live in Sales Navigator under the exact name used
 - Which contacts to start with — the `direct_observability` bucket first (DevOps leads, Platform Engineers, Infrastructure Architects)
 

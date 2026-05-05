@@ -182,6 +182,73 @@ function summarizeBatchResult(result) {
   };
 }
 
+function deriveSdrCoverageStatus({
+  attemptedSweepsCount = 0,
+  failedSweepsCount = 0,
+  resolutionStatus = null,
+} = {}) {
+  if (resolutionStatus === 'needs_company_resolution') {
+    return 'needs_company_scope_review';
+  }
+  const attempted = Number(attemptedSweepsCount || 0);
+  const failed = Number(failedSweepsCount || 0);
+  if (attempted > 0 && failed >= attempted) {
+    return 'needs_company_scope_review';
+  }
+  if (attempted > 0 && failed / attempted >= 0.3) {
+    return 'needs_company_scope_review';
+  }
+  if (failed > 0) {
+    return 'completed_with_sweep_warnings';
+  }
+  return 'completed';
+}
+
+function summarizeSdrResearchOutcome(result = {}) {
+  const saveResults = result.saveResults
+    || (result.status ? [{ fullName: result.fullName || 'Unknown lead', status: result.status, note: result.note || null }] : []);
+  const verifiedSaveStatuses = new Set(['saved_and_verified', 'already_saved_verified']);
+  const clickedUnverifiedStatuses = new Set(['saved', 'already_saved', 'results_row_fallback_saved', 'save_clicked_unverified']);
+  const failedSaveStatuses = new Set(['failed', 'failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state', 'missing_after_save', 'wrong_identity_detected']);
+  const manualReviewStatuses = new Set(['manual_review', 'save_ui_manual_review']);
+  const coverageStatus = result.coverageStatus || deriveSdrCoverageStatus({
+    attemptedSweepsCount: result.attemptedSweepsCount,
+    failedSweepsCount: result.failedSweepsCount,
+    resolutionStatus: result.resolutionStatus,
+  });
+  const summary = {
+    found: Number(result.candidateCount || 0),
+    selectedForList: Number(result.listCandidateCount || 0),
+    selectedForLiveSave: Number(result.selectedForListSaveCount || 0),
+    savedVerified: saveResults.filter((item) => verifiedSaveStatuses.has(item.status)).length,
+    saveClickedUnverified: saveResults.filter((item) => clickedUnverifiedStatuses.has(item.status)).length,
+    failedSave: saveResults.filter((item) => failedSaveStatuses.has(item.status)).length,
+    manualReview: saveResults.filter((item) => manualReviewStatuses.has(item.status)).length,
+    strongButNotAutoSaved: Number(result.strongButNotAutoSavedCount || 0),
+    notAutoSaved: Math.max(0, Number(result.candidateCount || 0) - Number(result.listCandidateCount || 0)),
+    attemptedSweeps: Number(result.attemptedSweepsCount || 0),
+    failedSweeps: Number(result.failedSweepsCount || 0),
+    coverageStatus,
+    nextActions: [],
+  };
+  if (summary.coverageStatus === 'needs_company_scope_review') {
+    summary.nextActions.push('retry_company_scope');
+  }
+  if (summary.strongButNotAutoSaved > 0) {
+    summary.nextActions.push('review_strong_not_saved');
+  }
+  if (summary.saveClickedUnverified > 0) {
+    summary.nextActions.push('verify_list_membership');
+  }
+  if (summary.failedSave > 0 || summary.manualReview > 0) {
+    summary.nextActions.push('manual_review');
+  }
+  if (summary.nextActions.length === 0) {
+    summary.nextActions.push('no_action');
+  }
+  return summary;
+}
+
 function deriveConnectOperatorGuidance(item = {}) {
   const status = String(item.status || '').trim().toLowerCase();
   const note = String(item.note || '').trim().toLowerCase();
@@ -285,6 +352,7 @@ function renderAccountBatchReportMarkdown(payload) {
 
   for (const result of payload.results || []) {
     const summary = summarizeBatchResult(result);
+    const sdrSummary = result.sdrSummary || summarizeSdrResearchOutcome(result);
     lines.push(`## ${result.accountName}`);
     lines.push(`- List: \`${result.listName}\``);
     if (result.coverageArtifactPath) {
@@ -299,6 +367,12 @@ function renderAccountBatchReportMarkdown(payload) {
     if (result.selectedForListSaveCount !== undefined) {
       lines.push(`- Selected for live save: \`${result.selectedForListSaveCount}\``);
     }
+    lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
+    lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
+    if (sdrSummary.attemptedSweeps > 0) {
+      lines.push(`- Sweeps: \`${sdrSummary.attemptedSweeps - sdrSummary.failedSweeps}/${sdrSummary.attemptedSweeps} succeeded\``);
+    }
+    lines.push(`- Next action: \`${(sdrSummary.nextActions || ['no_action']).join(', ')}\``);
     lines.push(`- Save success: \`${summary.saveSuccessCount}\``);
     lines.push(`- Save failed: \`${summary.saveFailureCount}\``);
     if (summary.connectAttemptCount > 0) {
@@ -367,6 +441,35 @@ function renderAccountBatchReportMarkdown(payload) {
       }
       lines.push('');
     }
+
+    const strongNotSaved = (result.strongButNotAutoSavedCandidates || []).slice(0, 10);
+    if (strongNotSaved.length > 0) {
+      lines.push(`### Strong but not auto-saved`);
+      for (const item of strongNotSaved) {
+        const noteParts = [];
+        if (item.title) {
+          noteParts.push(item.title);
+        }
+        if (item.reason) {
+          noteParts.push(`reason=${item.reason}`);
+        }
+        if (item.nextAction) {
+          noteParts.push(`next=${item.nextAction}`);
+        }
+        const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
+        lines.push(`- ${item.fullName}: \`${item.coverageBucket || 'unknown'}\`${note}`);
+      }
+      lines.push('');
+    }
+
+    const notSavedReasons = result.notSavedReasonCounts || {};
+    if (Object.keys(notSavedReasons).length > 0) {
+      lines.push(`### Not Saved Reasons`);
+      for (const [reason, count] of Object.entries(notSavedReasons)) {
+        lines.push(`- ${reason}: \`${count}\``);
+      }
+      lines.push('');
+    }
   }
 
   return `${lines.join('\n').trim()}\n`;
@@ -393,11 +496,13 @@ module.exports = {
   buildAccountBatchReportPath,
   buildAccountBatchListName,
   formatAccountBatchDuration,
+  deriveSdrCoverageStatus,
   limitBatchCandidates,
   parseAccountNames,
   renderAccountBatchReportMarkdown,
   renderAccountBatchListNameTemplate,
   deriveConnectOperatorGuidance,
+  summarizeSdrResearchOutcome,
   writeAccountBatchArtifact,
   writeAccountBatchReport,
 };

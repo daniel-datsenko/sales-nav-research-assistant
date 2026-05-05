@@ -40,6 +40,7 @@
     "autoresearch:gate": "node src/cli.js print-autoresearch-gate",
     "autoresearch:supervisor": "node src/cli.js print-autoresearch-supervisor",
     "autoresearch:speed": "node src/cli.js autoresearch-speed-eval",
+    "sdr-research": "node src/cli.js sdr-research",
     "parallel-account-research": "node src/cli.js parallel-account-research",
     "parallel-research:stress": "node automation/parallel-research-stress.js",
     "parallel-research:stack-readiness": "node automation/parallel-research-stack-readiness.js",

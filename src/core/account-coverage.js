@@ -629,6 +629,14 @@ function buildPersonaCoverageFollowUpPlan(personaCoverage = {}, options = {}) {
       'CIO',
       'CDO',
       'Chief Data Officer',
+      'VP Engineering',
+      'VP of Engineering',
+      'Director of Engineering',
+      'Director Engineering',
+      'Engineering Director',
+      'Head of Engineering',
+      'VP Technology',
+      'VP of Technology',
       'Director Data',
       'Directeur Data',
       'Digital Transformation',
@@ -1127,7 +1135,7 @@ function normalizeSelectionText(value) {
 
 function hasExecutiveTechnologyTitle(candidate) {
   const text = normalizeSelectionText(`${candidate.title || ''} ${candidate.headline || ''}`);
-  return /\b(chief information officer|chief technology officer|chief data officer|chief data\s*&\s*analytics officer|chief analytics officer|chief ai officer|chief artificial intelligence officer|cio|cto|cdo)\b/.test(text);
+  return /\b(chief information officer|chief technology officer|chief data officer|chief data\s*&\s*analytics officer|chief analytics officer|chief ai officer|chief artificial intelligence officer|cio|cto|cdo|vp engineering|vp of engineering|director of engineering|director engineering|engineering director|head of engineering|vp technology|vp of technology)\b/.test(text);
 }
 
 function hasMicroservicesObservabilityTitle(candidate) {

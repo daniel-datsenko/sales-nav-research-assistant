@@ -3535,6 +3535,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         listCandidateCount: listCandidates.length,
         selectedForListSaveCount: selectedForListSave.length,
         strongButNotAutoSavedCount: strongButNotAutoSavedCandidates.length,
+        outOfNetworkCount: strongButNotAutoSavedCandidates.length,
         strongButNotAutoSavedCandidates,
         notSavedReasonCounts,
         sdrSummary: summarizeSdrResearchOutcome({
@@ -3542,6 +3543,7 @@ async function handleRunAccountBatch(repository, values, logger) {
           listCandidateCount: listCandidates.length,
           selectedForListSaveCount: selectedForListSave.length,
           strongButNotAutoSavedCount: strongButNotAutoSavedCandidates.length,
+          outOfNetworkCount: strongButNotAutoSavedCandidates.length,
           attemptedSweepsCount: coverageRun.templates.length,
           failedSweepsCount: coverageRun.sweepErrors.length,
           resolutionStatus: coverageRun.result.resolutionStatus || null,

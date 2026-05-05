@@ -133,7 +133,7 @@ test('renderAccountBatchReportMarkdown includes pilot-friendly save summaries', 
   assert.match(markdown, /List name template: `Research \{date\}`/);
   assert.match(markdown, /Max list saves per account: `3`/);
   assert.match(markdown, /Selected for live save: `3`/);
-  assert.match(markdown, /SDR summary: found=`20` \| selected=`8` \| saved_verified=`0` \| save_unverified=`1` \| failed_save=`1` \| manual_review=`0` \| not_auto_saved=`12`/);
+  assert.match(markdown, /SDR summary: found=`20` \| selected=`8` \| saved_verified=`0` \| save_unverified=`1` \| failed_save=`1` \| manual_review=`0` \| out_of_network=`0` \| failed_sweeps=`0` \| not_auto_saved=`12`/);
   assert.match(markdown, /Coverage status: `completed`/);
   assert.match(markdown, /Next action: `verify_list_membership, manual_review`/);
   assert.match(markdown, /Philipp Weidinger: `saved`/);
@@ -164,6 +164,7 @@ test('summarizeSdrResearchOutcome explains found vs saved gaps for SDRs', () => 
     failedSave: 1,
     manualReview: 0,
     strongButNotAutoSaved: 4,
+    outOfNetwork: 4,
     notAutoSaved: 24,
     attemptedSweeps: 20,
     failedSweeps: 8,
@@ -214,7 +215,7 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
     ],
   });
 
-  assert.match(markdown, /SDR summary: found=`30` \| selected=`6`/);
+  assert.match(markdown, /SDR summary: found=`30` \| selected=`6` .* out_of_network=`2` \| failed_sweeps=`8`/);
   assert.match(markdown, /Coverage status: `needs_company_scope_review`/);
   assert.match(markdown, /Sweeps: `12\/20 succeeded`/);
   assert.match(markdown, /Next action: `retry_company_scope, review_strong_not_saved`/);

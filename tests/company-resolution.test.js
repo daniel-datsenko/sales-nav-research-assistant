@@ -34,6 +34,16 @@ test('findCompanyAliasEntry tolerates legal suffix and punctuation variants', ()
   );
 });
 
+test('findCompanyAliasEntry matches configured target and subsidiary aliases', () => {
+  const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
+
+  assert.equal(
+    findCompanyAliasEntry(aliasConfig, 'EDEKA DIGITAL').targets
+      .some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'),
+    true,
+  );
+});
+
 test('buildCompanyResolution resolves seeded hard accounts', () => {
   const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
   const mediaGroup = buildCompanyResolution({
@@ -54,6 +64,21 @@ test('buildCompanyResolution resolves seeded hard accounts', () => {
   assert.ok(mediaGroup.confidence >= 0.85);
   assert.equal(logisticsGroup.status, 'resolved_exact');
   assert.equal(logisticsGroup.targets[0].linkedinName, 'Example Logistics');
+});
+
+test('buildCompanyResolution resolves EDEKA DIGITAL through curated subsidiary target', () => {
+  const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
+  const resolution = buildCompanyResolution({
+    accountName: 'EDEKA DIGITAL',
+    source: 'territory',
+    aliasConfig,
+    now: new Date('2026-05-05T17:00:00.000Z'),
+  });
+
+  assert.notEqual(resolution.status, 'all_resolution_failed');
+  assert.equal(resolution.targets.some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'), true);
+  assert.ok(resolution.searchVariantsTried.includes('EDEKA DIGITAL'));
+  assert.match(resolution.manualSearchUrls.linkedinCompanySearchUrl, /linkedin\.com\/search\/results\/companies/);
 });
 
 test('buildCompanyResolution marks low-confidence manual-review accounts', () => {
@@ -86,6 +111,8 @@ test('writeCompanyResolutionArtifact writes JSON and Markdown reports', () => {
 
   assert.equal(json.status, 'all_resolution_failed');
   assert.match(markdown, /Company Resolution Report/);
+  assert.match(markdown, /Search variants tried/);
+  assert.match(markdown, /Manual LinkedIn company search/);
   assert.match(renderCompanyResolutionMarkdown(json), /Recommended action/);
   assert.equal(summarizeCompanyResolutionArtifacts(tempDir).failed, 1);
 });

@@ -62,8 +62,27 @@ function findAccountAliasEntry(aliasConfig, accountName) {
   const normalizedTarget = normalizeAccountAliasKey(accountName);
   const matchingKey = Object.keys(accounts).find((key) => (
     normalizeAccountAliasKey(key) === normalizedTarget
+    || accountAliasEntryMatchesName(accounts[key], normalizedTarget)
   ));
   return matchingKey ? accounts[matchingKey] : {};
+}
+
+function accountAliasEntryMatchesName(entry = {}, normalizedTarget = '') {
+  if (!normalizedTarget) {
+    return false;
+  }
+  const values = [
+    ...(entry.accountSearchAliases || []),
+    ...(entry.companyFilterAliases || []),
+    ...(entry.parentAliases || []),
+    ...(entry.subsidiaryAliases || []),
+    ...(entry.targets || []).flatMap((target) => [
+      target.linkedinName,
+      target.name,
+      target.companyName,
+    ]),
+  ].filter(Boolean);
+  return values.some((value) => normalizeAccountAliasKey(value) === normalizedTarget);
 }
 
 function loadPriorityModel() {
@@ -389,6 +408,94 @@ function inferLiveScopedTargets(activeAccount, accountName, candidates = []) {
     .slice(0, 3);
 }
 
+function normalizeCompanyScopeLabel(value) {
+  return normalizeAccountAliasKey(value);
+}
+
+function companyScopeLabelsMatch(left, right) {
+  const normalizedLeft = normalizeCompanyScopeLabel(left);
+  const normalizedRight = normalizeCompanyScopeLabel(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+  const leftTokens = new Set(normalizedLeft.split(/\s+/).filter((token) => token.length >= 3));
+  const rightTokens = new Set(normalizedRight.split(/\s+/).filter((token) => token.length >= 3));
+  const overlap = [...leftTokens].filter((token) => rightTokens.has(token));
+  return overlap.length > 0 && (
+    normalizedLeft.includes(normalizedRight)
+    || normalizedRight.includes(normalizedLeft)
+    || overlap.length >= Math.min(2, leftTokens.size, rightTokens.size)
+  );
+}
+
+function buildAllowedCompanyScopeLabels({
+  accountName,
+  aliasEntry = {},
+  companyResolution = {},
+  activeAccount = {},
+} = {}) {
+  return [
+    accountName,
+    activeAccount?.salesNav?.selectedCompanyLabel,
+    activeAccount?.salesNav?.selectedCompanyName,
+    activeAccount?.salesNav?.companyName,
+    ...(activeAccount?.salesNav?.companyTargets || []).map((target) => target.linkedinName),
+    ...(companyResolution.targets || []).map((target) => target.linkedinName),
+    ...(aliasEntry.accountSearchAliases || []),
+    ...(aliasEntry.companyFilterAliases || []),
+    ...(aliasEntry.parentAliases || []),
+    ...(aliasEntry.subsidiaryAliases || []),
+    ...(aliasEntry.targets || []).map((target) => target.linkedinName || target.name || target.companyName),
+  ]
+    .map((label) => String(label || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .filter((label, index, all) => all.findIndex((entry) => normalizeCompanyScopeLabel(entry) === normalizeCompanyScopeLabel(label)) === index);
+}
+
+function assessCompanyScopeIntegrity({
+  accountName,
+  aliasEntry = {},
+  companyResolution = {},
+  activeAccount = {},
+  candidates = [],
+} = {}) {
+  const allowedLabels = buildAllowedCompanyScopeLabels({
+    accountName,
+    aliasEntry,
+    companyResolution,
+    activeAccount,
+  });
+  const related = [];
+  const unrelated = [];
+  for (const candidate of candidates || []) {
+    const company = String(candidate.company || candidate.accountName || '').replace(/\s+/g, ' ').trim();
+    if (!company) {
+      related.push(candidate);
+      continue;
+    }
+    const allowed = allowedLabels.some((label) => companyScopeLabelsMatch(company, label));
+    (allowed ? related : unrelated).push(candidate);
+  }
+  const unrelatedCompanies = [...new Set(unrelated.map((candidate) => candidate.company).filter(Boolean))].slice(0, 10);
+  const selectedTargets = allowedLabels.slice(0, 5);
+  const contaminationDetected = unrelated.length > 0 && related.length > 0;
+  const allCandidatesUnrelated = unrelated.length > 0 && related.length === 0;
+  return {
+    contaminationDetected,
+    allCandidatesUnrelated,
+    allowedLabels,
+    selectedTargets,
+    unrelatedCandidateCount: unrelated.length,
+    relatedCandidateCount: related.length,
+    unrelatedCompanies,
+    keptCandidates: allCandidatesUnrelated ? [] : related,
+    warning: contaminationDetected || allCandidatesUnrelated ? 'cross_company_contamination_detected' : null,
+  };
+}
+
 function summarizeCompanyResolutionForCoverage({
   companyResolution,
   companyResolutionArtifact,
@@ -397,6 +504,7 @@ function summarizeCompanyResolutionForCoverage({
   accountName,
   finalResult,
   rawResults,
+  companyScopeAssessment = null,
 }) {
   const selectedTargets = companyResolution.targets.map((target) => target.linkedinName);
   const liveScoped = hasSuccessfulLiveSweepEvidence(rawResults);
@@ -408,11 +516,23 @@ function summarizeCompanyResolutionForCoverage({
   );
 
   if (liveScoped && resolverWasUncertain && Number(finalResult?.candidateCount || 0) > 0) {
+    if (companyScopeAssessment?.warning) {
+      return {
+        status: 'needs_manual_company_review',
+        confidence: 0.6,
+        recommendedAction: 'review_company_scope_before_sweeps',
+        selectedTargets: companyScopeAssessment.selectedTargets || inferLiveScopedTargets(activeAccount, accountName, finalResult.candidates || []),
+        artifactPath: companyResolutionArtifact.artifactPath,
+        reportPath: companyResolutionArtifact.reportPath,
+        evidence: ['live_people_sweep_returned_candidates', companyScopeAssessment.warning],
+      };
+    }
+    const liveTargets = inferLiveScopedTargets(activeAccount, accountName, finalResult.candidates || []);
     return {
       status: 'resolved_by_live_scope',
-      confidence: 1,
+      confidence: liveTargets.length === 1 ? 0.9 : 0.75,
       recommendedAction: 'run_people_sweeps',
-      selectedTargets: inferLiveScopedTargets(activeAccount, accountName, finalResult.candidates || []),
+      selectedTargets: liveTargets,
       artifactPath: companyResolutionArtifact.artifactPath,
       reportPath: companyResolutionArtifact.reportPath,
       evidence: ['live_people_sweep_returned_candidates'],
@@ -842,6 +962,9 @@ async function runAccountCoverageWorkflow({
     aliasConfig,
     priorCoverage,
   }), { now });
+  if (logger && typeof logger.info === 'function') {
+    logger.info(`Company scope checked for ${accountName}: ${companyResolution.status}`);
+  }
   const companyResolutionArtifact = await timePhase(timings, 'company_resolution_artifact', async () =>
     writeCompanyResolutionArtifact(companyResolution), { now });
   const account = {
@@ -897,6 +1020,9 @@ async function runAccountCoverageWorkflow({
       break;
     }
     const template = templates[templateIndex];
+    if (logger && typeof logger.info === 'function') {
+      logger.info(`Sweep ${templateIndex + 1}/${templates.length} started: ${template.id}`);
+    }
 
     if (
       shouldAdaptiveSkipRestSweep({
@@ -939,6 +1065,9 @@ async function runAccountCoverageWorkflow({
           seenCandidateKeys.add(key);
         }
         registerSweepAdds(uniqueNew, template.id);
+        if (logger && typeof logger.info === 'function') {
+          logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${cacheHit.candidates.length} | new=${uniqueNew} | cache=hit`);
+        }
       }, {
         now,
         meta: {
@@ -982,6 +1111,9 @@ async function runAccountCoverageWorkflow({
           seenCandidateKeys.add(key);
         }
         registerSweepAdds(uniqueNew, template.id);
+        if (logger && typeof logger.info === 'function') {
+          logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
+        }
         if (reuseSweepCache) {
           writeSweepCache(sweepCacheDir, cacheKey, {
             accountName,
@@ -1052,6 +1184,28 @@ async function runAccountCoverageWorkflow({
       ...result,
       ...(sweepErrors.length > 0 ? { sweepErrors } : {}),
     };
+  const companyScopeAssessment = assessCompanyScopeIntegrity({
+    accountName,
+    aliasEntry,
+    companyResolution,
+    activeAccount,
+    candidates: finalResult.candidates || [],
+  });
+  if (companyScopeAssessment.warning) {
+    finalResult.companyScope = {
+      status: 'needs_company_scope_review',
+      warning: companyScopeAssessment.warning,
+      unrelatedCandidateCount: companyScopeAssessment.unrelatedCandidateCount,
+      relatedCandidateCount: companyScopeAssessment.relatedCandidateCount,
+      unrelatedCompanies: companyScopeAssessment.unrelatedCompanies,
+      allowedLabels: companyScopeAssessment.allowedLabels,
+    };
+    finalResult.candidates = companyScopeAssessment.keptCandidates;
+    finalResult.candidateCount = finalResult.candidates.length;
+    finalResult.personaCoverage = summarizePersonaCoverage(finalResult.candidates);
+    finalResult.resolutionStatus = 'needs_company_scope_review';
+    finalResult.coverageError = `${companyScopeAssessment.warning}: ${companyScopeAssessment.unrelatedCompanies.join(', ')}`;
+  }
   finalResult.companyResolution = summarizeCompanyResolutionForCoverage({
     companyResolution,
     companyResolutionArtifact,
@@ -1060,6 +1214,7 @@ async function runAccountCoverageWorkflow({
     accountName,
     finalResult,
     rawResults,
+    companyScopeAssessment,
   });
   if (needsCompanyResolution) {
     finalResult.resolutionStatus = 'needs_company_resolution';
@@ -1348,7 +1503,7 @@ function classifyCoverageListSelection(candidate, options = {}) {
 }
 
 function annotateCoverageCandidatesForListSelection(result, options = {}) {
-  return (result?.candidates || [])
+  const annotated = (result?.candidates || [])
     .map((candidate) => {
       const selection = classifyCoverageListSelection(candidate, options);
       return {
@@ -1359,6 +1514,33 @@ function annotateCoverageCandidatesForListSelection(result, options = {}) {
         selectedForList: selection.selected,
       };
     });
+  const minScore = Number.isFinite(Number(options.minScore))
+    ? Number(options.minScore)
+    : 25;
+  const selectedCount = annotated.filter((candidate) => candidate.selectedForList).length;
+  const maxScore = Math.max(...annotated.map((candidate) => Number(candidate.score || 0)), 0);
+  if (options.relativeRankFallback !== false && annotated.length > 0 && selectedCount === 0 && maxScore < minScore) {
+    const fallbackLimit = Number.isFinite(Number(options.relativeRankFallbackLimit))
+      ? Number(options.relativeRankFallbackLimit)
+      : 10;
+    const fallbackKeys = new Set(
+      annotated
+        .filter((candidate) => Number(candidate.score || 0) > 0)
+        .sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
+        .slice(0, fallbackLimit)
+        .map(normalizeCandidateKey),
+    );
+    return annotated.map((candidate) => fallbackKeys.has(normalizeCandidateKey(candidate))
+      ? {
+        ...candidate,
+        listSelectionReason: 'relative_rank_manual_review',
+        manualReviewSuggested: true,
+        relativeRankFallbackApplied: true,
+        selectedForList: false,
+      }
+      : candidate);
+  }
+  return annotated;
 }
 
 function selectCoverageListCandidates(result, options = {}) {

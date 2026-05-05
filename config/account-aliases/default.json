@@ -199,6 +199,134 @@
       "territoryCountries": ["Germany"],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "Avoid homonym matches such as unrelated broadband companies; route Example Mobility SE research to the Example Mobility LinkedIn company target."
+    },
+    "edeka": {
+      "accountSearchAliases": ["EDEKA", "EDEKA DIGITAL", "Edeka Digital", "Lunar"],
+      "companyFilterAliases": ["EDEKA", "EDEKA DIGITAL", "Edeka Digital", "EDEKA DIGITAL GmbH", "Lunar GmbH"],
+      "targets": [
+        {
+          "linkedinName": "EDEKA",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        },
+        {
+          "linkedinName": "EDEKA DIGITAL GmbH",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        },
+        {
+          "linkedinName": "Lunar GmbH",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        }
+      ],
+      "subsidiaryAliases": ["EDEKA DIGITAL", "Edeka Digital", "EDEKA DIGITAL GmbH", "Lunar GmbH"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Parent retail brand likely has separate IT entities; sweep parent plus curated IT subsidiaries, never unrelated companies."
+    },
+    "otto": {
+      "accountSearchAliases": ["Otto Group", "Otto GmbH & Co. KGaA", "About You", "Bonprix"],
+      "companyFilterAliases": ["Otto Group", "Otto GmbH & Co. KGaA", "About You", "Bonprix"],
+      "targets": [
+        {
+          "linkedinName": "Otto Group",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        },
+        {
+          "linkedinName": "About You",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        },
+        {
+          "linkedinName": "Bonprix",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        }
+      ],
+      "subsidiaryAliases": ["About You", "Bonprix"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Holding research should include known technology-heavy subsidiaries."
+    },
+    "schwarz": {
+      "accountSearchAliases": ["Schwarz Group", "Schwarz IT", "Lidl", "Kaufland"],
+      "companyFilterAliases": ["Schwarz Group", "Schwarz IT", "Lidl", "Kaufland"],
+      "targets": [
+        {
+          "linkedinName": "Schwarz Group",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        },
+        {
+          "linkedinName": "Schwarz IT",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        }
+      ],
+      "subsidiaryAliases": ["Schwarz IT", "Lidl", "Kaufland"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Retail parent often has a carved-out IT organization."
+    },
+    "rewe": {
+      "accountSearchAliases": ["REWE Group", "REWE digital", "REWE Systems"],
+      "companyFilterAliases": ["REWE Group", "REWE digital", "REWE Systems"],
+      "targets": [
+        {
+          "linkedinName": "REWE Group",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        },
+        {
+          "linkedinName": "REWE digital",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        },
+        {
+          "linkedinName": "REWE Systems",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        }
+      ],
+      "subsidiaryAliases": ["REWE digital", "REWE Systems"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Parent plus known IT entities should be reviewed together."
+    },
+    "bertelsmann": {
+      "accountSearchAliases": ["Bertelsmann", "Arvato Systems"],
+      "companyFilterAliases": ["Bertelsmann", "Arvato Systems"],
+      "targets": [
+        {
+          "linkedinName": "Bertelsmann",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        },
+        {
+          "linkedinName": "Arvato Systems",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        }
+      ],
+      "subsidiaryAliases": ["Arvato Systems"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Bertelsmann technology research should include Arvato Systems as a likely IT subsidiary."
     }
   }
 }

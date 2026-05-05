@@ -29,7 +29,7 @@ npm run check-driver-session -- --driver=playwright --session-mode=persistent
 
 If authenticated: proceed without mentioning it.
 
-If not authenticated: tell the SDR in plain language — "Deine LinkedIn-Session ist abgelaufen. Bitte kurz einloggen, ich warte." Then run:
+If not authenticated: tell the SDR in plain language — "Your LinkedIn session has expired. Please log in again — I'll wait." Then run:
 
 ```bash
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
@@ -51,15 +51,15 @@ npm run account-coverage -- --account-name="Account Name" --driver=playwright
 
 While each account runs, tell the SDR what's happening in plain language:
 
-- "Ich suche gerade Kontakte bei [Account]..."
-- "Gefunden: [N] Kontakte bei [Account]. Weiter mit [nächster Account]..."
-- "Alle Accounts durch. Ich speichere jetzt die Liste in Sales Navigator."
+- "Searching for contacts at [Account]..."
+- "Found [N] contacts at [Account]. Moving on to [next account]..."
+- "All accounts done. Saving the list to Sales Navigator now."
 
 Never show raw CLI output, sweep names, bucket names, or internal flags.
 
 ### Step 3 — Create the Sales Navigator list
 
-When an SDR asks for a "LinkedIn-Liste", "Sales Nav Liste", or says "pack die in eine Liste" — always create it live in the browser. Showing a table in chat is not the deliverable.
+When an SDR asks for a "LinkedIn list", "Sales Nav list", or says "add them to a list" — always create it live in the browser. Showing a table in chat is not the deliverable.
 
 Derive the list name automatically from SDR name + accounts + date if not specified. Never ask for the list name unless genuinely unclear.
 
@@ -86,7 +86,7 @@ After the list is created, tell the SDR:
 
 Example closing message:
 
-> "Fertig. 69 Kontakte in 'Grafana - Guillaume Nolot - Thales Skello Oodrive' gespeichert. Öffne die Liste in Sales Navigator und fang mit den DevOps- und Platform-Kontakten an — das sind deine stärksten Einstiegspunkte."
+> "Done. 69 contacts saved to 'Grafana - Guillaume Nolot - Thales Skello Oodrive'. Open the list in Sales Navigator and start with the DevOps and Platform contacts — those are your strongest entry points."
 
 Never end with raw stats or log output. Always end with a concrete action the SDR can take immediately.
 
@@ -98,15 +98,15 @@ Never end with raw stats or log output. Always end with a concrete action the SD
 
 ### Output format when showing contacts in chat
 
-| Name | Titel | Sales Nav |
+| Name | Title | Sales Nav |
 |------|-------|-----------|
-| Vorname Nachname | Titel | [Link](url) |
+| First Last | Title | [Link](url) |
 
 - Sort: direct_observability first, then technical_adjacent
 - Strip `_ntb=...` session tokens from all URLs
 - CTO/C-Level: include but note "(Email tier)"
 - Never fabricate LinkedIn profile URLs
-- Contacts with initials only (e.g. "Edgar H."): include, note "LinkedIn: nicht verifiziert"
+- Contacts with initials only (e.g. "Edgar H."): include, note "LinkedIn: not verified"
 
 ## Agent Operating Context
 

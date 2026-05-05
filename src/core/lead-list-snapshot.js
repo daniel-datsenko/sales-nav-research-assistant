@@ -2,12 +2,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { readJson } = require('../lib/json');
 const { resolveProjectPath } = require('../lib/paths');
+const {
+  buildSalesNavigatorLeadIdentity,
+  normalizeSalesNavigatorLeadUrl,
+} = require('./sales-nav-identity');
 
 const ACCOUNT_BATCH_ARTIFACTS_DIR = resolveProjectPath('runtime/artifacts/account-batches');
 const CONFIRMED_SAVED_STATUSES = new Set([
-  'saved',
-  'already_saved',
-  'results_row_fallback_saved',
+  'saved_and_verified',
+  'already_saved_verified',
 ]);
 
 function normalizeLeadListName(value) {
@@ -63,7 +66,7 @@ function buildLeadListSnapshotFromArtifact(artifact, { listName = null, artifact
   const seen = new Set();
   const rows = [];
   for (const row of sourceRows) {
-    const salesNavigatorUrl = row.salesNavigatorUrl || row.profileUrl || row.candidate?.salesNavigatorUrl || null;
+    const salesNavigatorUrl = normalizeSalesNavigatorLeadUrl(row.salesNavigatorUrl || row.profileUrl || row.candidate?.salesNavigatorUrl || null);
     const fullName = row.fullName || row.name || row.candidate?.fullName || null;
     if (!fullName || !salesNavigatorUrl || !/linkedin\.com\/sales\/lead\//i.test(salesNavigatorUrl)) {
       continue;
@@ -77,6 +80,11 @@ function buildLeadListSnapshotFromArtifact(artifact, { listName = null, artifact
     rows.push({
       fullName,
       salesNavigatorUrl,
+      ...buildSalesNavigatorLeadIdentity({
+        ...row,
+        salesNavigatorUrl,
+        fullName,
+      }),
       rowText: [fullName, row.title, row.accountName, row.status, row.note].filter(Boolean).join(' | '),
       invitationSent: /already_sent|invitation sent|connection sent|sent/i.test(statusText),
       connectionSent: /already_connected|connected|vernetzt/i.test(statusText),

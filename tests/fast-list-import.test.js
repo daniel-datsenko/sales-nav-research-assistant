@@ -401,6 +401,12 @@ test('saveFastListImport retries lead-detail render failures once', async () => 
     driver,
     liveSave: true,
     maxRetries: 1,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     importPlan: {
       listName: 'Calling List',
       leads: [
@@ -417,7 +423,74 @@ test('saveFastListImport retries lead-detail render failures once', async () => 
   assert.equal(attempts, 2);
   assert.equal(result.status, 'completed');
   assert.equal(result.saved, 1);
+  assert.equal(result.results[0].status, 'saved_and_verified');
   assert.equal(result.results[0].attempt, 2);
+});
+
+test('saveFastListImport downgrades click-only saves when no live readback verifier is available', async () => {
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        return { status: 'saved', selectionMode: 'existing_list' };
+      },
+    },
+    liveSave: true,
+    maxRetries: 0,
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Nora Platform',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+          resolutionStatus: 'resolved',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.status, 'completed_with_followup');
+  assert.equal(result.confirmedSaved, 0);
+  assert.equal(result.unverified, 1);
+  assert.equal(result.results[0].status, 'save_clicked_unverified');
+  assert.equal(result.results[0].verifiedSaved, false);
+});
+
+test('saveFastListImport flags same-name wrong-identity readback', async () => {
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        return { status: 'saved', selectionMode: 'results_row_fallback' };
+      },
+    },
+    liveSave: true,
+    maxRetries: 0,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Patryk Szymczak',
+        title: 'Co-Founder',
+        accountName: 'Ci Labs',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/wrong-id',
+      }],
+    }),
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Riverty',
+          fullName: 'Patryk Szymczak',
+          title: 'IT Infrastructure Expert',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/intended-id',
+          resolutionStatus: 'resolved',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.status, 'completed_with_followup');
+  assert.equal(result.confirmedSaved, 0);
+  assert.equal(result.results[0].status, 'wrong_identity_detected');
+  assert.equal(result.results[0].verificationStatus, 'wrong_identity_detected');
 });
 
 test('saveFastListImport leaves unresolved rows out of live mutation', async () => {
@@ -429,6 +502,12 @@ test('saveFastListImport leaves unresolved rows out of live mutation', async () 
       },
     },
     liveSave: true,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     importPlan: {
       listName: 'Calling List',
       leads: [
@@ -490,6 +569,12 @@ test('saveFastListImport does not save mutation-review excluded rows', async () 
       },
     },
     liveSave: true,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     importPlan: {
       listName: 'Calling List',
       leads: [
@@ -522,6 +607,12 @@ test('saveFastListImport marks non-manual mutation-review exclusions as follow-u
       },
     },
     liveSave: true,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     importPlan: {
       listName: 'Calling List',
       leads: [
@@ -554,6 +645,12 @@ test('saveFastListImport skips duplicate Sales Navigator URLs after the first li
       },
     },
     liveSave: true,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     importPlan: {
       listName: 'Calling List',
       leads: [
@@ -599,6 +696,12 @@ test('saveFastListImport stops after rate-limit failure instead of burning remai
     liveSave: true,
     maxRetries: 0,
     rateLimitBackoffMs: 250,
+    readLeadListSnapshot: async () => ({
+      rows: [{
+        fullName: 'Nora Platform',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+      }],
+    }),
     wait(ms) {
       waitedMs += ms;
     },
@@ -632,7 +735,7 @@ test('saveFastListImport stops after rate-limit failure instead of burning remai
 
   assert.equal(attempts, 2);
   assert.equal(waitedMs, 250);
-  assert.deepEqual(progress, ['saved', 'failed_rate_limit', 'skipped_rate_limit_cooldown']);
+  assert.deepEqual(progress, ['saved_and_verified', 'failed_rate_limit', 'skipped_rate_limit_cooldown']);
   assert.equal(result.status, 'completed_with_followup');
   assert.equal(result.failed, 1);
   assert.equal(result.rateLimitSkipped, 1);

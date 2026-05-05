@@ -701,6 +701,7 @@ async function handleFastListImport(values, logger) {
         maxRetries,
         runId,
         existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
         },
@@ -788,6 +789,7 @@ async function handleRetryFailedFastListImport(values, logger) {
         maxRetries,
         runId,
         existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
         },
@@ -882,6 +884,7 @@ async function handleImportCoverage(values, logger) {
         maxRetries,
         runId,
         existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
         },
@@ -1301,10 +1304,7 @@ function recordConnectEventIfKnown(repository, rowOrCandidate, approvalId, actio
 
 async function readLeadListSnapshot(driver, listName) {
   try {
-    if (typeof driver.runHarnessJson === 'function') {
-      return await readLeadListSnapshotViaHarness(driver, listName);
-    }
-    return await readLeadListSnapshotViaPlaywright(driver, listName);
+    return await readLeadListSnapshotStrict(driver, listName);
   } catch (error) {
     const artifactSnapshot = readLatestLeadListArtifactSnapshot(listName);
     if (artifactSnapshot) {
@@ -1312,6 +1312,13 @@ async function readLeadListSnapshot(driver, listName) {
     }
     throw error;
   }
+}
+
+async function readLeadListSnapshotStrict(driver, listName) {
+  if (typeof driver.runHarnessJson === 'function') {
+    return await readLeadListSnapshotViaHarness(driver, listName);
+  }
+  return await readLeadListSnapshotViaPlaywright(driver, listName);
 }
 
 function readLeadListSnapshotViaHarness(driver, listName) {

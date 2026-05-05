@@ -32,6 +32,11 @@ const {
   timePhase,
 } = require('./speed-telemetry');
 const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
+const {
+  buildSalesNavigatorLeadIdentity,
+  findSalesNavigatorLeadIdentityMatch,
+  normalizeSalesNavigatorLeadUrl,
+} = require('./sales-nav-identity');
 
 const FAST_IMPORT_ARTIFACTS_DIR = path.join(ARTIFACTS_DIR, 'fast-import');
 const LEARNED_LEAD_RESOLUTION_SUGGESTIONS_PATH = path.join(FAST_IMPORT_ARTIFACTS_DIR, 'learned-lead-resolution-suggestions.json');
@@ -1392,18 +1397,7 @@ function isMissingListCreationDisabledError(note) {
 }
 
 function normalizeLeadUrl(url) {
-  const raw = String(url || '').trim();
-  if (!raw) {
-    return '';
-  }
-  try {
-    const parsed = new URL(raw);
-    parsed.search = '';
-    parsed.hash = '';
-    return parsed.toString().replace(/\/$/, '');
-  } catch {
-    return raw.replace(/[?#].*$/, '').replace(/\/$/, '');
-  }
+  return normalizeSalesNavigatorLeadUrl(url);
 }
 
 function buildExistingLeadUrlSet(existingLeadUrls = []) {
@@ -1422,11 +1416,13 @@ async function saveFastListImport({
   stopOnRateLimit = true,
   wait = null,
   rateLimitBackoffMs = 0,
+  readLeadListSnapshot = null,
 } = {}) {
   const results = [];
   const listInfo = { listName: importPlan.listName, externalRef: null };
   const initialExistingLeadUrlSet = buildExistingLeadUrlSet(existingLeadUrls);
   const existingLeadUrlSet = new Set(initialExistingLeadUrlSet);
+  const attemptedLeadUrlSet = new Set();
   let rateLimitStop = null;
 
   if (!liveSave) {
@@ -1513,6 +1509,28 @@ async function saveFastListImport({
       continue;
     }
 
+    if (attemptedLeadUrlSet.has(normalizeLeadUrl(lead.salesNavigatorUrl))) {
+      const row = {
+        ...lead,
+        status: 'save_clicked_unverified',
+        saveRecoveryPath: 'in_run_duplicate_unverified',
+        failureCategory: 'save_unverified',
+        selectionMode: 'in_run_duplicate_unverified',
+        attempt: 0,
+        note: 'Skipped duplicate lead URL after an earlier unverified save attempt in this run.',
+        verificationStatus: 'unverified_duplicate_attempt',
+        verificationMethod: 'lead_list_readback',
+        verifiedSaved: false,
+        intendedLeadIdentity: buildSalesNavigatorLeadIdentity(lead),
+        nextAction: 'verify_list_membership_before_connect',
+      };
+      results.push(row);
+      if (typeof onProgress === 'function') {
+        onProgress(row);
+      }
+      continue;
+    }
+
     let attempt = 0;
     let saved = false;
     let lastNote = null;
@@ -1533,7 +1551,7 @@ async function saveFastListImport({
           { runId, accountKey: lead.accountName || 'fast-list-import', dryRun: false },
         );
         const normalizedSave = normalizeSaveResult(saveResult);
-        const row = {
+        let row = {
           ...lead,
           status: normalizedSave.status,
           saveRecoveryPath: normalizedSave.recoveryPath,
@@ -1541,9 +1559,19 @@ async function saveFastListImport({
           selectionMode: saveResult.selectionMode || null,
           attempt,
           note: saveResult.note || null,
+          intendedLeadIdentity: buildSalesNavigatorLeadIdentity(lead),
         };
+        row = await verifyFastListSaveRow({
+          row,
+          lead,
+          listName: importPlan.listName,
+          readLeadListSnapshot,
+        });
         results.push(row);
-        existingLeadUrlSet.add(normalizeLeadUrl(lead.salesNavigatorUrl));
+        if (row.verifiedSaved) {
+          existingLeadUrlSet.add(normalizeLeadUrl(lead.salesNavigatorUrl));
+        }
+        attemptedLeadUrlSet.add(normalizeLeadUrl(lead.salesNavigatorUrl));
         if (typeof onProgress === 'function') {
           onProgress(row);
         }
@@ -1609,6 +1637,76 @@ function normalizeSaveResult(saveResult = {}) {
   return { status: saveResult.status || 'saved', recoveryPath: saveResult.selectionMode || 'lead_page_save' };
 }
 
+async function verifyFastListSaveRow({
+  row,
+  lead,
+  listName,
+  readLeadListSnapshot,
+}) {
+  const base = {
+    ...row,
+    verifiedSaved: false,
+    verificationStatus: 'unverified',
+    verificationMethod: 'lead_list_readback',
+  };
+
+  if (typeof readLeadListSnapshot !== 'function') {
+    return {
+      ...base,
+      status: row.status === 'already_saved' ? 'already_saved' : 'save_clicked_unverified',
+      failureCategory: row.status === 'already_saved' ? null : 'save_unverified',
+      note: row.note || 'save clicked but no live list readback verifier was available',
+      nextAction: row.status === 'already_saved' ? undefined : 'verify_list_membership_before_connect',
+    };
+  }
+
+  let snapshot;
+  try {
+    snapshot = await readLeadListSnapshot(listName);
+  } catch (error) {
+    return {
+      ...base,
+      status: row.status === 'already_saved' ? 'already_saved' : 'save_clicked_unverified',
+      failureCategory: row.status === 'already_saved' ? null : 'save_readback_unavailable',
+      note: `save clicked but live list readback failed: ${String(error.message || error)}`,
+      nextAction: row.status === 'already_saved' ? undefined : 'verify_list_membership_before_connect',
+    };
+  }
+
+  const match = findSalesNavigatorLeadIdentityMatch(lead, snapshot?.rows || []);
+  if (match.status === 'matched') {
+    return {
+      ...base,
+      status: row.status === 'already_saved' ? 'already_saved_verified' : 'saved_and_verified',
+      verifiedSaved: true,
+      verificationStatus: 'verified',
+      readbackLeadIdentity: match.identity,
+      note: row.note || 'verified in target Sales Navigator list',
+    };
+  }
+
+  if (match.status === 'same_name_wrong_identity') {
+    return {
+      ...base,
+      status: 'wrong_identity_detected',
+      verificationStatus: 'wrong_identity_detected',
+      failureCategory: 'wrong_identity_detected',
+      readbackLeadIdentity: match.identity,
+      note: 'same-name row found in target list, but Sales Navigator lead identity does not match intended lead',
+      nextAction: 'manual_review_before_connect',
+    };
+  }
+
+  return {
+    ...base,
+    status: 'save_clicked_unverified',
+    verificationStatus: 'missing_after_save',
+    failureCategory: 'missing_after_save',
+    note: 'save clicked but intended Sales Navigator lead identity was missing from target list readback',
+    nextAction: 'retry_or_manual_review_list_membership',
+  };
+}
+
 function classifySaveFailure(note) {
   const message = String(note || '');
   if (/too many requests|rate.?limit|throttl|429|please wait before trying again|try again later/i.test(message)) {
@@ -1657,15 +1755,16 @@ function buildFastListImportResult(payload) {
   const failed = results.filter((row) => failedStatuses.has(row.status)).length;
   const unresolved = results.filter((row) => row.status === 'unresolved').length;
   const manualReview = results.filter((row) => row.status === 'manual_review').length;
+  const unverified = results.filter((row) => ['save_clicked_unverified', 'wrong_identity_detected'].includes(row.status)).length;
   const mutationReviewExcluded = results.filter((row) => row.saveRecoveryPath === 'mutation_review_exclusion').length;
-  const confirmedSaved = results.filter((row) => ['saved', 'results_row_fallback_saved'].includes(row.status)).length;
-  const alreadySaved = results.filter((row) => row.status === 'already_saved').length;
-  const snapshotSkipped = results.filter((row) => row.status === 'already_saved' && row.saveRecoveryPath === 'snapshot_preflight').length;
+  const confirmedSaved = results.filter((row) => row.status === 'saved_and_verified').length;
+  const alreadySaved = results.filter((row) => ['already_saved', 'already_saved_verified'].includes(row.status)).length;
+  const snapshotSkipped = results.filter((row) => ['already_saved', 'already_saved_verified'].includes(row.status) && row.saveRecoveryPath === 'snapshot_preflight').length;
   const rateLimitSkipped = results.filter((row) => row.status === 'skipped_rate_limit_cooldown').length;
   const failureBreakdown = summarizeSaveFailureBreakdown(results);
   return {
     ...payload,
-    status: failed || unresolved || manualReview || mutationReviewExcluded || rateLimitSkipped ? 'completed_with_followup' : 'completed',
+    status: failed || unresolved || manualReview || unverified || mutationReviewExcluded || rateLimitSkipped ? 'completed_with_followup' : 'completed',
     saved: confirmedSaved,
     confirmedSaved,
     alreadySaved,
@@ -1674,9 +1773,10 @@ function buildFastListImportResult(payload) {
     failed,
     unresolved,
     manualReview,
+    unverified,
     mutationReviewExcluded,
     failureBreakdown,
-    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }),
+    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, unverified, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }),
   };
 }
 
@@ -1687,6 +1787,10 @@ function summarizeSaveFailureBreakdown(results = []) {
         ? 'unresolved'
         : row.status === 'skipped_rate_limit_cooldown'
           ? 'rate_limit_cooldown'
+          : row.status === 'save_clicked_unverified'
+            ? (row.verificationStatus || 'save_unverified')
+            : row.status === 'wrong_identity_detected'
+              ? 'wrong_identity_detected'
           : null
     );
     if (!key) {
@@ -1697,9 +1801,12 @@ function summarizeSaveFailureBreakdown(results = []) {
   }, {});
 }
 
-function deriveFastListImportNextAction({ failed, unresolved, manualReview, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }) {
+function deriveFastListImportNextAction({ failed, unresolved, manualReview, unverified, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }) {
   if (failureBreakdown?.rate_limit || rateLimitSkipped) {
     return 'wait_10_min_and_retry_failed';
+  }
+  if (unverified || failureBreakdown?.missing_after_save || failureBreakdown?.wrong_identity_detected) {
+    return 'verify_list_membership_before_connect';
   }
   if (failureBreakdown?.runtime_failure) {
     return 'rebootstrap_session_then_retry_failed';
@@ -2065,6 +2172,7 @@ module.exports = {
   inferFullNameFromLinkedInSlug,
   isRetryableSaveError,
   normalizeSaveResult,
+  verifyFastListSaveRow,
   loadCoverageImportPlan,
   loadCoverageLeadIndex,
   loadFastListImportSource,

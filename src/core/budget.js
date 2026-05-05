@@ -98,7 +98,54 @@ function computeBudgetState({
   };
 }
 
+function buildConnectBudgetOperatorNotice(budget, {
+  requestedCount = null,
+  label = 'connect run',
+} = {}) {
+  const requested = Number.isFinite(Number(requestedCount)) ? Number(requestedCount) : null;
+  const lines = [
+    `Connect pacing notice (${label}): LinkedIn invitations use a daily and weekly budget.`,
+    `Current budget: ${budget.budgetMode} mode, daily target ${budget.recommendedTodayLimit}, remaining today ${budget.remainingToday}, remaining this week ${budget.remainingThisWeek}/${budget.weeklyCap}.`,
+  ];
+
+  if (budget.remainingToday <= 0 || budget.remainingThisWeek <= 0) {
+    lines.push('Today\'s connect pacing is exhausted. Wait for the next business day or explicitly change --daily-max/--budget-mode.');
+    return {
+      label,
+      requestedCount: requested,
+      cappedByDailyPacing: true,
+      exhausted: true,
+      lines,
+    };
+  }
+
+  if (requested !== null && requested > budget.remainingToday) {
+    lines.push(`Requested/pending connects: ${requested}. This run will cap at ${budget.remainingToday} unless you explicitly raise --daily-max/--budget-mode.`);
+    lines.push('You can send more today, but that spends the same weekly allowance faster and leaves fewer connects for later this week.');
+    return {
+      label,
+      requestedCount: requested,
+      cappedByDailyPacing: true,
+      exhausted: false,
+      lines,
+    };
+  }
+
+  if (requested !== null) {
+    lines.push(`Requested/pending connects: ${requested}. This is within today's pacing.`);
+  }
+
+  return {
+    label,
+    requestedCount: requested,
+    cappedByDailyPacing: false,
+    exhausted: false,
+    lines,
+  };
+}
+
 module.exports = {
+  buildConnectBudgetOperatorNotice,
   DEFAULT_CONNECT_BUDGET_MODES,
   computeBudgetState,
   resolveConnectBudgetPolicy,

@@ -1285,9 +1285,9 @@ function recordConnectEventIfKnown(repository, rowOrCandidate, approvalId, actio
 async function readLeadListSnapshot(driver, listName) {
   try {
     if (typeof driver.runHarnessJson === 'function') {
-      return readLeadListSnapshotViaHarness(driver, listName);
+      return await readLeadListSnapshotViaHarness(driver, listName);
     }
-    return readLeadListSnapshotViaPlaywright(driver, listName);
+    return await readLeadListSnapshotViaPlaywright(driver, listName);
   } catch (error) {
     const artifactSnapshot = readLatestLeadListArtifactSnapshot(listName);
     if (artifactSnapshot) {

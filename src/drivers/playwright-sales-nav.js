@@ -163,6 +163,7 @@ const DEFAULT_SELECTORS = {
     'a:has-text("Connect")',
   ],
   connectSendButtons: [
+    'button:has-text("Send Invitation")',
     'button:has-text("Send invitation")',
     'button:has-text("Send without a note")',
     'button:has-text("Send")',
@@ -684,8 +685,16 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     await connectButton.click().catch(() => {});
     await this.page.waitForTimeout(this.options.settleMs);
 
-    const sendButton = await findFirstVisible(this.page, DEFAULT_SELECTORS.connectSendButtons)
+    let sendButton = await findFirstVisible(this.page, DEFAULT_SELECTORS.connectSendButtons)
       || await findVisibleActionControl(this.page, SEND_INVITATION_PATTERNS);
+    if (!sendButton) {
+      const deadline = Date.now() + Math.max(2500, this.options.settleMs * 6);
+      while (!sendButton && Date.now() < deadline) {
+        await this.page.waitForTimeout(250).catch(() => {});
+        sendButton = await findFirstVisible(this.page, DEFAULT_SELECTORS.connectSendButtons)
+          || await findVisibleActionControl(this.page, SEND_INVITATION_PATTERNS);
+      }
+    }
     if (!sendButton) {
       const postClickUiState = await readConnectState(this.page);
       if (postClickUiState.hasInvitationSent || postClickUiState.hasPendingConnectControl) {

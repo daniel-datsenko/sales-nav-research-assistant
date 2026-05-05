@@ -19,17 +19,17 @@ test('buildLeadListSnapshotFromArtifact converts fast-import artifacts into conn
         title: 'Senior Platform Owner',
         accountName: 'Example Semiconductor Co',
         salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
-        status: 'saved',
+        status: 'saved_and_verified',
       },
       {
         fullName: 'Duplicate Example Saved Lead',
         salesNavigatorUrl: 'https://www.linkedin.com/in/not-sales-nav',
-        status: 'saved',
+        status: 'saved_and_verified',
       },
       {
         fullName: 'Example Pending Lead',
         salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/456',
-        status: 'already_saved',
+        status: 'already_saved_verified',
         note: 'already saved before run',
       },
     ],
@@ -69,7 +69,7 @@ test('buildLeadListSnapshotFromArtifact ignores explicit failed import result ro
       {
         fullName: 'Saved Lead',
         salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/saved',
-        status: 'saved',
+        status: 'saved_and_verified',
       },
       {
         fullName: 'Manual Review Lead',

@@ -98,7 +98,11 @@ const {
 const { createDriver } = require('./drivers');
 const { createDashboardServer } = require('./server/dashboard');
 const { sendApprovedConnects } = require('./core/connect-executor');
-const { computeBudgetState, resolveConnectBudgetPolicy } = require('./core/budget');
+const {
+  buildConnectBudgetOperatorNotice,
+  computeBudgetState,
+  resolveConnectBudgetPolicy,
+} = require('./core/budget');
 const { reconcileState } = require('./core/reconciler');
 const { maybeFallbackToLeadPageConnect } = require('./core/connect-fallback');
 const { isConnectMenuActionLabel } = require('./core/connect-menu');
@@ -1097,6 +1101,13 @@ async function handleConnectLeadList(repository, values, logger) {
       dailyMax: budgetPolicy.dailyMax,
       dailyMin: budgetPolicy.dailyMin,
     });
+    const pendingAvailableCount = snapshot.rows
+      .filter((row) => !row.invitationSent && !row.connectionSent)
+      .length;
+    logConnectBudgetOperatorNotice(logger, budget, {
+      label: 'connect-lead-list',
+      requestedCount: Math.min(limit, pendingAvailableCount),
+    });
 
     if (budget.remainingToday <= 0 || budget.remainingThisWeek <= 0) {
       logger.info(`Driver: ${driverName}`);
@@ -1260,6 +1271,12 @@ function buildConnectBudgetPolicy(values) {
     dailyMax: getString(values, 'daily-max'),
     dailyMin: getString(values, 'daily-min'),
   });
+}
+
+function logConnectBudgetOperatorNotice(logger, budget, options = {}) {
+  const notice = buildConnectBudgetOperatorNotice(budget, options);
+  notice.lines.forEach((line) => logger.info(line));
+  return notice;
 }
 
 function resolveKnownCandidateId(repository, rowOrCandidate) {
@@ -2400,6 +2417,20 @@ async function handleSendApproved(repository, values, logger) {
     throw new Error('No run available for connect execution.');
   }
   const budgetPolicy = buildConnectBudgetPolicy(values);
+  const rawBudget = repository.getBudgetState(budgetPolicy.effectiveWeeklyCap);
+  const budget = computeBudgetState({
+    weeklyCap: rawBudget.weeklyCap,
+    sentThisWeek: rawBudget.weekCount,
+    sentToday: rawBudget.dayCount,
+    budgetMode: budgetPolicy.budgetMode,
+    toolSharePercent: budgetPolicy.toolSharePercent,
+    dailyMax: budgetPolicy.dailyMax,
+    dailyMin: budgetPolicy.dailyMin,
+  });
+  logConnectBudgetOperatorNotice(logger, budget, {
+    label: 'send-approved-connects',
+    requestedCount: Number(getString(values, 'limit') || 25),
+  });
 
   const driver = createDriver(run.driver, buildDriverOptions(values, run, {
     sessionMode: 'persistent',
@@ -3255,6 +3286,11 @@ async function handleRunAccountBatch(repository, values, logger) {
     dailyMax: budgetPolicy.dailyMax,
     dailyMin: budgetPolicy.dailyMin,
   });
+  if (liveConnect) {
+    logConnectBudgetOperatorNotice(logger, budget, {
+      label: 'run-account-batch live-connect',
+    });
+  }
 
   const batchSessionMode = getString(values, 'session-mode')
     || ((driverName === 'playwright' && (liveSave || liveConnect)) ? 'storage-state' : 'persistent');
@@ -3611,6 +3647,10 @@ async function handlePilotConnectBatch(repository, values, logger) {
       toolSharePercent: budgetPolicy.toolSharePercent,
       dailyMax: budgetPolicy.dailyMax,
       dailyMin: budgetPolicy.dailyMin,
+    });
+    logConnectBudgetOperatorNotice(logger, budget, {
+      label: 'pilot-connect-batch',
+      requestedCount: accountNames.length * maxConnectsPerAccount,
     });
 
     const results = [];

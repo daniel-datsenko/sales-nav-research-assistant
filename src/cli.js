@@ -105,6 +105,10 @@ const {
 } = require('./core/budget');
 const { reconcileState } = require('./core/reconciler');
 const { maybeFallbackToLeadPageConnect } = require('./core/connect-fallback');
+const {
+  summarizeConnectResults,
+  verifyConnectResult,
+} = require('./core/connect-verification');
 const { isConnectMenuActionLabel } = require('./core/connect-menu');
 const { writeConnectEvidenceSprint } = require('./core/connect-evidence');
 const { readLatestLeadListArtifactSnapshot } = require('./core/lead-list-snapshot');
@@ -1066,6 +1070,7 @@ async function handleConnectLeadList(repository, values, logger) {
   const driverName = getString(values, 'driver') || 'playwright';
   const listName = getString(values, 'list-name');
   const limit = Number(getString(values, 'limit') || Number.MAX_SAFE_INTEGER);
+  const allowUnverifiedConnectContinue = getBoolean(values, 'allow-unverified-connect-continue');
   if (!listName) {
     throw new Error('connect-lead-list requires --list-name');
   }
@@ -1125,7 +1130,9 @@ async function handleConnectLeadList(repository, values, logger) {
       .slice(0, Math.min(limit, budget.remainingToday));
 
     const results = [];
-    for (const row of pendingRows) {
+    let unprocessed = 0;
+    for (let index = 0; index < pendingRows.length; index += 1) {
+      const row = pendingRows[index];
       const knownCandidateId = resolveKnownCandidateId(repository, row);
       const candidateId = knownCandidateId || row.salesNavigatorUrl || row.fullName;
       if (knownCandidateId && repository.hasSentConnect(knownCandidateId)) {
@@ -1151,24 +1158,41 @@ async function handleConnectLeadList(repository, values, logger) {
           : driverName === 'browser-harness'
           ? sendConnectFromLeadListRow(driver, listName, row)
           : await sendConnectFromLeadListRowViaPlaywright(driver, snapshot.listUrl || listName, row);
-        const result = await maybeFallbackToLeadPageConnect({
+        const connectResult = await maybeFallbackToLeadPageConnect({
           initialResult,
           driver,
           row,
           accountKey: listName,
           runId: 'connect-lead-list-row-fallback',
         });
+        const result = await verifyConnectResult({
+          candidate: row,
+          result: connectResult,
+          readSnapshot: () => readLeadListSnapshotStrict(driver, snapshot.listUrl || listName),
+        });
 
         recordConnectEventIfKnown(repository, row, null, 'connect', result.status, {
           listName,
           fullName: row.fullName,
           note: result.note || null,
+          verifiedConnect: result.verifiedConnect || false,
+          verificationStatus: result.verificationStatus || null,
         });
         results.push({
           name: row.fullName,
           status: result.status,
           note: result.note || null,
+          verifiedConnect: result.verifiedConnect || false,
+          verificationStatus: result.verificationStatus || null,
         });
+        if (result.status === 'manual_review' && !allowUnverifiedConnectContinue) {
+          unprocessed = pendingRows.length - index - 1;
+          break;
+        }
+        if (result.status === 'rate_limited') {
+          unprocessed = pendingRows.length - index - 1;
+          break;
+        }
       } catch (error) {
         results.push({
           name: row.fullName,
@@ -1188,10 +1212,11 @@ async function handleConnectLeadList(repository, values, logger) {
     logger.info(`Daily pacing target: ${budget.recommendedTodayLimit}`);
     logger.info(`Total leads: ${finalSnapshot.rows.length}`);
     logger.info(`Already invited before run: ${snapshot.rows.filter((row) => row.invitationSent || row.connectionSent).length}`);
-    logger.info(`Attempted this run: ${pendingRows.length}`);
+    logger.info(`Attempted this run: ${results.length}`);
     results.forEach((result) => {
-      logger.info(`${result.name} | ${result.status}${result.note ? ` | ${result.note}` : ''}`);
+      logger.info(`${result.name} | ${result.status}${result.verificationStatus ? ` | verification=${result.verificationStatus}` : ''}${result.note ? ` | ${result.note}` : ''}`);
     });
+    logger.info(`Connect verification summary: ${JSON.stringify(summarizeConnectResults(results, unprocessed))}`);
     if (snapshot.source === 'artifact_fallback') {
       logger.info(`Visible list verification: skipped because Sales Nav list lookup fell back to artifact ${snapshot.artifactPath || 'unknown'}`);
     } else {
@@ -2463,6 +2488,7 @@ async function handleSendApproved(repository, values, logger) {
       ...run,
       weeklyCap: budgetPolicy.weeklyCap,
       connectBudgetPolicy: budgetPolicy,
+      allowUnverifiedConnectContinue: getBoolean(values, 'allow-unverified-connect-continue'),
     },
     limit: Number(getString(values, 'limit') || 25),
   });
@@ -3266,6 +3292,7 @@ async function handleRunAccountBatch(repository, values, logger) {
   const consolidatedListName = explicitConsolidatedListName || templateConsolidatedListName || null;
   const liveSave = getBoolean(values, 'liveSave', 'live-save');
   const liveConnect = getBoolean(values, 'liveConnect', 'live-connect');
+  const allowUnverifiedConnectContinue = getBoolean(values, 'allow-unverified-connect-continue');
   const pilotConfig = getString(values, 'pilot-config') ? loadPilotConfig(getString(values, 'pilot-config')) : null;
   const driverName = getString(values, 'driver') || 'playwright';
   const peopleSearchUrl = getString(values, 'people-search-url') || 'https://www.linkedin.com/sales/search/people?viewAllFilters=true';
@@ -3383,7 +3410,8 @@ async function handleRunAccountBatch(repository, values, logger) {
 
       const connectCandidates = liveSave ? selectedForListSave : listCandidates;
       if (liveConnect && connectCandidates.length > 0) {
-        for (const candidate of connectCandidates) {
+        for (let connectIndex = 0; connectIndex < connectCandidates.length; connectIndex += 1) {
+          const candidate = connectCandidates[connectIndex];
           const candidateId = candidate.salesNavigatorUrl || candidate.profileUrl || candidate.fullName;
           const remainingToday = budget.remainingToday - sentThisRun;
           const remainingWeek = budget.remainingThisWeek - sentThisRun;
@@ -3405,28 +3433,53 @@ async function handleRunAccountBatch(repository, values, logger) {
           }
 
           try {
-            const connectResult = await driver.sendConnect(
+            const rawConnectResult = await driver.sendConnect(
               candidate,
               { runId: 'run-account-batch', accountKey: accountName, dryRun: false },
             );
+            const connectResult = await verifyConnectResult({
+              candidate,
+              result: rawConnectResult,
+              readSnapshot: liveSave ? () => readLeadListSnapshotStrict(driver, listName) : null,
+            });
             repository.insertConnectEvent(candidateId, null, 'connect', connectResult.status, {
               accountName,
               listName,
               fullName: candidate.fullName,
               note: connectResult.note || null,
+              verifiedConnect: connectResult.verifiedConnect || false,
+              verificationStatus: connectResult.verificationStatus || null,
             });
-            if (connectResult.status === 'sent') {
+            if (connectResult.status === 'sent' && connectResult.verifiedConnect) {
               sentThisRun += 1;
             }
             connectResults.push({
               fullName: candidate.fullName,
               status: connectResult.status,
               note: connectResult.note || null,
+              verifiedConnect: connectResult.verifiedConnect || false,
+              verificationStatus: connectResult.verificationStatus || null,
               connectPath: connectResult.connectPath || null,
               fallbackTriggeredBy: connectResult.fallbackTriggeredBy || null,
               initialStatus: connectResult.initialStatus || null,
               initialNote: connectResult.initialNote || null,
             });
+            if (connectResult.status === 'manual_review' && !allowUnverifiedConnectContinue) {
+              connectResults.push(...connectCandidates.slice(connectIndex + 1).map((remaining) => ({
+                fullName: remaining.fullName,
+                status: 'unprocessed',
+                note: 'Skipped because a prior connect outcome was unverified and fail-closed mode is active.',
+              })));
+              break;
+            }
+            if (connectResult.status === 'rate_limited') {
+              connectResults.push(...connectCandidates.slice(connectIndex + 1).map((remaining) => ({
+                fullName: remaining.fullName,
+                status: 'unprocessed',
+                note: 'Skipped because LinkedIn showed a rate-limit signal.',
+              })));
+              break;
+            }
           } catch (error) {
             connectResults.push({
               fullName: candidate.fullName,
@@ -3625,6 +3678,7 @@ async function handlePilotConnectBatch(repository, values, logger) {
   const maxConnectsPerAccount = Number(getString(values, 'max-connects-per-account') || 1);
   const driverName = getString(values, 'driver') || 'playwright';
   const pilotConfig = loadPilotConfig(getString(values, 'pilot-config'));
+  const allowUnverifiedConnectContinue = getBoolean(values, 'allow-unverified-connect-continue');
   const driverOptions = buildDriverOptions(values, { dryRun: false }, {
     sessionMode: 'persistent',
     headless: true,
@@ -3721,7 +3775,8 @@ async function handlePilotConnectBatch(repository, values, logger) {
       }
 
       const connectResults = [];
-      for (const row of pendingRows) {
+      for (let rowIndex = 0; rowIndex < pendingRows.length; rowIndex += 1) {
+        const row = pendingRows[rowIndex];
         const remainingToday = budget.remainingToday - sentThisRun;
         const remainingWeek = budget.remainingThisWeek - sentThisRun;
         if (remainingToday <= 0 || remainingWeek <= 0) {
@@ -3757,7 +3812,7 @@ async function handlePilotConnectBatch(repository, values, logger) {
                 },
                 { runId: 'pilot-connect-batch', accountKey: accountName, dryRun: false },
               );
-          const result = selectionSource === 'lead_list'
+          const rawResult = selectionSource === 'lead_list'
             ? await maybeFallbackToLeadPageConnect({
               initialResult,
               driver,
@@ -3765,23 +3820,50 @@ async function handlePilotConnectBatch(repository, values, logger) {
               accountKey: accountName,
             })
             : initialResult;
+          const result = await verifyConnectResult({
+            candidate: row,
+            result: rawResult,
+            readSnapshot: selectionSource === 'lead_list'
+              ? () => readLeadListSnapshotStrict(driver, listName)
+              : null,
+          });
           recordConnectEventIfKnown(repository, row, null, 'connect', result.status, {
             listName,
             fullName: row.fullName,
             note: result.note || null,
+            verifiedConnect: result.verifiedConnect || false,
+            verificationStatus: result.verificationStatus || null,
           });
-          if (result.status === 'sent') {
+          if (result.status === 'sent' && result.verifiedConnect) {
             sentThisRun += 1;
           }
           connectResults.push({
             fullName: row.fullName,
             status: result.status,
             note: result.note || null,
+            verifiedConnect: result.verifiedConnect || false,
+            verificationStatus: result.verificationStatus || null,
             connectPath: result.connectPath || null,
             fallbackTriggeredBy: result.fallbackTriggeredBy || null,
             initialStatus: result.initialStatus || null,
             initialNote: result.initialNote || null,
           });
+          if (result.status === 'manual_review' && !allowUnverifiedConnectContinue) {
+            connectResults.push(...pendingRows.slice(rowIndex + 1).map((remaining) => ({
+              fullName: remaining.fullName,
+              status: 'unprocessed',
+              note: 'Skipped because a prior connect outcome was unverified and fail-closed mode is active.',
+            })));
+            break;
+          }
+          if (result.status === 'rate_limited') {
+            connectResults.push(...pendingRows.slice(rowIndex + 1).map((remaining) => ({
+              fullName: remaining.fullName,
+              status: 'unprocessed',
+              note: 'Skipped because LinkedIn showed a rate-limit signal.',
+            })));
+            break;
+          }
         } catch (error) {
           connectResults.push({
             fullName: row.fullName,
@@ -3893,9 +3975,9 @@ Usage:
   node src/cli.js import-coverage --accounts=example-marketplace-a,example-saas-marketplace,olx-group [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
   node src/cli.js test-connect --driver=playwright|browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"] --live-connect
   node src/cli.js inspect-connect-surface --driver=playwright --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"]
-  node src/cli.js connect-lead-list --driver=playwright|browser-harness|hybrid --list-name="Territory List" [--limit=25] --live-connect
+  node src/cli.js connect-lead-list --driver=playwright|browser-harness|hybrid --list-name="Territory List" [--limit=25] --live-connect [--allow-unverified-connect-continue]
   node src/cli.js remove-lead-list-members --driver=playwright --list-name="Territory List" --names="Name A, Name B" --live-save
-  node src/cli.js send-approved-connects [--run-id=<run-id>] [--limit=25]
+  node src/cli.js send-approved-connects [--run-id=<run-id>] [--limit=25] [--allow-unverified-connect-continue]
   node src/cli.js reconcile-state
   node src/cli.js cleanup-runtime [--max-age-hours=72]
   node src/cli.js print-live-test-checklist
@@ -3914,9 +3996,9 @@ Usage:
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
   node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
-  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect]
+  node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect] [--allow-unverified-connect-continue]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
-  node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect
+  node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect [--allow-unverified-connect-continue]
 `);
 }
 

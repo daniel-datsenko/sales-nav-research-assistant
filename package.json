@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "UNLICENSED",
-  "description": "Supervised Sales Navigator research assistant with pluggable browser drivers, SQLite state, and operator review dashboard.",
+  "description": "Supervised Sales Navigator assistant for researching accounts and creating reviewed SDR lead lists.",
   "main": "src/cli.js",
   "scripts": {
     "sync-territory": "node src/cli.js sync-territory",

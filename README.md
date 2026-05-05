@@ -4,52 +4,49 @@
   <img src="docs/assets/grots-linkedin.jpg" alt="Sales Navigator Research Assistant hero image" width="900">
 </p>
 
-Supervised research assistant for LinkedIn Sales Navigator workflows.
+Sales Navigator Research Assistant helps SDRs build better LinkedIn Sales Navigator lead lists faster.
 
-The app helps an SDR/operator move from territory accounts to relevant technical stakeholders, reviewable lead candidates, and guarded Sales Navigator list workflows. It is designed for supervised use: research and reporting can run in dry-safe mode, while any live Sales Navigator action requires explicit operator intent.
+Give it a few accounts. It researches the right technical people, explains who it found, and can create a Sales Navigator list when you explicitly ask it to.
 
 ## What It Does
 
-- Resolves territory accounts into reliable LinkedIn/Sales Navigator company targets.
-- Runs account coverage sweeps for observability, platform, cloud, infrastructure, and related personas.
-- Classifies accounts and runs as `productive`, `mixed`, `sparse`, `noisy`, `all_sweeps_failed`, or environment-blocked.
-- Imports external lead lists quickly and buckets people into `resolved_safe_to_save`, `needs_company_alias_retry`, and `manual_review`.
-- Plans Sales Navigator lead-list updates and only performs live list saves when explicitly run with live-save flags.
-- Models guarded connect workflows for supervised testing and maps attempts into deterministic operator statuses.
-- Produces JSON and Markdown artifacts for review, handoff, and release-readiness checks.
+- Finds relevant people at target accounts: DevOps, platform, cloud, infrastructure, engineering leaders, and related personas.
+- Creates Sales Navigator lead lists when you explicitly ask it to save leads.
+- Explains the result in plain language: found, saved, not saved, and what needs review.
+- Helps with messy company names by trying to find the right LinkedIn company page.
+- Imports calling lists from files and helps match those names to Sales Navigator profiles.
+- Keeps risky actions guarded, especially list saves and connection requests.
 
 ## Safety Model
 
-The default posture is intentionally conservative.
+The tool is intentionally cautious.
 
-- No live list saves happen unless a command is run with `--live-save`.
-- No connection invitations are sent by dry-safe or background workflows.
-- Supervised connect test commands require explicit live-connect flags and should only be used by an authorized operator.
-- Background/autoresearch flows are dry-safe and must not send invitations or mutate LinkedIn lists.
-- Runtime data, browser profiles, cookies, sessions, logs, screenshots, and local databases live under ignored paths.
-- Salesforce credentials, BigQuery credentials, LinkedIn session state, and any API keys must be provided through local environment variables or local-only files, never committed.
+- It does not save leads to a real Sales Navigator list unless you explicitly ask for live save.
+- It does not send connection requests from the normal SDR research command.
+- If LinkedIn asks for an email address before connecting, the tool skips that prospect.
+- Login/session files, cookies, screenshots, and credentials stay local and must not be committed.
+- If the tool is unsure about a company or person, it asks for review instead of guessing silently.
 
-## MVP Scope
+## Current Scope
 
-Ready or close to ready:
+Works well today:
 
-- Account discovery and coverage sweeps.
-- Company resolution and alias/target handling for difficult account names.
-- Safe list creation/list-save workflows with visible Sales Navigator verification.
-- Fast lead-list import from Markdown calling lists.
-- Deterministic connect status modeling.
-- Operator reports, release summaries, and local dashboard tooling.
+- Researching accounts and finding relevant technical stakeholders.
+- Creating reviewed Sales Navigator lead lists.
+- Explaining why some leads were not saved.
+- Handling many difficult company-name cases.
+- Importing name lists and matching people to Sales Navigator profiles.
 
-Still guarded:
+Still intentionally guarded:
 
-- Broad fully automatic connect across all LinkedIn UI variations.
-- Fully unattended background territory machine over large account batches.
-- SDR self-serve UX beyond CLI/runbook/operator-dashboard flows.
-- Automatic handling of uncertain company scope or low-confidence people matches.
+- Broad automatic connection requests.
+- Large unattended background runs.
+- Unclear company matches.
+- Low-confidence people matches.
 
 ## Quick Start
 
-Run the local readiness check first:
+Check that the tool is ready:
 
 ```bash
 npm run doctor
@@ -61,19 +58,19 @@ Install dependencies:
 npm install
 ```
 
-Run the full regression suite:
+For contributors: run all tests:
 
 ```bash
 npm test
 ```
 
-Run release-readiness tests:
+For contributors: run release-readiness checks:
 
 ```bash
 npm run test:release-readiness
 ```
 
-Print the operator dashboard:
+Print the current operator dashboard:
 
 ```bash
 npm run print-mvp-operator-dashboard
@@ -87,9 +84,9 @@ npm run print-mvp-release-contract
 
 ## SDR Quick Action
 
-For day-to-day SDR testing, start here. Give the tool three to five accounts and let it research, explain the result, and optionally create the Sales Navigator list.
+For day-to-day SDR testing, start here. Give the tool three to five accounts and let it work.
 
-Dry-safe research:
+Research only:
 
 ```bash
 npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
@@ -104,17 +101,17 @@ npm run sdr-research -- \
   --live-save
 ```
 
-This command never sends connection invitations. It uses the persistent browser session, creates the list only when `--live-save` is explicit, and reports what was found, saved, not saved, and what needs review.
+This command never sends connection invitations. It reports what it found, what it saved, what it skipped, and what needs review.
 
 ## Environment Setup
 
-Create a local `.env` from `.env.example` if you need live integrations:
+Create a local `.env` from `.env.example` only if you need Salesforce, BigQuery, or other live integrations:
 
 ```bash
 cp .env.example .env
 ```
 
-Only fill in values on your own machine or runner. Do not commit `.env`, browser sessions, cookies, storage state, or runtime artifacts.
+Only fill in values on your own machine. Do not commit `.env`, browser sessions, cookies, screenshots, or local result files.
 
 ## First Run In An Agent
 
@@ -124,31 +121,31 @@ If you open this repo in Codex, Cursor, Claude Code, or a similar agent, the fir
 npm run doctor
 ```
 
-If dependencies or login are missing, that is normal. Dry-safe research can still be prepared after install, but real Sales Navigator list writes require a visible authenticated browser session via:
+If install or LinkedIn login is missing, that is normal. The agent should help you set it up. Real Sales Navigator list writes require a visible LinkedIn login:
 
 ```bash
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 ```
 
-See [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AGENTS.md), and [CLAUDE.md](CLAUDE.md) for agent-specific startup guidance.
+See [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AGENTS.md), and [CLAUDE.md](CLAUDE.md) for startup guidance.
 
 ## Common Workflows
 
-### Check Browser Session
+### Check LinkedIn Login
 
 ```bash
 npm run check-driver-session -- --driver=playwright --session-mode=persistent
 ```
 
-### Bootstrap A Visible Session
+### Log In Again If Needed
 
-Use this when the browser profile needs a manual login or checkpoint repair:
+Use this when LinkedIn needs a fresh manual login:
 
 ```bash
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 ```
 
-### Dry-Run Territory/Account Research
+### Background Account Research
 
 ```bash
 npm run run-background-territory-loop -- --driver=playwright --limit=1
@@ -156,7 +153,7 @@ npm run run-background-territory-loop -- --driver=playwright --limit=1
 
 ### Research Several Accounts Into One List
 
-For SDRs, prefer `npm run sdr-research`. Use the lower-level batch command only when you need advanced options.
+For SDRs, prefer `npm run sdr-research`. The commands below are advanced.
 
 Use `--consolidate-list-name` when you want one shared Sales Navigator list instead of one list per account:
 
@@ -178,19 +175,19 @@ node src/cli.js run-account-batch \
   --live-save
 ```
 
-### Resolve A Difficult Company
+### Resolve A Difficult Company Name
 
 ```bash
 node src/cli.js resolve-company --account-name="Example Company"
 ```
 
-### Retry Company Resolution Failures
+### Retry Accounts With Company-Name Problems
 
 ```bash
 node src/cli.js run-company-resolution-retries --limit=3 --driver=hybrid --max-candidates=25
 ```
 
-### Fast Resolve A Calling List
+### Match A Calling List To Sales Navigator
 
 ```bash
 npm run fast-resolve-leads -- \
@@ -200,7 +197,7 @@ npm run fast-resolve-leads -- \
   --max-candidates=4
 ```
 
-### Dry Plan A List Import
+### Preview A List Import
 
 ```bash
 npm run fast-list-import -- \
@@ -210,7 +207,7 @@ npm run fast-list-import -- \
 
 ### Retry Only Failed List Saves
 
-If a live save run hit a temporary UI/rate-limit problem, retry only the failed rows instead of reprocessing the whole source:
+If a save run hit a temporary LinkedIn issue, retry only the failed people instead of reprocessing the whole file:
 
 ```bash
 node src/cli.js retry-failed-fast-list-import \
@@ -219,11 +216,11 @@ node src/cli.js retry-failed-fast-list-import \
   --live-save
 ```
 
-The retry command includes rows with `failed_runtime`, `failed_rate_limit`, `failed_network`, `failed_ui_state`, and `skipped_rate_limit_cooldown`.
+The retry command is for temporary save problems, not for people the tool already marked as bad matches.
 
-### Live Save A Safe Resolved List
+### Save A Reviewed Calling List
 
-Only run this intentionally after reviewing the dry plan:
+Only run this intentionally after reviewing the preview:
 
 ```bash
 npm run fast-list-import -- \
@@ -234,32 +231,27 @@ npm run fast-list-import -- \
   --allow-list-create
 ```
 
-## Project Structure
+## Project Structure For Contributors
 
-- `src/cli.js`: command-line entry point.
-- `src/core/`: orchestration, company resolution, connect handling, list import, background runner, reports.
-- `src/drivers/`: Playwright, Browser Harness, hybrid, and mock drivers.
-- `src/adapters/`: read-only Salesforce and BigQuery adapters.
-- `config/`: ICP, pilot policy, account aliases, coverage, runner, scoring, and mode configs.
-- `docs/`: runbooks, release contract, MVP status, and operator guidance.
-- `tests/`: Node test suite.
-- `runtime/`: local-only state and artifacts; ignored by Git.
-- `automation/`: local helper wrappers for browser/harness workflows.
-- `vendor/browser-harness/`: vendored Browser Harness helper package.
+- `src/`: the tool logic.
+- `config/`: persona rules, account aliases, and safety settings.
+- `docs/`: setup notes, operating notes, and release notes.
+- `tests/`: automated checks for contributors.
+- `runtime/`: local-only browser/login/results data. This is ignored by Git.
 
 ## Usage And Compliance
 
-This tool controls a real browser and can interact with Sales Navigator UI when explicitly configured to do so. Operators are responsible for using it only with accounts, systems, and workflows they are authorized to access, and for following applicable platform terms, internal security policies, and customer-data handling rules.
+This tool controls a real browser. Use it only with LinkedIn, Salesforce, and company systems you are allowed to access.
 
-This repository is intentionally conservative: dry-safe research is the default, live mutations are opt-in, and uncertain company or person matches are routed to review instead of being silently acted on.
+The tool is intentionally conservative: research is safe by default, real Sales Navigator changes require explicit approval, and uncertain company or person matches are sent to review instead of guessed.
 
 ## Sharing This Repo
 
 This repository is intended to be safe to share as source code, but every operator is responsible for their local runtime state.
 
-- Keep `runtime/`, `.env`, browser profiles, screenshots, cookies, storage state, logs, and local databases out of Git.
+- Keep `runtime/`, `.env`, browser profiles, screenshots, cookies, logs, and local databases out of Git.
 - Use `.env.example` as a template; do not commit real Salesforce, BigQuery, LinkedIn, or browser-session credentials.
-- Treat live Sales Navigator workflows as supervised operations. Dry-safe commands are the default; live mutations require explicit flags.
+- Treat real Sales Navigator list saves and connection requests as supervised actions.
 - Review LinkedIn/Sales Navigator terms, internal security policy, and customer data-handling requirements before wider rollout.
 
 ## License
@@ -268,15 +260,15 @@ This repository is not open source. It is shared under a proprietary internal ev
 
 ## Release Readiness Definition
 
-The first release target is a supervised MVP, not a broad autonomous release. It is release-ready when:
+The first release target is a supervised MVP, not a fully automatic broad rollout. It is release-ready when:
 
-- Discovery reliably finds relevant technical stakeholders.
-- Save-to-list flows are stable and visibly verifiable in Sales Navigator.
-- Known connect UI shapes end in deterministic statuses instead of generic failures.
-- `email_required` is treated as a normal skip state.
-- Guarded account classes remain guarded unless supervised evidence proves otherwise.
-- Operators can use reports and dashboards without reading raw logs.
-- Background runs produce useful dry-safe evidence and separate environment failures from account logic failures.
+- Account research reliably finds relevant technical people.
+- List saves are stable and can be checked in Sales Navigator.
+- Connection-request attempts end in clear outcomes.
+- Email-required prospects are skipped.
+- Guarded accounts stay guarded until reviewed.
+- SDRs can understand the report without reading logs.
+- Background research produces useful findings without hiding browser/login problems.
 
 ## GitHub Publishing Checklist
 

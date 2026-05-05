@@ -1,25 +1,27 @@
 # Claude Code Startup Guide
 
-This repository contains Sales Navigator Research Assistant, a supervised browser-backed research tool. Start every new local setup by running:
+This repo contains Sales Navigator Research Assistant. It helps SDRs turn account names into useful Sales Navigator lead lists.
+
+Start every new setup by running:
 
 ```bash
 npm run doctor
 ```
 
-Explain the result in plain language before attempting browser-backed workflows. Dry-safe research and artifact generation can run without LinkedIn login. Real Sales Navigator list saves or connection invitations require explicit operator approval and a visible authenticated browser session.
+Explain the result in plain language. Do not use setup jargon. Research can be prepared before LinkedIn login, but real Sales Navigator list saves or connection requests need the user to approve the action and be logged in.
 
 If setup is incomplete, offer two safe paths:
 
-- A) Produce a research Markdown/calling-list artifact now; Sales Navigator push happens after setup.
-- B) Finish setup first with `npm install`, tests, and `npm run bootstrap-session -- --driver=playwright --wait-minutes=10`.
+- A) Prepare the research file now; push to Sales Navigator after setup.
+- B) Finish setup first, then create the Sales Navigator list.
 
-Never run `--live-save`, `--live-connect`, or background connect commands unless the operator explicitly requests that live action.
+Never save leads or send connection requests unless the user explicitly asks for that live action.
 
 ## SDR Workflow — How to Handle Lead Requests
 
 The SDRs using this tool are not technical. They speak in plain language: "give me leads for these accounts" or "build me a LinkedIn list for Thales, Skello and Oodrive." Your job is to translate that into the right actions automatically — no technical questions, no command explanations, no jargon.
 
-### Step 1 — Session check (silent, always first)
+### Step 1 — Check LinkedIn Login Silently
 
 Before anything else, silently verify the LinkedIn session:
 
@@ -27,9 +29,9 @@ Before anything else, silently verify the LinkedIn session:
 npm run check-driver-session -- --driver=playwright --session-mode=persistent
 ```
 
-If authenticated: proceed without mentioning it.
+If logged in: proceed without mentioning it.
 
-If not authenticated: tell the SDR in plain language — "Your LinkedIn session has expired. Please log in again — I'll wait." Then run:
+If not logged in: tell the SDR in plain language — "Your LinkedIn login has expired. Please log in again — I'll wait." Then run:
 
 ```bash
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
@@ -37,25 +39,24 @@ npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 
 Wait for confirmation before continuing.
 
-### Step 2 — Run account coverage
+### Step 2 — Research The Accounts
 
 **For normal SDR requests, use `sdr-research`, never `test-account-search`.**
 
-`test-account-search` is a setup smoke-test capped at 5 results. It is not for SDR use. `account-coverage` runs 21 keyword sweeps per account and returns 30-60 qualified leads.
+`test-account-search` is only a tiny setup check. It is not for SDR work.
 
-Run the friendly SDR wrapper first. It keeps the persistent browser session, researches accounts sequentially, and can create one Sales Navigator list when live-save is explicitly requested:
+Run the friendly SDR command. It researches the accounts one by one and can create one Sales Navigator list when the SDR asks for it:
 
 ```bash
-npm run sdr-research -- --accounts="Account A, Account B, Account C" --driver=playwright
+npm run sdr-research -- --accounts="Account A, Account B, Account C"
 ```
 
-If the SDR asked for a Sales Navigator list, add `--live-save` and let the command create the list:
+If the SDR asked for a Sales Navigator list, add `--live-save`:
 
 ```bash
 npm run sdr-research -- \
   --accounts="Account A, Account B, Account C" \
   --list-name="SDR Research - Account A Account B Account C" \
-  --driver=playwright \
   --live-save
 ```
 
@@ -65,7 +66,7 @@ While it runs, tell the SDR what's happening in plain language:
 - "Found [N] contacts at [Account]. Moving on to [next account]..."
 - "All accounts done. Saving the list to Sales Navigator now."
 
-Never show raw CLI output, sweep names, bucket names, or internal flags.
+Never show raw terminal output, sweep names, bucket names, or internal flags.
 
 ### Step 3 — Create the Sales Navigator list
 
@@ -73,29 +74,29 @@ When an SDR asks for a "LinkedIn list", "Sales Nav list", or says "add them to a
 
 Derive the list name automatically from SDR name + accounts + date if not specified. Never ask for the list name unless genuinely unclear.
 
-`sdr-research` sets the safe list-create flag automatically when `--live-save` is present. Do not use connect flags with this command; it rejects them by design.
+`sdr-research` handles list creation automatically when `--live-save` is present. Do not use this command for connection requests.
 
 ### Step 4 — Close with a clear next step
 
 After the list is created, tell the SDR:
 
 - How many contacts were saved and across which accounts
-- How many strong contacts were found but not auto-saved, and why
+- How many strong contacts were found but not saved automatically, and why
 - Whether any account needs company-scope review
 - That the list is now live in Sales Navigator under the exact name used
-- Which contacts to start with — the `direct_observability` bucket first (DevOps leads, Platform Engineers, Infrastructure Architects)
+- Which contacts to start with: DevOps, platform, cloud, infrastructure, and engineering leaders first.
 
 Example closing message:
 
 > "Done. 69 contacts saved to 'Grafana - Guillaume Nolot - Thales Skello Oodrive'. Open the list in Sales Navigator and start with the DevOps and Platform contacts — those are your strongest entry points."
 
-Never end with raw stats or log output. Always end with a concrete action the SDR can take immediately.
+Never end with raw stats or log output. Always end with one concrete next step the SDR can take immediately.
 
-### Bucketing logic (internal → SDR-facing)
+### Internal Labels Translated For SDRs
 
-- `direct_observability` → primary contacts, start here
-- `technical_adjacent` → valid outreach targets, second priority
-- `likely_noise` → exclude silently, never show to SDR
+- `direct_observability` → strongest contacts, start here.
+- `technical_adjacent` → still useful, second priority.
+- `likely_noise` → not useful enough, do not show unless asked.
 
 ### Output format when showing contacts in chat
 

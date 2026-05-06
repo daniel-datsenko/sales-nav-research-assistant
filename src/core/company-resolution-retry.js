@@ -6,6 +6,7 @@ const { BACKGROUND_RUNNER_ARTIFACTS_DIR, ensureDir } = require('../lib/paths');
 const RETRYABLE_RESOLUTION_STATUSES = new Set([
   'resolved_exact',
   'resolved_multi_target',
+  'resolved_multi_target_curated',
 ]);
 
 function slugify(value) {

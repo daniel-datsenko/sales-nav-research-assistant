@@ -227,6 +227,49 @@ test('detectRateLimit reads LinkedIn rate-limit indicators from title and body',
   assert.equal(await detectRateLimit(normalPage), false);
 });
 
+test('playwright API prefetch reads every selected related target in entity-priority order', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver();
+  const requestedCompanyIds = [];
+  driver.salesNavApiGet = async (requestPath) => {
+    if (String(requestPath).includes('salesApiAccountSearch')) {
+      return {
+        ok: true,
+        payload: {
+          elements: [
+            { entityUrn: 'urn:li:fs_salesCompany:1', name: 'EDEKA', navigationUrl: 'https://www.linkedin.com/sales/company/1' },
+            { entityUrn: 'urn:li:fs_salesCompany:2', name: 'EDEKA IT', navigationUrl: 'https://www.linkedin.com/sales/company/2' },
+            { entityUrn: 'urn:li:fs_salesCompany:3', name: 'EDEKA ZENTRALE Stiftung & Co. KG', navigationUrl: 'https://www.linkedin.com/sales/company/3' },
+            { entityUrn: 'urn:li:fs_salesCompany:4', name: 'EDEKA DIGITAL GmbH', navigationUrl: 'https://www.linkedin.com/sales/company/4' },
+          ],
+        },
+      };
+    }
+    const companyId = String(requestPath).match(/\(id:(\d+)\)/)?.[1] || '';
+    requestedCompanyIds.push(companyId);
+    return {
+      ok: true,
+      payload: {
+        elements: [{
+          entityUrn: `urn:li:fs_salesProfile:(lead-${companyId},NAME_SEARCH,x)`,
+          firstName: `Lead${companyId}`,
+          lastName: 'Example',
+          currentPositions: [{ title: 'Site Reliability Engineer', companyName: `Company ${companyId}`, current: true }],
+        }],
+      },
+    };
+  };
+
+  const result = await driver.runSalesNavApiReadPrefetch({
+    accountName: 'EDEKA',
+    leadCount: 5,
+  });
+
+  assert.equal(result.companyResolution.status, 'resolved_multi_target_api');
+  assert.deepEqual(requestedCompanyIds, ['2', '4', '1', '3']);
+  assert.equal(result.leadCandidates.length, 4);
+  assert.equal(result.companyResolution.selectedTargets[0].entityPriority, 'it_digital_first');
+});
+
 test('playwright driver backs off once and resumes after transient rate limit', async () => {
   const waits = [];
   let bodyText = 'Too many requests. Try later.';

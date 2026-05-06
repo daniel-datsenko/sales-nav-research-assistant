@@ -1,3 +1,8 @@
+const {
+  classifyCompanyEntityPriority,
+  compareCompanyTargetPriority,
+} = require('./company-resolution');
+
 const SAFE_TEXT_LIMIT = 500;
 
 function stripQuotedCookieValue(value) {
@@ -201,6 +206,14 @@ function assessApiCompanyResolution(accountName, companyCandidates = []) {
       index,
       normalizedName: normalizeCompanyNameForApi(candidate.name),
     }))
+    .map((candidate) => ({
+      ...candidate,
+      entityPriority: classifyCompanyEntityPriority({
+        linkedinName: candidate.name,
+        targetType: candidate.normalizedName === normalizedAccount ? 'parent' : 'unknown',
+        evidence: candidate.evidence || [],
+      }),
+    }))
     .filter((candidate) => candidate.normalizedName && candidate.companyId);
   const exact = enriched.filter((candidate) => candidate.normalizedName === normalizedAccount);
   const prefixed = enriched.filter((candidate) => (
@@ -221,16 +234,17 @@ function assessApiCompanyResolution(accountName, companyCandidates = []) {
     return {
       status: 'needs_company_scope_review',
       confidence: 0.55,
-      selectedTargets: exact,
+      selectedTargets: [...exact].sort(compareCompanyTargetPriority),
       warning: 'api_company_search_ambiguous_exact_matches',
     };
   }
 
   if (exact.length === 1 && prefixed.length >= 2) {
+    const selectedTargets = [exact[0], ...prefixed.slice(0, 4)].sort(compareCompanyTargetPriority);
     return {
       status: 'resolved_multi_target_api',
       confidence: 0.82,
-      selectedTargets: [exact[0], ...prefixed.slice(0, 4)],
+      selectedTargets,
       warning: null,
     };
   }
@@ -248,7 +262,7 @@ function assessApiCompanyResolution(accountName, companyCandidates = []) {
     return {
       status: 'needs_company_scope_review',
       confidence: 0.62,
-      selectedTargets: prefixed.slice(0, 4),
+      selectedTargets: prefixed.slice(0, 4).sort(compareCompanyTargetPriority),
       warning: 'api_company_search_missing_exact_match',
     };
   }

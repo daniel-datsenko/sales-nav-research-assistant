@@ -1046,7 +1046,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     accountName,
     companyCount = 10,
     leadCount = 100,
-    maxTargets = 3,
+    maxTargets = 5,
   } = {}) {
     const errors = [];
     let companyResponse = null;

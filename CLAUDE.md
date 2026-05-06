@@ -57,6 +57,8 @@ For faster guarded tests, you may add `--api-read-prefetch`. Explain it simply a
 npm run sdr-research -- --accounts="Account A, Account B, Account C" --api-read-prefetch
 ```
 
+For large enterprise accounts, think in related company entities, not one page. Prioritize IT, digital, systems, technology, and platform subsidiaries first because they often own infrastructure and observability. Still keep the parent or main company in scope because buyers and observability owners can sit there too. Only treat a company as out of scope when it is clearly unrelated or a same-name homonym.
+
 If the SDR asked for a Sales Navigator list, add `--live-save`:
 
 ```bash

@@ -100,6 +100,8 @@ npm run sdr-research -- \
   --api-read-prefetch
 ```
 
+For large companies, the tool treats the account as a related company set. It checks IT, digital, systems, technology, and platform entities first, then the parent or main company, because useful observability contacts can live in either place. Same-name companies that are not clearly related still stop for review.
+
 Research and create/update one Sales Navigator list:
 
 ```bash

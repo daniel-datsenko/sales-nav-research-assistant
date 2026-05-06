@@ -49,6 +49,15 @@ A deterministic, dry-safe ordered plan derived from autoresearch evidence. Valid
 **Company Scope**
 Evidence that a people search is constrained to the intended account/company. If Company Scope is missing or ambiguous, browser-backed people search must fail closed rather than search broadly.
 
+**Enterprise Entity Resolver**
+The read-only workflow that inspects related Sales Navigator company pages for large accounts, ranks IT/digital entities first, keeps the parent/main company in scope, and excludes unrelated homonyms. It may produce learned suggestions, but it does not mutate Sales Navigator or automatically promote config.
+
+**API Read Prefetch**
+An opt-in read-only path that uses the logged-in browser session to fetch Sales Navigator company/lead evidence faster than UI sweeps. API Read Prefetch can accelerate research and improve company identity evidence, but it is not permission for Live Mutation.
+
+**API List Readback**
+The read-only list verification path that reads Sales Navigator list membership by stable lead identity before and after Live-save. API List Readback may skip already-present leads and verify final membership; it must not create lists, add leads, remove leads, connect, or message.
+
 **Company Resolution Blocker**
 A state where an account/company target cannot be safely resolved or scoped. Live-save candidates from blocked accounts are not eligible until the blocker is cleared or explicitly reviewed.
 
@@ -110,6 +119,8 @@ A task that requires human-in-the-loop judgment, live external access, design ap
 ## Relationships
 
 - An **Operator** approves any **Live Mutation**.
+- **API Read Prefetch** and **API List Readback** are read-only helpers; they never grant **Live Mutation** permission.
+- The **Enterprise Entity Resolver** strengthens **Company Scope** for large related company sets before **Account Research** or **Live-save** eligibility.
 - **Autoresearch** produces **Runtime Artifacts**, a **Research Loop Plan**, evaluation metrics, and an **Execution Gate**.
 - A **Gate Report** and **Supervisor Runbook** render the **Execution Gate** without executing live actions.
 - A **Safe-to-save Candidate** requires valid **Lead Identity**, verified **Company Scope**, no blocking **Manual Review**, and acceptable duplicate/already-saved state.

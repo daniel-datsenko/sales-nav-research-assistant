@@ -89,13 +89,32 @@ npm run fast-list-import -- \
 
 If the list already exists, `--allow-list-create` is harmless. If it does not exist, it allows the first save to create it.
 
+## API-Assisted Verification
+
+Live-save still uses the guarded browser UI to add people to a Sales Navigator list. The read-only Sales Navigator browser API is used as a safety and speed layer around that UI action when available:
+
+1. Before saving, the tool reads the target list and skips leads that are already there.
+2. The browser UI saves only the approved missing leads.
+3. After saving, the tool reads the list again and verifies the intended Sales Navigator IDs are present.
+
+The report uses simple counts:
+
+- `Already in list`: approved leads that did not need another UI save.
+- `Added now`: approved leads the browser UI attempted to add.
+- `Verified in Sales Nav`: leads confirmed in the final list readback.
+- `Needs follow-up`: clicked or planned leads that could not be verified.
+
+This API path is read-only. It does not create lists, add leads, remove leads, or send connects by API. Use `--skip-api-list-readback` only when you need to debug the older UI snapshot fallback.
+
 ## Why This Is Faster
 
 The old flow often required manual one-off resolution and ad-hoc retries. The fast flow centralizes that into a reusable import manifest:
 
 - cached Sales Navigator URLs avoid repeated lookup,
+- read-only list readback skips leads that are already saved,
 - one browser session handles the batch,
 - transient render failures retry automatically,
+- final list membership is verified by stable Sales Navigator IDs when available,
 - unresolved leads are reported instead of silently skipped.
 
 ## Current Learning
@@ -124,4 +143,5 @@ Next hardening targets:
 - No live save without `--live-save`.
 - No list creation unless the driver is allowed to create the list.
 - No live connect, ever.
+- No API-based list mutation in the default flow; API readback is verification only.
 - Public LinkedIn `/in/` URLs are not saved directly; the lead must resolve to a Sales Navigator `/sales/lead/` URL first.

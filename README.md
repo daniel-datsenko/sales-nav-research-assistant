@@ -113,6 +113,8 @@ npm run sdr-research -- \
 
 This command never sends connection invitations. It reports what it found, what it saved, what it skipped, and what needs review.
 
+When live-save is used, the tool now checks the target Sales Navigator list before and after saving with a read-only browser API path when available. In plain terms: it first skips people who are already in the list, saves only missing approved leads through the browser UI, then verifies the final list membership by stable Sales Navigator IDs. If the read-only API is not available, the tool falls back to the older UI snapshot check.
+
 ## Environment Setup
 
 Create a local `.env` from `.env.example` only if you need Salesforce, BigQuery, or other live integrations:
@@ -173,6 +175,8 @@ npm run account-coverage -- \
 ```
 
 The API prefetch only reads data from the logged-in browser. Real list saves still require `--live-save`.
+
+For list creation and list updates, API usage is read-only by default. The app may use it to find the list, read existing members, skip duplicates, and verify the final result, but the actual lead save still happens through the guarded browser UI. Use `--skip-api-list-readback` only when debugging the fallback path.
 
 ### Enterprise Entity Resolver
 

@@ -30,6 +30,14 @@ For normal SDR work, use this:
 npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
 ```
 
+For large or messy enterprise accounts, add the faster read-only lookup:
+
+```bash
+npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive" --api-read-prefetch
+```
+
+This lets the tool read company and lead IDs from the logged-in browser before running slower UI sweeps. If a company has several related pages, the tool should search IT/digital entities first, then the parent company, and stop only for truly unrelated same-name companies.
+
 To also create/update a Sales Navigator list:
 
 ```bash
@@ -40,6 +48,8 @@ npm run sdr-research -- \
 ```
 
 This command does not send connection requests.
+
+When `--live-save` is used, the tool checks the Sales Navigator list before saving, skips people already in the list, saves only missing approved leads through the browser UI, and then checks the list again. The final answer should say whether the list was verified in Sales Navigator or whether follow-up is needed.
 
 ## 4. Advanced Single-Account Research
 
@@ -74,6 +84,14 @@ The report should answer:
 - What should the SDR do next?
 
 If the report says `manual_review`, `needs_company_resolution`, `environment_blocked`, or `email_required`, stop and review instead of forcing the action.
+
+If the report says `needs_company_scope_review`, run:
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Account Name"
+```
+
+Use the result to confirm the related IT, digital, parent, regional, or brand entities before retrying the account.
 
 ## 6. Live Actions
 

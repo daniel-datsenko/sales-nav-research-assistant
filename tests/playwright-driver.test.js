@@ -270,6 +270,54 @@ test('playwright API prefetch reads every selected related target in entity-prio
   assert.equal(result.companyResolution.selectedTargets[0].entityPriority, 'it_digital_first');
 });
 
+test('playwright API prefetch uses curated METRO company IDs instead of ambiguous name search', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver();
+  const requestedPaths = [];
+  driver.salesNavApiGet = async (requestPath) => {
+    requestedPaths.push(requestPath);
+    assert.doesNotMatch(requestPath, /salesApiAccountSearch/);
+    const companyId = String(requestPath).match(/\(id:(\d+)\)/)?.[1] || '';
+    return {
+      ok: true,
+      payload: {
+        elements: [{
+          entityUrn: `urn:li:fs_salesProfile:(metro-${companyId},NAME_SEARCH,x)`,
+          firstName: `Metro${companyId}`,
+          lastName: 'Lead',
+          currentPositions: [{ title: 'Cloud Platform Lead', companyName: `Company ${companyId}`, current: true }],
+        }],
+      },
+    };
+  };
+
+  const result = await driver.runSalesNavApiReadPrefetch({
+    accountName: 'METRO',
+    leadCount: 5,
+    companyTargets: [
+      {
+        linkedinName: 'METRO/MAKRO',
+        salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/164955',
+        targetType: 'parent',
+        evidence: ['curated_parent'],
+      },
+      {
+        linkedinName: 'METRO.digital',
+        salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/70517322',
+        targetType: 'subsidiary',
+        evidence: ['curated_it_subsidiary'],
+      },
+    ],
+  });
+
+  assert.equal(result.companyResolution.status, 'resolved_multi_target_curated');
+  assert.equal(result.leadCandidates.length, 2);
+  assert.deepEqual(
+    result.targetResponses.map((response) => response.target.companyId),
+    ['70517322', '164955'],
+  );
+  assert.equal(requestedPaths.length, 2);
+});
+
 test('playwright driver backs off once and resumes after transient rate limit', async () => {
   const waits = [];
   let bodyText = 'Too many requests. Try later.';

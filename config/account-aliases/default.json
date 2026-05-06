@@ -306,6 +306,30 @@
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Parent plus known IT entities should be reviewed together."
     },
+    "metro": {
+      "accountSearchAliases": ["METRO", "METRO.digital", "METRO/MAKRO"],
+      "companyFilterAliases": ["METRO", "METRO.digital", "METRO/MAKRO"],
+      "targets": [
+        {
+          "linkedinName": "METRO.digital",
+          "salesNavCompanyUrl": "https://www.linkedin.com/sales/company/70517322",
+          "targetType": "subsidiary",
+          "territoryFit": "likely",
+          "evidence": ["curated_it_subsidiary"]
+        },
+        {
+          "linkedinName": "METRO/MAKRO",
+          "salesNavCompanyUrl": "https://www.linkedin.com/sales/company/164955",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "evidence": ["curated_parent"]
+        }
+      ],
+      "subsidiaryAliases": ["METRO.digital"],
+      "territoryCountries": ["Germany"],
+      "resolutionStatus": "resolved_multi_target",
+      "resolutionNotes": "Use curated METRO.digital first for IT/digital owners and METRO/MAKRO as parent/main buyer scope; avoid generic same-name Metro homonyms."
+    },
     "bertelsmann": {
       "accountSearchAliases": ["Bertelsmann", "Arvato Systems"],
       "companyFilterAliases": ["Bertelsmann", "Arvato Systems"],

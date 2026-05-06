@@ -107,6 +107,11 @@ function extractCompanyId(value = {}) {
   return '';
 }
 
+function extractCompanyIdFromSalesNavUrl(url) {
+  const match = String(url || '').match(/\/sales\/company\/([^/?#]+)/i);
+  return match ? decodeURIComponent(match[1]).trim() : '';
+}
+
 function extractLeadIdFromUrn(entityUrn = '') {
   const match = String(entityUrn || '').match(/fs_salesProfile:\(?([^,\)]+)/i);
   return match ? match[1].trim() : '';
@@ -196,6 +201,44 @@ function normalizeCompanyNameForApi(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeCuratedApiCompanyTargets(companyTargets = []) {
+  return (Array.isArray(companyTargets) ? companyTargets : [])
+    .map((target, index) => {
+      const name = target.linkedinName || target.name || target.companyName || '';
+      const companyId = target.companyId || extractCompanyIdFromSalesNavUrl(target.salesNavCompanyUrl);
+      if (!name || !companyId) {
+        return null;
+      }
+      return {
+        name,
+        companyId,
+        entityUrn: target.entityUrn || `urn:li:fs_salesCompany:${companyId}`,
+        salesNavigatorUrl: target.salesNavCompanyUrl || `https://www.linkedin.com/sales/company/${companyId}`,
+        index,
+        normalizedName: normalizeCompanyNameForApi(name),
+        entityPriority: classifyCompanyEntityPriority(target),
+        evidence: [...new Set(['curated_target', ...(target.evidence || [])])],
+      };
+    })
+    .filter(Boolean)
+    .sort(compareCompanyTargetPriority);
+}
+
+function assessCuratedApiCompanyResolution(accountName, companyTargets = []) {
+  const selectedTargets = normalizeCuratedApiCompanyTargets(companyTargets);
+  if (selectedTargets.length === 0) {
+    return null;
+  }
+  return {
+    status: selectedTargets.length > 1 ? 'resolved_multi_target_curated' : 'resolved_exact_api',
+    confidence: selectedTargets.length > 1 ? 0.9 : 0.95,
+    selectedTargets,
+    warning: null,
+    source: 'curated_company_targets',
+    accountName,
+  };
 }
 
 function assessApiCompanyResolution(accountName, companyCandidates = []) {
@@ -350,12 +393,14 @@ module.exports = {
   buildLeadSearchPath,
   buildSalesNavApiProbeArtifact,
   assessApiCompanyResolution,
+  assessCuratedApiCompanyResolution,
   classifySalesNavApiFailure,
   extractCsrfFromCookieHeader,
   extractCsrfFromCookies,
   extractLeadIdFromUrn,
   normalizeApiLeadForCoverage,
   normalizeCompanySearchResponse,
+  normalizeCuratedApiCompanyTargets,
   normalizeLeadElement,
   normalizeLeadSearchResponse,
   safePreview,

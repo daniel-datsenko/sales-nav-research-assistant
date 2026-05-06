@@ -7,6 +7,7 @@ const {
   buildLeadSearchPath,
   buildSalesNavApiProbeArtifact,
   assessApiCompanyResolution,
+  assessCuratedApiCompanyResolution,
   classifySalesNavApiFailure,
   extractCsrfFromCookieHeader,
   extractCsrfFromCookies,
@@ -96,6 +97,30 @@ test('assessApiCompanyResolution distinguishes exact, multi-target, and ambiguou
   ]);
   assert.equal(metro.status, 'needs_company_scope_review');
   assert.equal(metro.warning, 'api_company_search_ambiguous_exact_matches');
+});
+
+test('assessCuratedApiCompanyResolution turns METRO targets into safe ordered API targets', () => {
+  const resolution = assessCuratedApiCompanyResolution('METRO', [
+    {
+      linkedinName: 'METRO/MAKRO',
+      salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/164955',
+      targetType: 'parent',
+      evidence: ['curated_parent'],
+    },
+    {
+      linkedinName: 'METRO.digital',
+      salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/70517322',
+      targetType: 'subsidiary',
+      evidence: ['curated_it_subsidiary'],
+    },
+  ]);
+
+  assert.equal(resolution.status, 'resolved_multi_target_curated');
+  assert.deepEqual(
+    resolution.selectedTargets.map((target) => target.companyId),
+    ['70517322', '164955'],
+  );
+  assert.equal(resolution.selectedTargets[0].entityPriority, 'it_digital_first');
 });
 
 test('entityUrn is a first-class Sales Navigator identity match', () => {

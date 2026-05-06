@@ -11,6 +11,7 @@ const {
   buildLeadSearchPath,
   buildSalesNavApiProbeArtifact,
   assessApiCompanyResolution,
+  assessCuratedApiCompanyResolution,
   classifySalesNavApiFailure,
   extractCsrfFromCookies,
   normalizeApiLeadForCoverage,
@@ -1047,23 +1048,26 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     companyCount = 10,
     leadCount = 100,
     maxTargets = 5,
+    companyTargets = [],
   } = {}) {
     const errors = [];
     let companyResponse = null;
-    try {
-      companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
-    } catch (error) {
-      errors.push(error);
+    const curatedResolution = assessCuratedApiCompanyResolution(accountName, companyTargets);
+    if (!curatedResolution) {
+      try {
+        companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
+      } catch (error) {
+        errors.push(error);
+      }
     }
 
-    const companyCandidates = companyResponse?.payload
-      ? normalizeCompanySearchResponse(companyResponse.payload)
-      : [];
-    const companyResolution = assessApiCompanyResolution(accountName, companyCandidates);
+    const companyCandidates = curatedResolution?.selectedTargets
+      || (companyResponse?.payload ? normalizeCompanySearchResponse(companyResponse.payload) : []);
+    const companyResolution = curatedResolution || assessApiCompanyResolution(accountName, companyCandidates);
     const leadCandidates = [];
     const targetResponses = [];
 
-    if (['resolved_exact_api', 'resolved_multi_target_api'].includes(companyResolution.status)) {
+    if (['resolved_exact_api', 'resolved_multi_target_api', 'resolved_multi_target_curated'].includes(companyResolution.status)) {
       for (const target of companyResolution.selectedTargets.slice(0, Math.max(1, maxTargets))) {
         try {
           const response = await this.salesNavApiGet(buildLeadSearchPath({

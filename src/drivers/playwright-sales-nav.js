@@ -234,6 +234,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     this.currentAccountKey = null;
     this.launchedPersistentContext = false;
     this.connectAttemptCount = 0;
+    this.leadListReadbackCache = new Map();
   }
 
   async openSession(context) {
@@ -964,14 +965,22 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     const normalized = String(listRef || '').trim();
     const urlMatch = normalized.match(/\/sales\/lists\/people\/(\d+)/i);
     if (urlMatch) {
-      return {
+      const direct = {
         listId: urlMatch[1],
         listUrl: normalized,
         listName: normalized,
       };
+      this.leadListReadbackCache.set(normalized, direct);
+      this.leadListReadbackCache.set(direct.listId, direct);
+      return direct;
     }
     if (!normalized) {
       return null;
+    }
+
+    const cached = this.leadListReadbackCache.get(normalized);
+    if (cached?.listId) {
+      return cached;
     }
 
     await this.navigateIfNeeded('https://www.linkedin.com/sales/lists/people');
@@ -993,7 +1002,52 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       error.code = 'unexpected_shape';
       throw error;
     }
+    this.leadListReadbackCache.set(normalized, match);
+    this.leadListReadbackCache.set(match.listId, match);
+    this.leadListReadbackCache.set(match.listUrl, match);
     return match;
+  }
+
+  async readLeadListSnapshotViaApiReadOnly(listRef, { count = 100, maxRows = 1000 } = {}) {
+    const list = await this.resolveLeadListIdReadOnly(listRef);
+    if (!list?.listId) {
+      const error = new Error(`sales_nav_api: unable to resolve lead list ${listRef}`);
+      error.code = 'unexpected_shape';
+      throw error;
+    }
+
+    const rows = [];
+    const seen = new Set();
+    const pageSize = Math.max(1, Math.min(Number(count) || 100, 100));
+    const rowLimit = Math.max(pageSize, Number(maxRows) || 1000);
+    for (let start = 0; start < rowLimit; start += pageSize) {
+      const response = await this.salesNavApiGet(buildLeadListReadbackPath({
+        listId: list.listId,
+        start,
+        count: pageSize,
+      }));
+      const pageRows = normalizeLeadSearchResponse(response.payload);
+      for (const row of pageRows) {
+        const key = row.salesNavigatorLeadId || row.entityUrn || row.salesNavigatorUrl;
+        if (!key || seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        rows.push(row);
+      }
+      if (pageRows.length < pageSize) {
+        break;
+      }
+    }
+
+    return {
+      status: 'ok',
+      source: 'sales_nav_api',
+      listName: list.listName || listRef,
+      listUrl: list.listUrl || listRef,
+      listId: list.listId,
+      rows,
+    };
   }
 
   async runSalesNavApiProbe({

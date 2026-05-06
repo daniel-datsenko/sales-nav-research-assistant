@@ -41,6 +41,7 @@ function buildDriverOptions(values, run = null, defaults = {}) {
     allowListCreate: getBoolean(values, 'allow-list-create'),
     recoveryMode: getString(values, 'recovery-mode') || defaults.recoveryMode || 'screenshot-only',
     dryRun: runDry,
+    skipApiListReadback: getBoolean(values, 'skip-api-list-readback') || Boolean(defaults.skipApiListReadback),
     maxScrollSteps: Number(getString(values, 'max-scroll-steps') || 10),
     settleMs: Number(getString(values, 'settle-ms') || 350),
     rateLimitBackoffMs: Number(getString(values, 'rate-limit-backoff-ms') || defaults.rateLimitBackoffMs || 60000),

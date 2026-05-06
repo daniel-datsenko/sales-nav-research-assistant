@@ -1619,6 +1619,12 @@ async function saveFastListImport({
     }
   }
 
+  await applyFinalListReadbackVerification({
+    results,
+    listName: importPlan.listName,
+    readLeadListSnapshot,
+  });
+
   return buildFastListImportResult({
     ...importPlan,
     liveSave: true,
@@ -1707,6 +1713,68 @@ async function verifyFastListSaveRow({
   };
 }
 
+function needsFinalListReadbackVerification(row = {}) {
+  return ['save_clicked_unverified', 'wrong_identity_detected'].includes(row.status)
+    || ['unverified', 'missing_after_save', 'wrong_identity_detected'].includes(row.verificationStatus);
+}
+
+async function applyFinalListReadbackVerification({
+  results = [],
+  listName,
+  readLeadListSnapshot,
+} = {}) {
+  if (typeof readLeadListSnapshot !== 'function') {
+    return results;
+  }
+  if (!results.some(needsFinalListReadbackVerification)) {
+    return results;
+  }
+
+  let snapshot;
+  try {
+    snapshot = await readLeadListSnapshot(listName);
+  } catch {
+    return results;
+  }
+
+  for (const row of results) {
+    if (!needsFinalListReadbackVerification(row)) {
+      continue;
+    }
+    const match = findSalesNavigatorLeadIdentityMatch(row, snapshot?.rows || []);
+    if (match.status === 'matched') {
+      row.status = row.status === 'already_saved' ? 'already_saved_verified' : 'saved_and_verified';
+      row.verifiedSaved = true;
+      row.verificationStatus = 'verified';
+      row.verificationMethod = snapshot?.source === 'sales_nav_api'
+        ? 'final_api_lead_list_readback'
+        : 'final_lead_list_readback';
+      row.readbackLeadIdentity = match.identity;
+      row.failureCategory = null;
+      if (row.note && /readback failed|missing from target list/i.test(row.note)) {
+        row.previousVerificationNote = row.note;
+      }
+      row.note = 'verified in final target Sales Navigator list';
+      delete row.nextAction;
+      continue;
+    }
+    if (match.status === 'same_name_wrong_identity') {
+      row.status = 'wrong_identity_detected';
+      row.verifiedSaved = false;
+      row.verificationStatus = 'wrong_identity_detected';
+      row.verificationMethod = snapshot?.source === 'sales_nav_api'
+        ? 'final_api_lead_list_readback'
+        : 'final_lead_list_readback';
+      row.failureCategory = 'wrong_identity_detected';
+      row.readbackLeadIdentity = match.identity;
+      row.note = 'same-name row found in final target list readback, but Sales Navigator lead identity does not match intended lead';
+      row.nextAction = 'manual_review_before_connect';
+    }
+  }
+
+  return results;
+}
+
 function classifySaveFailure(note) {
   const message = String(note || '');
   if (/too many requests|rate.?limit|throttl|429|please wait before trying again|try again later/i.test(message)) {
@@ -1762,6 +1830,15 @@ function buildFastListImportResult(payload) {
   const snapshotSkipped = results.filter((row) => ['already_saved', 'already_saved_verified'].includes(row.status) && row.saveRecoveryPath === 'snapshot_preflight').length;
   const rateLimitSkipped = results.filter((row) => row.status === 'skipped_rate_limit_cooldown').length;
   const failureBreakdown = summarizeSaveFailureBreakdown(results);
+  const listImportSummary = {
+    found: payload.uniqueLeads ?? payload.detectedRows ?? results.length,
+    selected: results.length,
+    alreadyInList: alreadySaved,
+    addedNow: confirmedSaved,
+    verifiedInSalesNav: confirmedSaved + alreadySaved,
+    needsFollowUp: failed + unresolved + manualReview + unverified + mutationReviewExcluded + rateLimitSkipped,
+    attemptedAdds: results.filter((row) => Number(row.attempt || 0) > 0).length,
+  };
   return {
     ...payload,
     status: failed || unresolved || manualReview || unverified || mutationReviewExcluded || rateLimitSkipped ? 'completed_with_followup' : 'completed',
@@ -1776,6 +1853,7 @@ function buildFastListImportResult(payload) {
     unverified,
     mutationReviewExcluded,
     failureBreakdown,
+    listImportSummary,
     nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, unverified, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }),
   };
 }
@@ -2033,6 +2111,13 @@ function renderFastListImportMarkdown(artifact) {
   lines.push(`- Resolved leads: \`${artifact.resolvedLeads ?? 0}\``);
   lines.push(`- Unresolved leads: \`${artifact.unresolvedLeads ?? artifact.unresolved ?? 0}\``);
   if (artifact.liveSave) {
+    if (artifact.listImportSummary) {
+      lines.push(`- Found/selected: \`${artifact.listImportSummary.found ?? 0}/${artifact.listImportSummary.selected ?? 0}\``);
+      lines.push(`- Already in Sales Nav list: \`${artifact.listImportSummary.alreadyInList ?? 0}\``);
+      lines.push(`- Added now and verified: \`${artifact.listImportSummary.addedNow ?? 0}\``);
+      lines.push(`- Verified in Sales Nav total: \`${artifact.listImportSummary.verifiedInSalesNav ?? 0}\``);
+      lines.push(`- Needs follow-up: \`${artifact.listImportSummary.needsFollowUp ?? 0}\``);
+    }
     lines.push(`- Confirmed saved this run: \`${artifact.confirmedSaved ?? artifact.saved ?? 0}\``);
     lines.push(`- Already in list: \`${artifact.alreadySaved ?? 0}\``);
     lines.push(`- Snapshot preflight skips: \`${artifact.snapshotSkipped ?? 0}\``);

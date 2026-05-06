@@ -119,6 +119,16 @@ class HybridSalesNavigatorDriver extends DriverAdapter {
     return this.mutationDriver.saveCandidateToList(candidate, listInfo, context);
   }
 
+  async readLeadListSnapshotViaApiReadOnly(listRef, options) {
+    if (typeof this.discoveryDriver.readLeadListSnapshotViaApiReadOnly === 'function') {
+      return this.discoveryDriver.readLeadListSnapshotViaApiReadOnly(listRef, options);
+    }
+    if (typeof this.mutationDriver.readLeadListSnapshotViaApiReadOnly === 'function') {
+      return this.mutationDriver.readLeadListSnapshotViaApiReadOnly(listRef, options);
+    }
+    throw new Error('sales_nav_api: read-only list snapshot is unavailable for this driver');
+  }
+
   async sendConnect(candidate, context) {
     return this.mutationDriver.sendConnect(candidate, context);
   }

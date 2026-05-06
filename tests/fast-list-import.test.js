@@ -456,6 +456,50 @@ test('saveFastListImport downgrades click-only saves when no live readback verif
   assert.equal(result.results[0].verifiedSaved, false);
 });
 
+test('saveFastListImport final readback verifies rows after early list lookup misses', async () => {
+  let readCalls = 0;
+  const result = await saveFastListImport({
+    driver: {
+      async saveCandidateToList() {
+        return { status: 'saved', selectionMode: 'created_list' };
+      },
+    },
+    liveSave: true,
+    maxRetries: 0,
+    readLeadListSnapshot: async () => {
+      readCalls += 1;
+      if (readCalls === 1) {
+        throw new Error('Unable to open lead list Calling List');
+      }
+      return {
+        source: 'sales_nav_api',
+        rows: [{
+          fullName: 'Nora Platform',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+          entityUrn: 'urn:li:fs_salesProfile:(123,NAME_SEARCH,x)',
+        }],
+      };
+    },
+    importPlan: {
+      listName: 'Calling List',
+      leads: [
+        {
+          accountName: 'Example Network Co',
+          fullName: 'Nora Platform',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/123',
+          resolutionStatus: 'resolved',
+        },
+      ],
+    },
+  });
+
+  assert.equal(readCalls, 2);
+  assert.equal(result.status, 'completed');
+  assert.equal(result.confirmedSaved, 1);
+  assert.equal(result.results[0].status, 'saved_and_verified');
+  assert.equal(result.results[0].verificationMethod, 'final_api_lead_list_readback');
+});
+
 test('saveFastListImport flags same-name wrong-identity readback', async () => {
   const result = await saveFastListImport({
     driver: {

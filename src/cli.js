@@ -858,7 +858,12 @@ async function handleFastListImport(values, logger) {
         accountKey: 'fast-list-import',
         dryRun: false,
       });
-      const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const existingSnapshot = await readLeadListPreflightSnapshot(
+        driver,
+        importPlan.listName,
+        logger,
+        readLatestLeadListArtifactSnapshot(importPlan.listName),
+      );
       const mutationReview = buildMutationReviewArtifact({
         command: 'fast-list-import',
         importPlan,
@@ -946,7 +951,12 @@ async function handleRetryFailedFastListImport(values, logger) {
         accountKey: 'retry-failed-fast-list-import',
         dryRun: false,
       });
-      const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const existingSnapshot = await readLeadListPreflightSnapshot(
+        driver,
+        importPlan.listName,
+        logger,
+        readLatestLeadListArtifactSnapshot(importPlan.listName),
+      );
       const mutationReview = buildMutationReviewArtifact({
         command: 'retry-failed-fast-list-import',
         importPlan,
@@ -1041,7 +1051,12 @@ async function handleImportCoverage(values, logger) {
         accountKey: 'import-coverage',
         dryRun: false,
       });
-      const existingSnapshot = readLatestLeadListArtifactSnapshot(importPlan.listName);
+      const existingSnapshot = await readLeadListPreflightSnapshot(
+        driver,
+        importPlan.listName,
+        logger,
+        readLatestLeadListArtifactSnapshot(importPlan.listName),
+      );
       const mutationReview = buildMutationReviewArtifact({
         command: 'import-coverage',
         importPlan,
@@ -1509,7 +1524,30 @@ async function readLeadListSnapshot(driver, listName) {
   }
 }
 
+async function readLeadListPreflightSnapshot(driver, listName, logger, fallbackSnapshot = null) {
+  try {
+    const snapshot = await readLeadListSnapshotStrict(driver, listName);
+    if (typeof logger?.info === 'function') {
+      const source = snapshot.source ? ` via ${snapshot.source}` : '';
+      logger.info(`Preflight list readback: ${snapshot.rows?.length || 0} existing lead(s)${source}`);
+    }
+    return snapshot;
+  } catch (error) {
+    if (typeof logger?.info === 'function') {
+      logger.info(`Preflight list readback unavailable: ${String(error.message || error)}`);
+    }
+    return fallbackSnapshot;
+  }
+}
+
 async function readLeadListSnapshotStrict(driver, listName) {
+  if (!driver.options?.skipApiListReadback && typeof driver.readLeadListSnapshotViaApiReadOnly === 'function') {
+    try {
+      return await driver.readLeadListSnapshotViaApiReadOnly(listName);
+    } catch {
+      // Fall back to the existing UI snapshot path when the read-only API shape is unavailable.
+    }
+  }
   if (typeof driver.runHarnessJson === 'function') {
     return await readLeadListSnapshotViaHarness(driver, listName);
   }
@@ -4347,9 +4385,9 @@ Usage:
   node src/cli.js render-coverage-review --account-name="Acme"
   node src/cli.js test-list-save --driver=playwright|browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." --list-name="Territory List" --live-save
   node src/cli.js fast-resolve-leads --source=/path/to/leads.md [--driver=playwright] [--search-timeout-ms=8000]
-  node src/cli.js fast-list-import --source=/path/to/leads.md[,/path/to/coverage.json] [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
-  node src/cli.js retry-failed-fast-list-import --artifact=/path/to/failed-fast-import.json [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
-  node src/cli.js import-coverage --accounts=example-marketplace-a,example-saas-marketplace,olx-group [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create]
+  node src/cli.js fast-list-import --source=/path/to/leads.md[,/path/to/coverage.json] [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create] [--skip-api-list-readback]
+  node src/cli.js retry-failed-fast-list-import --artifact=/path/to/failed-fast-import.json [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create] [--skip-api-list-readback]
+  node src/cli.js import-coverage --accounts=example-marketplace-a,example-saas-marketplace,olx-group [--bucket=direct_observability] [--min-score=40] [--list-name="Lead List"] [--driver=playwright] [--live-save] [--allow-list-create] [--skip-api-list-readback]
   node src/cli.js test-connect --driver=playwright|browser-harness|hybrid --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"] --live-connect
   node src/cli.js inspect-connect-surface --driver=playwright --candidate-url="https://www.linkedin.com/sales/lead/..." [--full-name="Jane Doe"]
   node src/cli.js connect-lead-list --driver=playwright|browser-harness|hybrid --list-name="Territory List" [--limit=25] --live-connect [--allow-unverified-connect-continue]

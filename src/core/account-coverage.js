@@ -944,6 +944,8 @@ async function runAccountCoverageWorkflow({
   runId = 'account-coverage',
   accountSource = 'manual',
   interSweepDelayMs = 0,
+  apiReadPrefetch = false,
+  apiReadPrefetchLeadCount = 100,
   logger = null,
   now = Date.now,
 }) {
@@ -1002,6 +1004,84 @@ async function runAccountCoverageWorkflow({
     activeAccount = resolvedAccounts?.[0] || account;
   }, { now });
 
+  let apiReadPrefetchResult = null;
+  let skipUiSweeps = false;
+  if (apiReadPrefetch && typeof driver.runSalesNavApiReadPrefetch === 'function') {
+    try {
+      apiReadPrefetchResult = await timePhase(timings, 'api_read_prefetch', async () =>
+        driver.runSalesNavApiReadPrefetch({
+          accountName,
+          leadCount: apiReadPrefetchLeadCount,
+        }), { now });
+    } catch (error) {
+      apiReadPrefetchResult = {
+        status: 'failed',
+        source: 'api_read_prefetch',
+        companyResolution: {
+          status: 'api_prefetch_failed',
+          warning: 'api_prefetch_failed',
+        },
+        companyCandidates: [],
+        leadCandidates: [],
+        targetResponses: [],
+        errors: [{
+          code: error.code || 'unexpected_shape',
+          message: String(error.message || error).slice(0, 500),
+          status: error.status || null,
+          path: error.path || null,
+        }],
+      };
+    }
+
+    if (logger && typeof logger.info === 'function') {
+      logger.info(`API read prefetch: ${apiReadPrefetchResult.companyResolution?.status || apiReadPrefetchResult.status} | leads=${apiReadPrefetchResult.leadCandidates?.length || 0}`);
+    }
+
+    if (apiReadPrefetchResult.companyResolution?.status === 'needs_company_scope_review') {
+      skipUiSweeps = true;
+    }
+
+    if ((apiReadPrefetchResult.leadCandidates || []).length > 0) {
+      const apiCandidates = apiReadPrefetchResult.leadCandidates;
+      rawResults.push({
+        templateId: 'api-broad-pool',
+        keywords: [],
+        candidates: apiCandidates,
+        cacheHit: false,
+        source: 'api_read_prefetch',
+      });
+      let uniqueNew = 0;
+      for (const candidate of apiCandidates) {
+        const key = normalizeCandidateKey(candidate);
+        if (!seenCandidateKeys.has(key)) {
+          uniqueNew += 1;
+        }
+        seenCandidateKeys.add(key);
+      }
+      const preliminary = await timePhase(timings, 'api_prefetch_scoring', async () => consolidateCoverageCandidates(rawResults, {
+        icpConfig,
+        priorityModel,
+        coverageConfig,
+        accountName,
+      }), { now });
+      const preliminaryPersona = summarizePersonaCoverage(preliminary.candidates || []);
+      if (preliminaryPersona.status === 'coverage_sufficient') {
+        skipUiSweeps = true;
+        if (logger && typeof logger.info === 'function') {
+          logger.info(`API read prefetch covered buyer/operator/user personas; skipping UI sweeps`);
+        }
+      }
+      timings.events.push({
+        phase: 'api_read_prefetch:api-broad-pool',
+        templateId: 'api-broad-pool',
+        durationMs: 0,
+        cacheHit: false,
+        candidateCount: apiCandidates.length,
+        uniqueNew,
+      });
+    }
+  }
+
   let stopSweeps = false;
   const adaptivePruningTelemetry = {
     enabled: adaptivePruningActive,
@@ -1024,6 +1104,14 @@ async function runAccountCoverageWorkflow({
   }
 
   for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
+    if (skipUiSweeps) {
+      adaptivePruningTelemetry.skippedTemplates.push(...templates.slice(templateIndex).map((template) => template.id));
+      adaptivePruningTelemetry.triggered = true;
+      adaptivePruningTelemetry.reason = apiReadPrefetchResult?.companyResolution?.status === 'needs_company_scope_review'
+        ? 'api_company_scope_review_required'
+        : 'api_prefetch_coverage_sufficient';
+      break;
+    }
     if (stopSweeps) {
       break;
     }
@@ -1173,7 +1261,8 @@ async function runAccountCoverageWorkflow({
     coverageConfig,
     accountName,
   }), { now });
-  const fallbackResult = result.candidateCount === 0
+  const apiCompanyScopeReviewRequired = apiReadPrefetchResult?.companyResolution?.status === 'needs_company_scope_review';
+  const fallbackResult = result.candidateCount === 0 && !apiCompanyScopeReviewRequired
     ? priorCoverage
     : null;
   const sweepFailureSummary = summarizeCoverageSweepErrors({ templates, sweepErrors });
@@ -1192,6 +1281,30 @@ async function runAccountCoverageWorkflow({
       ...result,
       ...(sweepErrors.length > 0 ? { sweepErrors } : {}),
     };
+  if (apiReadPrefetchResult) {
+    finalResult.apiReadPrefetch = {
+      status: apiReadPrefetchResult.status,
+      source: 'api_read_prefetch',
+      companyResolution: apiReadPrefetchResult.companyResolution,
+      companyCandidateCount: apiReadPrefetchResult.companyCandidates?.length || 0,
+      leadCandidateCount: apiReadPrefetchResult.leadCandidates?.length || 0,
+      targetResponses: apiReadPrefetchResult.targetResponses || [],
+      errors: apiReadPrefetchResult.errors || [],
+      uiSweepsSkipped: skipUiSweeps,
+    };
+    if (apiReadPrefetchResult.companyResolution?.status === 'needs_company_scope_review') {
+      finalResult.companyScope = {
+        status: 'needs_company_scope_review',
+        warning: apiReadPrefetchResult.companyResolution.warning || 'api_company_scope_review_required',
+        unrelatedCandidateCount: 0,
+        relatedCandidateCount: 0,
+        unrelatedCompanies: (apiReadPrefetchResult.companyResolution.selectedTargets || []).map((target) => target.name),
+        allowedLabels: [],
+      };
+      finalResult.resolutionStatus = 'needs_company_scope_review';
+      finalResult.coverageError = apiReadPrefetchResult.companyResolution.warning || 'api_company_scope_review_required';
+    }
+  }
   const companyScopeAssessment = assessCompanyScopeIntegrity({
     accountName,
     aliasEntry,

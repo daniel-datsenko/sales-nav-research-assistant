@@ -1041,6 +1041,185 @@ test('runAccountCoverageWorkflow upgrades failed company resolution when live sw
   assert.deepEqual(run.result.companyResolution.selectedTargets, ['Live Scoped Unknown Account']);
 });
 
+test('runAccountCoverageWorkflow uses API read prefetch and skips UI sweeps when persona coverage is sufficient', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  let peopleSearchCalls = 0;
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async runSalesNavApiReadPrefetch() {
+      return {
+        status: 'completed',
+        source: 'api_read_prefetch',
+        companyResolution: {
+          status: 'resolved_exact_api',
+          confidence: 0.95,
+          selectedTargets: [{ name: 'Celonis', companyId: '3118913' }],
+        },
+        companyCandidates: [{ name: 'Celonis', companyId: '3118913' }],
+        leadCandidates: [
+          {
+            fullName: 'API Buyer',
+            title: 'Chief Technology Officer',
+            company: 'Celonis',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-buyer',
+            entityUrn: 'urn:li:fs_salesProfile:(api-buyer,NAME_SEARCH,x)',
+          },
+          {
+            fullName: 'API Operator',
+            title: 'Head of Platform Engineering',
+            company: 'Celonis',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-operator',
+            entityUrn: 'urn:li:fs_salesProfile:(api-operator,NAME_SEARCH,x)',
+          },
+          {
+            fullName: 'API User',
+            title: 'Senior Site Reliability Engineer',
+            company: 'Celonis',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-user',
+            entityUrn: 'urn:li:fs_salesProfile:(api-user,NAME_SEARCH,x)',
+          },
+        ],
+        targetResponses: [{ status: 'ok', count: 3 }],
+        errors: [],
+      };
+    },
+    async openPeopleSearch() {
+      peopleSearchCalls += 1;
+    },
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Celonis',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    apiReadPrefetch: true,
+  });
+
+  assert.equal(peopleSearchCalls, 0);
+  assert.equal(run.result.candidateCount, 3);
+  assert.equal(run.result.apiReadPrefetch.companyResolution.status, 'resolved_exact_api');
+  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, true);
+  assert.equal(run.result.personaCoverage.status, 'coverage_sufficient');
+});
+
+test('runAccountCoverageWorkflow stops before UI sweeps when API company scope is ambiguous', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async runSalesNavApiReadPrefetch() {
+      return {
+        status: 'completed',
+        source: 'api_read_prefetch',
+        companyResolution: {
+          status: 'needs_company_scope_review',
+          confidence: 0.55,
+          selectedTargets: [
+            { name: 'Metro', companyId: '332814' },
+            { name: 'Metro', companyId: '1950279' },
+          ],
+          warning: 'api_company_search_ambiguous_exact_matches',
+        },
+        companyCandidates: [],
+        leadCandidates: [],
+        targetResponses: [],
+        errors: [],
+      };
+    },
+    async openPeopleSearch() {
+      throw new Error('UI sweeps should not run for ambiguous API company scope');
+    },
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'METRO',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    apiReadPrefetch: true,
+  });
+
+  assert.equal(run.result.candidateCount, 0);
+  assert.equal(run.result.resolutionStatus, 'needs_company_scope_review');
+  assert.equal(run.result.companyScope.warning, 'api_company_search_ambiguous_exact_matches');
+  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, true);
+});
+
+test('runAccountCoverageWorkflow falls back to UI sweeps when API read prefetch fails', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  let peopleSearchCalls = 0;
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async runSalesNavApiReadPrefetch() {
+      throw new Error('api unavailable');
+    },
+    async openPeopleSearch() {
+      peopleSearchCalls += 1;
+    },
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [{
+        fullName: 'Fallback Candidate',
+        title: 'Senior Site Reliability Engineer',
+        company: 'Fallback Account',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/fallback-candidate',
+      }];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Fallback Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    apiReadPrefetch: true,
+  });
+
+  assert.equal(peopleSearchCalls, 1);
+  assert.equal(run.result.candidateCount, 1);
+  assert.equal(run.result.apiReadPrefetch.status, 'failed');
+  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, false);
+});
+
 test('runAccountCoverageWorkflow filters cross-company contamination before list selection', async () => {
   const coverageConfig = {
     broadCrawl: { enabled: true, maxCandidates: 3 },

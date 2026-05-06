@@ -417,6 +417,9 @@ function renderAccountBatchReportMarkdown(payload) {
     }
     lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | out_of_network=\`${sdrSummary.outOfNetwork}\` | failed_sweeps=\`${sdrSummary.failedSweeps}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
+    if (result.apiReadPrefetch) {
+      lines.push(`- API read prefetch: \`${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status}\` | leads=\`${result.apiReadPrefetch.leadCandidateCount || 0}\` | ui_sweeps_skipped=\`${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}\``);
+    }
     if (result.companyScope?.warning) {
       lines.push(`- Company scope warning: \`${result.companyScope.warning}\` (${(result.companyScope.unrelatedCompanies || []).join(', ') || 'unknown company'})`);
     }

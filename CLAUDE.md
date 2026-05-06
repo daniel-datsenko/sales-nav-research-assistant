@@ -51,6 +51,12 @@ Run the friendly SDR command. It researches the accounts one by one and can crea
 npm run sdr-research -- --accounts="Account A, Account B, Account C"
 ```
 
+For faster guarded tests, you may add `--api-read-prefetch`. Explain it simply as "a faster read-only lookup in the logged-in Sales Navigator browser." It must never be described as an official LinkedIn API, and it does not save or connect anything by itself.
+
+```bash
+npm run sdr-research -- --accounts="Account A, Account B, Account C" --api-read-prefetch
+```
+
 If the SDR asked for a Sales Navigator list, add `--live-save`:
 
 ```bash

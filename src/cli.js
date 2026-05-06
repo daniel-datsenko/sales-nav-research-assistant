@@ -183,6 +183,9 @@ async function main() {
       case 'check-driver-session':
         await handleCheckDriverSession(values, logger);
         break;
+      case 'test-sales-nav-api':
+        await handleTestSalesNavApi(values, logger);
+        break;
       case 'doctor':
       case 'print-first-run-onboarding':
         await handleFirstRunOnboarding(values);
@@ -459,6 +462,85 @@ async function handleCheckDriverSession(values, logger) {
   } finally {
     await driver.close().catch(() => {});
   }
+}
+
+async function handleTestSalesNavApi(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-mutations')) {
+    throw new Error('test-sales-nav-api is read-only and refuses live mutation flags');
+  }
+
+  const accountName = getString(values, 'account-name');
+  if (!accountName) {
+    throw new Error('test-sales-nav-api requires --account-name="Account Name"');
+  }
+
+  const listName = getString(values, 'list-name');
+  const driverName = getString(values, 'driver') || 'playwright';
+  const driver = createDriver(driverName, {
+    ...buildDriverOptions(values, { dryRun: true }, {
+      sessionMode: 'persistent',
+      headless: false,
+    }),
+    allowMutations: false,
+    dryRun: true,
+  });
+
+  try {
+    await driver.openSession({
+      runId: 'sales-nav-api-probe',
+      territoryId: 'sales-nav-api-probe',
+      dryRun: true,
+      weeklyCap: 140,
+    });
+    const health = await driver.checkSessionHealth();
+    if (!health.authenticated) {
+      throw new Error(`LinkedIn session is not authenticated (${health.state || 'unknown'})`);
+    }
+    if (typeof driver.runSalesNavApiProbe !== 'function') {
+      throw new Error(`Driver ${driverName} does not support read-only Sales Nav API probes`);
+    }
+
+    const artifact = await driver.runSalesNavApiProbe({
+      accountName,
+      listName,
+      companyCount: Number(getString(values, 'max-companies') || 10),
+      leadCount: Number(getString(values, 'max-candidates') || 25),
+    });
+    const artifactPath = writeSalesNavApiProbeArtifact(artifact);
+
+    if (getBoolean(values, 'json')) {
+      console.log(JSON.stringify({ ...artifact, artifactPath }, null, 2));
+      return;
+    }
+
+    logger.info(`Sales Nav API probe: ${artifact.status}`);
+    logger.info(`Mode: ${artifact.mode}`);
+    logger.info(`API readable: ${artifact.apiReadable ? 'yes' : 'no'}`);
+    logger.info(`Company candidates: ${artifact.counts.companyCandidates}`);
+    logger.info(`Lead candidates: ${artifact.counts.leadCandidates}`);
+    logger.info(`List rows: ${artifact.counts.listRows}`);
+    logger.info(`Entity URN coverage: ${artifact.counts.entityUrnCoverage === null ? 'n/a' : `${Math.round(artifact.counts.entityUrnCoverage * 100)}%`}`);
+    if (artifact.errors.length > 0) {
+      for (const error of artifact.errors) {
+        logger.warn(`${error.code}: ${error.message}`);
+      }
+    }
+    logger.info(`Artifact: ${artifactPath}`);
+  } finally {
+    await driver.close().catch(() => {});
+  }
+}
+
+function writeSalesNavApiProbeArtifact(artifact) {
+  const safeName = String(artifact.accountName || 'account')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'account';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const artifactPath = resolveProjectPath('runtime', 'artifacts', 'sales-nav-api-probes', `${timestamp}-${safeName}.json`);
+  writeJson(artifactPath, artifact);
+  return artifactPath;
 }
 
 async function handleFirstRunOnboarding(values) {
@@ -1931,6 +2013,8 @@ async function handleAccountCoverage(values, logger) {
   const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
+  const apiReadPrefetch = getBoolean(values, 'api-read-prefetch');
+  const apiReadPrefetchLeadCount = Number(getString(values, 'api-prefetch-lead-count') || 100);
   const interSweepDelayMs = Number(getString(values, 'inter-sweep-delay-ms') || 0);
   const coverageConfig = loadAccountCoverageConfig(getString(values, 'coverage-config') || null);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -1964,6 +2048,8 @@ async function handleAccountCoverage(values, logger) {
       speedProfile,
       adaptiveSweepPruning,
       reuseSweepCache,
+      apiReadPrefetch,
+      apiReadPrefetchLeadCount,
       interSweepDelayMs,
       runId: 'account-coverage',
       logger: {
@@ -1986,6 +2072,9 @@ async function handleAccountCoverage(values, logger) {
     logger.info(`Sweeps: ${succeededSweeps}/${attemptedSweepCount} attempted succeeded${failedSweepIds.length ? `, ${failedSweepIds.length} failed (${failedSweepIds.join(', ')})` : ''}${skippedPrunedCount ? `, ${skippedPrunedCount} pruned (${result.adaptivePruning.skippedTemplates.join(', ')})` : ''}`);
     logger.info(`Research mode: ${result.researchMode || researchMode}`);
     logger.info(`Speed profile: ${result.speedProfile}`);
+    if (result.apiReadPrefetch) {
+      logger.info(`API read prefetch: ${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status} | leads=${result.apiReadPrefetch.leadCandidateCount} | ui_sweeps_skipped=${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}`);
+    }
     if (interSweepDelayMs > 0) {
       logger.info(`Inter-sweep delay: ${interSweepDelayMs}ms`);
     }
@@ -3316,6 +3405,8 @@ async function handleRunAccountBatch(repository, values, logger) {
   const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache');
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
+  const apiReadPrefetch = getBoolean(values, 'api-read-prefetch');
+  const apiReadPrefetchLeadCount = Number(getString(values, 'api-prefetch-lead-count') || 100);
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
   if ((liveSave || liveConnect) && researchConcurrency > 1) {
     throw new Error('research-concurrency > 1 is only allowed for read-only research; live-save/live-connect stay serial');
@@ -3380,6 +3471,8 @@ async function handleRunAccountBatch(repository, values, logger) {
         speedProfile,
         adaptiveSweepPruning,
         reuseSweepCache,
+        apiReadPrefetch,
+        apiReadPrefetchLeadCount,
         runId: 'run-account-batch',
         logger: {
           info(message) {
@@ -3564,6 +3657,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         coverageArtifactPath,
         candidateCount: coverageRun.result.candidateCount,
         resolutionStatus: coverageRun.result.resolutionStatus || null,
+        apiReadPrefetch: coverageRun.result.apiReadPrefetch || null,
         companyScope: coverageRun.result.companyScope || null,
         relativeRankFallbackApplied: annotatedCoverageCandidates.some((candidate) => candidate.relativeRankFallbackApplied),
         attemptedSweepsCount: coverageRun.templates.length,
@@ -4166,9 +4260,10 @@ Usage:
   node src/cli.js doctor [--json]
   node src/cli.js print-first-run-onboarding [--json]
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
+  node src/cli.js test-sales-nav-api --account-name="Acme" [--list-name="Existing Test List"] [--driver=playwright] [--max-candidates=25]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]
-  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--inter-sweep-delay-ms=2000]
+  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--api-read-prefetch] [--inter-sweep-delay-ms=2000]
   node src/cli.js resolve-company --account-name="Acme"
   node src/cli.js print-company-resolution [--account-name="Acme"]
   node src/cli.js retry-company-resolution-failures [--limit=3]
@@ -4203,7 +4298,7 @@ Usage:
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
   node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
-  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--live-save]
+  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--api-read-prefetch] [--live-save]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect] [--allow-unverified-connect-continue]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect [--allow-unverified-connect-continue]

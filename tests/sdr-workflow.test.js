@@ -48,6 +48,17 @@ test('buildSdrResearchBatchValues supports exhaustive mode without exposing inte
   assert.equal(values['speed-profile'], 'exhaustive');
 });
 
+test('buildSdrResearchBatchValues preserves opt-in API read prefetch for guarded speed tests', () => {
+  const values = buildSdrResearchBatchValues({
+    accounts: 'Celonis',
+    'api-read-prefetch': true,
+    'api-prefetch-lead-count': '100',
+  });
+
+  assert.equal(values['api-read-prefetch'], true);
+  assert.equal(values['api-prefetch-lead-count'], '100');
+});
+
 test('buildSdrResearchBatchValues refuses connect flags', () => {
   assert.throws(
     () => buildSdrResearchBatchValues({

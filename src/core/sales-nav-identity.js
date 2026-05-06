@@ -22,11 +22,17 @@ function extractSalesNavigatorLeadId(url) {
   return decodeURIComponent(match[1]).split(',')[0].trim();
 }
 
+function extractSalesNavigatorLeadIdFromEntityUrn(entityUrn) {
+  const match = String(entityUrn || '').match(/fs_salesProfile:\(?([^,\)]+)/i);
+  return match ? match[1].trim() : '';
+}
+
 function normalizeIdentityName(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function buildSalesNavigatorLeadIdentity(value = {}) {
+  const entityUrn = value.entityUrn || value.candidate?.entityUrn || '';
   const salesNavigatorUrl = normalizeSalesNavigatorLeadUrl(
     value.salesNavigatorUrl
       || value.profileUrl
@@ -35,10 +41,11 @@ function buildSalesNavigatorLeadIdentity(value = {}) {
       || '',
   );
   return {
+    entityUrn,
     salesNavigatorUrl,
     salesNavigatorLeadId: value.salesNavigatorLeadId
       || value.leadId
-      || value.entityUrn
+      || extractSalesNavigatorLeadIdFromEntityUrn(entityUrn)
       || extractSalesNavigatorLeadId(salesNavigatorUrl),
     fullName: value.fullName || value.name || value.candidate?.fullName || '',
     title: value.title || value.headline || value.candidate?.title || '',
@@ -49,6 +56,9 @@ function buildSalesNavigatorLeadIdentity(value = {}) {
 function salesNavigatorLeadIdentitiesMatch(left = {}, right = {}) {
   const leftIdentity = buildSalesNavigatorLeadIdentity(left);
   const rightIdentity = buildSalesNavigatorLeadIdentity(right);
+  if (leftIdentity.entityUrn && rightIdentity.entityUrn) {
+    return leftIdentity.entityUrn === rightIdentity.entityUrn;
+  }
   if (leftIdentity.salesNavigatorLeadId && rightIdentity.salesNavigatorLeadId) {
     return leftIdentity.salesNavigatorLeadId === rightIdentity.salesNavigatorLeadId;
   }
@@ -91,6 +101,7 @@ function findSalesNavigatorLeadIdentityMatch(target = {}, rows = []) {
 module.exports = {
   buildSalesNavigatorLeadIdentity,
   extractSalesNavigatorLeadId,
+  extractSalesNavigatorLeadIdFromEntityUrn,
   findSalesNavigatorLeadIdentityMatch,
   normalizeSalesNavigatorLeadUrl,
   salesNavigatorLeadIdentitiesMatch,

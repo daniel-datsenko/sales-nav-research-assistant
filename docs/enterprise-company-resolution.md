@@ -66,3 +66,15 @@ node src/cli.js resolve-company --account-name="Account Name"
 ```
 
 The resolution report should show the intended parent/subsidiary targets and should not include unrelated companies.
+
+## Read-Only Resolver Skill
+
+Before adding a permanent alias, you can let the tool inspect related Sales Navigator company pages in read-only mode:
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Example Enterprise"
+```
+
+The resolver writes JSON and Markdown under `runtime/artifacts/company-resolution/enterprise-entities/`. It reports which pages should be included, suggested for review, or excluded as unrelated homonyms. New findings stay as learned suggestions in the runtime artifact first; they are not automatically promoted into `config/account-aliases/default.json`.
+
+When `--api-read-prefetch` is used for `account-coverage` or `sdr-research`, the same resolver can be used automatically if the first company lookup is ambiguous. Safe related targets continue the sweep; unclear targets keep the run in `needs_company_scope_review`.

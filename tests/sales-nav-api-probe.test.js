@@ -7,6 +7,7 @@ const {
   buildLeadSearchPath,
   buildSalesNavApiProbeArtifact,
   assessApiCompanyResolution,
+  assessCuratedApiCompanyResolution,
   classifySalesNavApiFailure,
   extractCsrfFromCookieHeader,
   extractCsrfFromCookies,
@@ -89,13 +90,37 @@ test('assessApiCompanyResolution distinguishes exact, multi-target, and ambiguou
   assert.equal(edeka.selectedTargets[0].entityPriority, 'it_digital_first');
   assert.equal(edeka.selectedTargets.some((target) => target.name === 'EDEKA'), true);
 
-  const metro = assessApiCompanyResolution('METRO', [
-    { name: 'Metro', companyId: '332814' },
-    { name: 'Metro', companyId: '1950279' },
-    { name: 'METRO/MAKRO', companyId: '164955' },
+  const globex = assessApiCompanyResolution('Globex', [
+    { name: 'Globex', companyId: '332814' },
+    { name: 'Globex', companyId: '1950279' },
+    { name: 'Globex Group', companyId: '164955' },
   ]);
-  assert.equal(metro.status, 'needs_company_scope_review');
-  assert.equal(metro.warning, 'api_company_search_ambiguous_exact_matches');
+  assert.equal(globex.status, 'needs_company_scope_review');
+  assert.equal(globex.warning, 'api_company_search_ambiguous_exact_matches');
+});
+
+test('assessCuratedApiCompanyResolution turns generic enterprise targets into safe ordered API targets', () => {
+  const resolution = assessCuratedApiCompanyResolution('Globex', [
+    {
+      linkedinName: 'Globex Group',
+      salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/164955',
+      targetType: 'parent',
+      evidence: ['curated_parent'],
+    },
+    {
+      linkedinName: 'Globex Digital',
+      salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/70517322',
+      targetType: 'subsidiary',
+      evidence: ['curated_it_subsidiary'],
+    },
+  ]);
+
+  assert.equal(resolution.status, 'resolved_multi_target_curated');
+  assert.deepEqual(
+    resolution.selectedTargets.map((target) => target.companyId),
+    ['70517322', '164955'],
+  );
+  assert.equal(resolution.selectedTargets[0].entityPriority, 'it_digital_first');
 });
 
 test('entityUrn is a first-class Sales Navigator identity match', () => {

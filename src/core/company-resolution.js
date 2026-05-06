@@ -169,7 +169,11 @@ function buildCompanyResolution({
     }))
     .sort((left, right) => right.score - left.score);
 
-  const selectedTargets = targets.filter((target) => target.score >= 50).slice(0, 5);
+  const hasCuratedTargets = targets.some((target) => target.evidence.includes('curated_target'));
+  const selectableTargets = hasCuratedTargets
+    ? targets.filter((target) => target.evidence.includes('curated_target'))
+    : targets;
+  const selectedTargets = selectableTargets.filter((target) => target.score >= 50).slice(0, 5);
   selectedTargets.sort(compareCompanyTargetPriority);
   const top = [...selectedTargets].sort((left, right) => right.score - left.score)[0] || null;
   const strongTargets = selectedTargets.filter((target) => target.score >= 70);
@@ -334,7 +338,7 @@ function scoreCompanyTarget({ target, accountName, domains = [], territoryCountr
   if (evidence.some((item) => /alias|curated_target|curated_it_subsidiary|curated_parent/.test(item))) {
     score += 30;
   }
-  if (target.linkedinCompanyUrl || evidence.some((item) => /linkedin_url/.test(item))) {
+  if (target.linkedinCompanyUrl || target.salesNavCompanyUrl || evidence.some((item) => /linkedin_url/.test(item))) {
     score += 30;
   }
   if (domains.length > 0 && target.linkedinCompanyUrl && domains.some((domain) => target.linkedinCompanyUrl.includes(String(domain).replace(/^https?:\/\//i, '').replace(/^www\./i, '')))) {

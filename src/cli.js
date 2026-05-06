@@ -186,6 +186,9 @@ async function main() {
       case 'test-sales-nav-api':
         await handleTestSalesNavApi(values, logger);
         break;
+      case 'resolve-enterprise-entities':
+        await handleResolveEnterpriseEntities(values, logger);
+        break;
       case 'doctor':
       case 'print-first-run-onboarding':
         await handleFirstRunOnboarding(values);
@@ -526,6 +529,77 @@ async function handleTestSalesNavApi(values, logger) {
       }
     }
     logger.info(`Artifact: ${artifactPath}`);
+  } finally {
+    await driver.close().catch(() => {});
+  }
+}
+
+async function handleResolveEnterpriseEntities(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-mutations')) {
+    throw new Error('resolve-enterprise-entities is read-only and refuses live mutation flags');
+  }
+
+  const accountName = getString(values, 'account-name');
+  if (!accountName) {
+    throw new Error('resolve-enterprise-entities requires --account-name="Account Name"');
+  }
+
+  const driverName = getString(values, 'driver') || 'playwright';
+  const driver = createDriver(driverName, {
+    ...buildDriverOptions(values, { dryRun: true }, {
+      sessionMode: 'persistent',
+      headless: false,
+    }),
+    allowMutations: false,
+    dryRun: true,
+  });
+
+  try {
+    await driver.openSession({
+      runId: 'enterprise-entity-resolution',
+      territoryId: 'enterprise-entity-resolution',
+      dryRun: true,
+      weeklyCap: 140,
+    });
+    const health = await driver.checkSessionHealth();
+    if (!health.authenticated) {
+      throw new Error(`LinkedIn session is not authenticated (${health.state || 'unknown'})`);
+    }
+    if (typeof driver.resolveEnterpriseEntitiesReadOnly !== 'function') {
+      throw new Error(`Driver ${driverName} does not support enterprise entity resolution`);
+    }
+
+    const resolution = await driver.resolveEnterpriseEntitiesReadOnly({
+      accountName,
+      companyCount: Number(getString(values, 'max-companies') || 10),
+      leadSampleCount: Number(getString(values, 'lead-sample-count') || 10),
+      maxLeadSampleTargets: Number(getString(values, 'max-targets') || 8),
+      writeArtifact: true,
+    });
+
+    if (getBoolean(values, 'json')) {
+      console.log(JSON.stringify(resolution, null, 2));
+      return;
+    }
+
+    logger.info(`Enterprise entity resolver: ${resolution.status}`);
+    logger.info(`Mode: ${resolution.mode}`);
+    logger.info(`Included targets: ${resolution.summary?.included || 0}`);
+    logger.info(`Suggested targets: ${resolution.summary?.suggested || 0}`);
+    logger.info(`Excluded homonyms: ${resolution.summary?.excluded || 0}`);
+    for (const target of resolution.included || []) {
+      logger.info(`Include: ${target.name} | ${target.entityPriority} | confidence=${target.confidence}`);
+    }
+    for (const target of resolution.excluded || []) {
+      logger.info(`Skip: ${target.name} | ${target.reason}`);
+    }
+    if ((resolution.errors || []).length > 0) {
+      for (const error of resolution.errors) {
+        logger.warn(`${error.code}: ${error.message}`);
+      }
+    }
+    logger.info(`Artifact: ${resolution.artifactPath}`);
+    logger.info(`Report: ${resolution.reportPath}`);
   } finally {
     await driver.close().catch(() => {});
   }
@@ -4261,6 +4335,7 @@ Usage:
   node src/cli.js print-first-run-onboarding [--json]
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
   node src/cli.js test-sales-nav-api --account-name="Acme" [--list-name="Existing Test List"] [--driver=playwright] [--max-candidates=25]
+  node src/cli.js resolve-enterprise-entities --account-name="Acme" [--driver=playwright] [--max-companies=10] [--lead-sample-count=10]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]
   node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--api-read-prefetch] [--inter-sweep-delay-ms=2000]

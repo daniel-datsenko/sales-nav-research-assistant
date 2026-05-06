@@ -1012,6 +1012,7 @@ async function runAccountCoverageWorkflow({
         driver.runSalesNavApiReadPrefetch({
           accountName,
           leadCount: apiReadPrefetchLeadCount,
+          companyTargets: companyResolution.targets || activeAccount?.salesNav?.companyTargets || [],
         }), { now });
     } catch (error) {
       apiReadPrefetchResult = {

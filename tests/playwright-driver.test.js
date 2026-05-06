@@ -270,6 +270,102 @@ test('playwright API prefetch reads every selected related target in entity-prio
   assert.equal(result.companyResolution.selectedTargets[0].entityPriority, 'it_digital_first');
 });
 
+test('playwright API prefetch uses curated company IDs instead of ambiguous name search', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver();
+  const requestedPaths = [];
+  driver.salesNavApiGet = async (requestPath) => {
+    requestedPaths.push(requestPath);
+    assert.doesNotMatch(requestPath, /salesApiAccountSearch/);
+    const companyId = String(requestPath).match(/\(id:(\d+)\)/)?.[1] || '';
+    return {
+      ok: true,
+      payload: {
+        elements: [{
+          entityUrn: `urn:li:fs_salesProfile:(globex-${companyId},NAME_SEARCH,x)`,
+          firstName: `Globex${companyId}`,
+          lastName: 'Lead',
+          currentPositions: [{ title: 'Cloud Platform Lead', companyName: `Company ${companyId}`, current: true }],
+        }],
+      },
+    };
+  };
+
+  const result = await driver.runSalesNavApiReadPrefetch({
+    accountName: 'Globex',
+    leadCount: 5,
+    companyTargets: [
+      {
+        linkedinName: 'Globex Group',
+        salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/164955',
+        targetType: 'parent',
+        evidence: ['curated_parent'],
+      },
+      {
+        linkedinName: 'Globex Digital',
+        salesNavCompanyUrl: 'https://www.linkedin.com/sales/company/70517322',
+        targetType: 'subsidiary',
+        evidence: ['curated_it_subsidiary'],
+      },
+    ],
+  });
+
+  assert.equal(result.companyResolution.status, 'resolved_multi_target_curated');
+  assert.equal(result.leadCandidates.length, 2);
+  assert.deepEqual(
+    result.targetResponses.map((response) => response.target.companyId),
+    ['70517322', '164955'],
+  );
+  assert.equal(requestedPaths.length, 2);
+});
+
+test('playwright API prefetch recovers ambiguous enterprise accounts through entity resolver suggestions', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver();
+  const requestedCompanyIds = [];
+  driver.salesNavApiGet = async (requestPath) => {
+    if (String(requestPath).includes('salesApiAccountSearch')) {
+      return {
+        ok: true,
+        payload: {
+          elements: [
+            { entityUrn: 'urn:li:fs_salesCompany:332814', name: 'Globex', navigationUrl: 'https://www.linkedin.com/sales/company/332814' },
+            { entityUrn: 'urn:li:fs_salesCompany:1950279', name: 'Globex', navigationUrl: 'https://www.linkedin.com/sales/company/1950279' },
+            { entityUrn: 'urn:li:fs_salesCompany:70517322', name: 'Globex Digital', navigationUrl: 'https://www.linkedin.com/sales/company/70517322' },
+            { entityUrn: 'urn:li:fs_salesCompany:164955', name: 'Globex Group', navigationUrl: 'https://www.linkedin.com/sales/company/164955' },
+            { entityUrn: 'urn:li:fs_salesCompany:999', name: 'Globex Bank', navigationUrl: 'https://www.linkedin.com/sales/company/999' },
+          ],
+        },
+      };
+    }
+    const companyId = String(requestPath).match(/\(id:(\d+)\)/)?.[1] || '';
+    requestedCompanyIds.push(companyId);
+    return {
+      ok: true,
+      payload: {
+        elements: [{
+          entityUrn: `urn:li:fs_salesProfile:(enterprise-${companyId},NAME_SEARCH,x)`,
+          firstName: `Enterprise${companyId}`,
+          lastName: 'Lead',
+          currentPositions: [{ title: 'Cloud Platform Lead', companyName: `Company ${companyId}`, current: true }],
+        }],
+      },
+    };
+  };
+
+  const result = await driver.runSalesNavApiReadPrefetch({
+    accountName: 'Globex',
+    leadCount: 5,
+    maxTargets: 5,
+  });
+
+  assert.equal(result.companyResolution.status, 'resolved_multi_target_suggested');
+  assert.deepEqual(
+    result.companyResolution.selectedTargets.map((target) => target.companyId),
+    ['70517322', '164955'],
+  );
+  assert.deepEqual(requestedCompanyIds.slice(-2), ['70517322', '164955']);
+  assert.equal(result.companyCandidates.some((candidate) => candidate.name === 'Globex Bank' && candidate.decision === 'exclude'), true);
+});
+
 test('playwright driver backs off once and resumes after transient rate limit', async () => {
   const waits = [];
   let bodyText = 'Too many requests. Try later.';

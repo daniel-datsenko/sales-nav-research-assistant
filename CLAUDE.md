@@ -59,6 +59,14 @@ npm run sdr-research -- --accounts="Account A, Account B, Account C" --api-read-
 
 For large enterprise accounts, think in related company entities, not one page. Prioritize IT, digital, systems, technology, and platform subsidiaries first because they often own infrastructure and observability. Still keep the parent or main company in scope because buyers and observability owners can sit there too. Only treat a company as out of scope when it is clearly unrelated or a same-name homonym.
 
+If company scope is unclear, use:
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Account Name"
+```
+
+Explain it simply: "I am checking the related Sales Navigator company pages first, searching IT/digital entities before the parent, and skipping unrelated same-name pages." This command is read-only and must not be mixed with live-save or connect flags.
+
 If the SDR asked for a Sales Navigator list, add `--live-save`:
 
 ```bash

@@ -1140,8 +1140,8 @@ test('runAccountCoverageWorkflow stops before UI sweeps when API company scope i
           status: 'needs_company_scope_review',
           confidence: 0.55,
           selectedTargets: [
-            { name: 'Metro', companyId: '332814' },
-            { name: 'Metro', companyId: '1950279' },
+            { name: 'Globex', companyId: '332814' },
+            { name: 'Globex', companyId: '1950279' },
           ],
           warning: 'api_company_search_ambiguous_exact_matches',
         },
@@ -1162,7 +1162,7 @@ test('runAccountCoverageWorkflow stops before UI sweeps when API company scope i
 
   const run = await runAccountCoverageWorkflow({
     driver,
-    accountName: 'METRO',
+    accountName: 'Globex',
     coverageConfig,
     icpConfig,
     priorityModel: null,

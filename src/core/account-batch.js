@@ -419,6 +419,9 @@ function renderAccountBatchReportMarkdown(payload) {
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
     if (result.apiReadPrefetch) {
       lines.push(`- API read prefetch: \`${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status}\` | leads=\`${result.apiReadPrefetch.leadCandidateCount || 0}\` | ui_sweeps_skipped=\`${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}\``);
+      if (result.apiReadPrefetch.companyResolution?.source === 'enterprise_entity_resolver') {
+        lines.push(`- Enterprise entity resolver: \`used\` | report=\`${result.apiReadPrefetch.companyResolution.reportPath || 'runtime/artifacts/company-resolution/enterprise-entities'}\``);
+      }
       const entityPriorities = (result.apiReadPrefetch.companyResolution?.selectedTargets || [])
         .map((target) => `${target.name || target.linkedinName || 'unknown'}=${target.entityPriority || 'related_entity'}`)
         .slice(0, 5);

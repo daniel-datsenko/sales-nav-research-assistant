@@ -174,6 +174,16 @@ npm run account-coverage -- \
 
 The API prefetch only reads data from the logged-in browser. Real list saves still require `--live-save`.
 
+### Enterprise Entity Resolver
+
+Use this when an enterprise account has several related LinkedIn company pages, for example a parent brand plus IT, digital, systems, or platform subsidiaries. The resolver is read-only: it checks possible company pages, prioritizes IT/digital entities first, keeps the parent company in scope, and skips unrelated same-name companies.
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Example Enterprise"
+```
+
+With `--api-read-prefetch`, account research can call this resolver automatically when the first company lookup is ambiguous. If the resolver finds safe related entities, the run continues; if not, the report asks for company-scope review instead of searching the wrong company.
+
 ### Log In Again If Needed
 
 Use this when LinkedIn needs a fresh manual login:

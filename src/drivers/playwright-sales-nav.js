@@ -11,12 +11,18 @@ const {
   buildLeadSearchPath,
   buildSalesNavApiProbeArtifact,
   assessApiCompanyResolution,
+  assessCuratedApiCompanyResolution,
   classifySalesNavApiFailure,
   extractCsrfFromCookies,
   normalizeApiLeadForCoverage,
   normalizeCompanySearchResponse,
   normalizeLeadSearchResponse,
 } = require('../core/sales-nav-api-probe');
+const {
+  buildEnterpriseEntitySearchTerms,
+  resolveEnterpriseEntities,
+  writeEnterpriseEntityResolutionArtifact,
+} = require('../core/enterprise-entity-resolution');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const MIN_COMPANY_FILTER_CONFIDENCE = 0.7;
@@ -1047,23 +1053,73 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     companyCount = 10,
     leadCount = 100,
     maxTargets = 5,
+    companyTargets = [],
   } = {}) {
     const errors = [];
     let companyResponse = null;
-    try {
-      companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
-    } catch (error) {
-      errors.push(error);
+    const curatedResolution = assessCuratedApiCompanyResolution(accountName, companyTargets);
+    if (!curatedResolution) {
+      try {
+        companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
+      } catch (error) {
+        errors.push(error);
+      }
     }
 
-    const companyCandidates = companyResponse?.payload
-      ? normalizeCompanySearchResponse(companyResponse.payload)
-      : [];
-    const companyResolution = assessApiCompanyResolution(accountName, companyCandidates);
+    let companyCandidates = curatedResolution?.selectedTargets
+      || (companyResponse?.payload ? normalizeCompanySearchResponse(companyResponse.payload) : []);
+    let companyResolution = curatedResolution || assessApiCompanyResolution(accountName, companyCandidates);
+
+    if (!curatedResolution && ['needs_company_scope_review', 'all_resolution_failed'].includes(companyResolution.status)) {
+      const enterpriseResolution = await this.resolveEnterpriseEntitiesReadOnly({
+        accountName,
+        seedCompanyCandidates: companyCandidates,
+        companyCount,
+        leadSampleCount: Math.min(25, leadCount),
+        maxLeadSampleTargets: maxTargets,
+        writeArtifact: true,
+      }).catch((error) => ({
+        status: 'needs_company_scope_review',
+        selectedTargets: [],
+        included: [],
+        suggested: [],
+        excluded: [],
+        errors: [{
+          code: error.code || 'unexpected_shape',
+          message: String(error.message || error).slice(0, 500),
+        }],
+      }));
+
+      if (['resolved_multi_target_suggested', 'resolved_exact_suggested', 'resolved_multi_target_curated', 'resolved_exact_curated'].includes(enterpriseResolution.status)) {
+        companyResolution = {
+          status: enterpriseResolution.status,
+          confidence: enterpriseResolution.selectedTargets.length > 1 ? 0.86 : 0.9,
+          selectedTargets: enterpriseResolution.selectedTargets,
+          warning: null,
+          source: 'enterprise_entity_resolver',
+          accountName,
+          artifactPath: enterpriseResolution.artifactPath || null,
+          reportPath: enterpriseResolution.reportPath || null,
+          summary: enterpriseResolution.summary || null,
+        };
+        companyCandidates = [
+          ...(enterpriseResolution.included || []),
+          ...(enterpriseResolution.suggested || []),
+          ...(enterpriseResolution.excluded || []),
+        ];
+      }
+    }
     const leadCandidates = [];
     const targetResponses = [];
 
-    if (['resolved_exact_api', 'resolved_multi_target_api'].includes(companyResolution.status)) {
+    if ([
+      'resolved_exact_api',
+      'resolved_multi_target_api',
+      'resolved_multi_target_curated',
+      'resolved_exact_curated',
+      'resolved_exact_suggested',
+      'resolved_multi_target_suggested',
+    ].includes(companyResolution.status)) {
       for (const target of companyResolution.selectedTargets.slice(0, Math.max(1, maxTargets))) {
         try {
           const response = await this.salesNavApiGet(buildLeadSearchPath({
@@ -1108,6 +1164,95 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
         path: error.path || null,
       })),
     };
+  }
+
+  async resolveEnterpriseEntitiesReadOnly({
+    accountName,
+    seedCompanyCandidates = [],
+    companyCount = 10,
+    leadSampleCount = 10,
+    maxLeadSampleTargets = 8,
+    writeArtifact = true,
+  } = {}) {
+    const errors = [];
+    const searchTerms = buildEnterpriseEntitySearchTerms(accountName);
+    const companyCandidates = [...(seedCompanyCandidates || []).map((candidate) => ({
+      ...candidate,
+      searchTerm: candidate.searchTerm || accountName,
+    }))];
+    for (const term of searchTerms) {
+      try {
+        const response = await this.salesNavApiGet(buildCompanySearchPath(term, { count: companyCount }));
+        companyCandidates.push(...normalizeCompanySearchResponse(response.payload).map((candidate) => ({
+          ...candidate,
+          searchTerm: term,
+        })));
+      } catch (error) {
+        errors.push({
+          code: error.code || 'unexpected_shape',
+          message: String(error.message || error).slice(0, 500),
+          status: error.status || null,
+          path: error.path || null,
+          searchTerm: term,
+        });
+      }
+    }
+
+    const byCompanyId = new Map();
+    for (const candidate of companyCandidates) {
+      const key = candidate.companyId || candidate.entityUrn || candidate.name;
+      if (!key || byCompanyId.has(key)) continue;
+      byCompanyId.set(key, candidate);
+    }
+    const allUniqueCandidates = [...byCompanyId.values()];
+    const sampledCandidates = [];
+    for (const candidate of allUniqueCandidates.slice(0, Math.max(1, maxLeadSampleTargets))) {
+      const companyId = candidate.companyId;
+      if (!companyId) {
+        sampledCandidates.push(candidate);
+        continue;
+      }
+      try {
+        const response = await this.salesNavApiGet(buildLeadSearchPath({
+          companyId,
+          count: leadSampleCount,
+        }));
+        sampledCandidates.push({
+          ...candidate,
+          leadSamples: normalizeLeadSearchResponse(response.payload),
+        });
+      } catch (error) {
+        errors.push({
+          code: error.code || 'unexpected_shape',
+          message: String(error.message || error).slice(0, 500),
+          status: error.status || null,
+          path: error.path || null,
+          companyId,
+        });
+        sampledCandidates.push(candidate);
+      }
+    }
+
+    const sampledKeys = new Set(sampledCandidates.map((candidate) => candidate.companyId || candidate.entityUrn || candidate.name));
+    const resolution = {
+      ...resolveEnterpriseEntities({
+        accountName,
+        companyCandidates: [
+          ...sampledCandidates,
+          ...allUniqueCandidates.filter((candidate) => !sampledKeys.has(candidate.companyId || candidate.entityUrn || candidate.name)),
+        ],
+      }),
+      searchTerms,
+      errors,
+    };
+    if (writeArtifact) {
+      const paths = writeEnterpriseEntityResolutionArtifact(resolution);
+      return {
+        ...resolution,
+        ...paths,
+      };
+    }
+    return resolution;
   }
 
   async close() {

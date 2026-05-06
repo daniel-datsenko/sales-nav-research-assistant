@@ -237,6 +237,17 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
           unrelatedCompanies: ['Deutsche Bank'],
         },
         strongButNotAutoSavedCount: 2,
+        apiReadPrefetch: {
+          companyResolution: {
+            status: 'resolved_multi_target_api',
+            selectedTargets: [
+              { name: 'EDEKA IT', entityPriority: 'it_digital_first' },
+              { name: 'EDEKA', entityPriority: 'parent_buyer_scope' },
+            ],
+          },
+          leadCandidateCount: 30,
+          uiSweepsSkipped: true,
+        },
         saveResults: [],
         strongButNotAutoSavedCandidates: [
           {
@@ -271,6 +282,7 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
 
   assert.match(markdown, /SDR summary: found=`30` \| selected=`6` .* out_of_network=`2` \| failed_sweeps=`8`/);
   assert.match(markdown, /Coverage status: `needs_company_scope_review`/);
+  assert.match(markdown, /Entity priority: `EDEKA IT=it_digital_first, EDEKA=parent_buyer_scope`/);
   assert.match(markdown, /Company scope warning: `cross_company_contamination_detected` \(Deutsche Bank\)/);
   assert.match(markdown, /Manual review fallback: `top candidates shown because no candidate passed the normal save threshold`/);
   assert.match(markdown, /Sweeps: `12\/20 succeeded`/);

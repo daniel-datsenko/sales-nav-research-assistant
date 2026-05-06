@@ -1,6 +1,8 @@
 # Enterprise Company Resolution
 
-Use this note when an account is a large parent brand but the useful IT org lives in a separate LinkedIn company page.
+Use this note when an account is a large parent brand but the useful IT org lives in one or more separate LinkedIn company pages.
+
+The rule is: prioritize IT/digital entities first, but keep every clearly related entity in the sweep. Parent or main company pages stay in scope because executive buyers and observability owners can sit there. `out_of_scope` is only for unrelated homonyms or clearly wrong companies, not for parent or holding entities that look less technical.
 
 ## When To Add A Curated Target
 
@@ -47,6 +49,12 @@ Edit `config/account-aliases/default.json` and add or update the account entry:
 ```
 
 Keep the mapping conservative. If the subsidiary is not clearly related to the territory account, prefer manual review over automatic sweeps.
+
+When multiple related targets exist, the sweep order should be:
+
+1. IT, digital, systems, technology, platform, cloud, data, or engineering subsidiaries.
+2. Parent or main company pages for buyer coverage.
+3. Regional, product, brand, or other related entities.
 
 ## Operator Check
 

@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const {
   buildCompanyResolution,
+  classifyCompanyEntityPriority,
   companyNameFromLinkedInUrl,
   findCompanyAliasEntry,
   normalizeCompanyName,
@@ -44,6 +45,25 @@ test('findCompanyAliasEntry matches configured target and subsidiary aliases', (
   );
 });
 
+test('company entity priority ranks IT and digital targets before parent while keeping parent in scope', () => {
+  const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
+  const resolution = buildCompanyResolution({
+    accountName: 'EDEKA',
+    source: 'territory',
+    aliasConfig,
+    now: new Date('2026-05-06T12:00:00.000Z'),
+  });
+
+  assert.equal(resolution.status, 'resolved_multi_target_curated');
+  assert.equal(resolution.targets[0].entityPriority, 'it_digital_first');
+  assert.equal(resolution.targets.some((target) => target.linkedinName === 'EDEKA'), true);
+  assert.equal(
+    resolution.targets.find((target) => target.linkedinName === 'EDEKA').entityPriority,
+    'parent_buyer_scope',
+  );
+  assert.equal(classifyCompanyEntityPriority({ linkedinName: 'Retail Brand', targetType: 'brand' }), 'related_entity');
+});
+
 test('buildCompanyResolution resolves seeded hard accounts', () => {
   const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
   const mediaGroup = buildCompanyResolution({
@@ -79,6 +99,42 @@ test('buildCompanyResolution resolves EDEKA DIGITAL through curated subsidiary t
   assert.equal(resolution.targets.some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'), true);
   assert.ok(resolution.searchVariantsTried.includes('EDEKA DIGITAL'));
   assert.match(resolution.manualSearchUrls.linkedinCompanySearchUrl, /linkedin\.com\/search\/results\/companies/);
+});
+
+test('buildCompanyResolution can resolve METRO as curated multi-target without unrelated homonyms', () => {
+  const resolution = buildCompanyResolution({
+    accountName: 'METRO',
+    source: 'territory',
+    aliasConfig: {
+      accounts: {
+        metro: {
+          targets: [
+            {
+              linkedinName: 'METRO.digital',
+              targetType: 'subsidiary',
+              territoryFit: 'likely',
+              evidence: ['curated_it_subsidiary'],
+            },
+            {
+              linkedinName: 'METRO AG',
+              targetType: 'parent',
+              territoryFit: 'likely',
+              evidence: ['curated_parent'],
+            },
+          ],
+          resolutionStatus: 'resolved_multi_target',
+        },
+      },
+    },
+    now: new Date('2026-05-06T12:00:00.000Z'),
+  });
+
+  assert.equal(resolution.status, 'resolved_multi_target_curated');
+  assert.deepEqual(
+    resolution.targets.map((target) => target.linkedinName),
+    ['METRO.digital', 'METRO AG'],
+  );
+  assert.equal(resolution.targets[0].entityPriority, 'it_digital_first');
 });
 
 test('buildCompanyResolution marks low-confidence manual-review accounts', () => {

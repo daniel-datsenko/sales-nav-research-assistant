@@ -419,6 +419,12 @@ function renderAccountBatchReportMarkdown(payload) {
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
     if (result.apiReadPrefetch) {
       lines.push(`- API read prefetch: \`${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status}\` | leads=\`${result.apiReadPrefetch.leadCandidateCount || 0}\` | ui_sweeps_skipped=\`${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}\``);
+      const entityPriorities = (result.apiReadPrefetch.companyResolution?.selectedTargets || [])
+        .map((target) => `${target.name || target.linkedinName || 'unknown'}=${target.entityPriority || 'related_entity'}`)
+        .slice(0, 5);
+      if (entityPriorities.length > 0) {
+        lines.push(`- Entity priority: \`${entityPriorities.join(', ')}\``);
+      }
     }
     if (result.companyScope?.warning) {
       lines.push(`- Company scope warning: \`${result.companyScope.warning}\` (${(result.companyScope.unrelatedCompanies || []).join(', ') || 'unknown company'})`);

@@ -10,6 +10,7 @@ const {
 const COMPANY_RESOLUTION_STATUSES = new Set([
   'resolved_exact',
   'resolved_multi_target',
+  'resolved_multi_target_curated',
   'resolved_low_confidence',
   'needs_manual_company_review',
   'all_resolution_failed',
@@ -169,13 +170,22 @@ function buildCompanyResolution({
     .sort((left, right) => right.score - left.score);
 
   const selectedTargets = targets.filter((target) => target.score >= 50).slice(0, 5);
-  const top = selectedTargets[0] || null;
+  selectedTargets.sort(compareCompanyTargetPriority);
+  const top = [...selectedTargets].sort((left, right) => right.score - left.score)[0] || null;
   const strongTargets = selectedTargets.filter((target) => target.score >= 70);
   const inferredStatus = classifyCompanyResolutionStatus({ top, strongTargets });
-  const status = COMPANY_RESOLUTION_STATUSES.has(aliasEntry.resolutionStatus)
+  const explicitStatus = COMPANY_RESOLUTION_STATUSES.has(aliasEntry.resolutionStatus)
     && inferredStatus !== 'all_resolution_failed'
     ? aliasEntry.resolutionStatus
-    : inferredStatus;
+    : null;
+  const hasCuratedMultiTarget = selectedTargets.length > 1
+    && selectedTargets.some((target) => target.evidence.includes('curated_target'));
+  const status = (explicitStatus === 'resolved_multi_target' && hasCuratedMultiTarget)
+    ? 'resolved_multi_target_curated'
+    : explicitStatus
+    || (inferredStatus === 'resolved_multi_target' && hasCuratedMultiTarget
+      ? 'resolved_multi_target_curated'
+      : inferredStatus);
   const confidence = top ? Number((top.score / 100).toFixed(2)) : 0;
   const recommendedAction = getCompanyResolutionRecommendedAction(status);
 
@@ -321,7 +331,7 @@ function scoreCompanyTarget({ target, accountName, domains = [], territoryCountr
     score += 20;
     evidence.push('partial_name_match');
   }
-  if (evidence.some((item) => /alias/.test(item))) {
+  if (evidence.some((item) => /alias|curated_target|curated_it_subsidiary|curated_parent/.test(item))) {
     score += 30;
   }
   if (target.linkedinCompanyUrl || evidence.some((item) => /linkedin_url/.test(item))) {
@@ -346,12 +356,59 @@ function scoreCompanyTarget({ target, accountName, domains = [], territoryCountr
   }
 
   const cappedScore = Math.max(0, Math.min(100, score));
+  const entityPriority = classifyCompanyEntityPriority(target);
   return {
     ...target,
     score: cappedScore,
     confidence: Number((cappedScore / 100).toFixed(2)),
+    entityPriority,
+    entityPriorityRank: getCompanyEntityPriorityRank(entityPriority),
     evidence: [...new Set(evidence)],
   };
+}
+
+function classifyCompanyEntityPriority(target = {}) {
+  const name = String(target.linkedinName || target.name || target.companyName || '').toLowerCase();
+  const evidence = (target.evidence || []).join(' ').toLowerCase();
+  const type = String(target.targetType || '').toLowerCase();
+  const text = `${name} ${evidence} ${type}`;
+  if (/\b(it|digital|systems?|technology|tech|platform|cloud|data|software|engineering|rechenzentrum|informatik)\b/.test(text)) {
+    return 'it_digital_first';
+  }
+  if (type === 'parent' || /\b(parent|holding|main|curated_parent)\b/.test(text)) {
+    return 'parent_buyer_scope';
+  }
+  return 'related_entity';
+}
+
+function getCompanyEntityPriorityRank(priority) {
+  switch (priority) {
+    case 'it_digital_first':
+      return 0;
+    case 'parent_buyer_scope':
+      return 1;
+    default:
+      return 2;
+  }
+}
+
+function compareCompanyTargetPriority(left = {}, right = {}) {
+  const leftRank = Number.isFinite(left.entityPriorityRank)
+    ? left.entityPriorityRank
+    : getCompanyEntityPriorityRank(classifyCompanyEntityPriority(left));
+  const rightRank = Number.isFinite(right.entityPriorityRank)
+    ? right.entityPriorityRank
+    : getCompanyEntityPriorityRank(classifyCompanyEntityPriority(right));
+  if (leftRank === 0 || rightRank === 0) {
+    return leftRank - rightRank;
+  }
+  if ((left.score || 0) !== (right.score || 0)) {
+    return (right.score || 0) - (left.score || 0);
+  }
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+  return (right.score || 0) - (left.score || 0);
 }
 
 function classifyCompanyResolutionStatus({ top, strongTargets }) {
@@ -378,6 +435,7 @@ function getCompanyResolutionRecommendedAction(status) {
     case 'resolved_exact':
       return 'run_people_sweeps';
     case 'resolved_multi_target':
+    case 'resolved_multi_target_curated':
       return 'run_guarded_multi_target_sweeps';
     case 'resolved_low_confidence':
     case 'needs_manual_company_review':
@@ -394,6 +452,7 @@ function normalizeTargetForArtifact(target) {
     salesNavCompanyUrl: target.salesNavCompanyUrl || null,
     targetType: target.targetType || 'unknown',
     territoryFit: target.territoryFit || 'unclear',
+    entityPriority: target.entityPriority || classifyCompanyEntityPriority(target),
     confidence: target.confidence,
     score: target.score,
     evidence: target.evidence || [],
@@ -514,7 +573,7 @@ function summarizeCompanyResolutionArtifacts(artifactsDir = COMPANY_RESOLUTION_A
   return {
     total: artifacts.length,
     resolvedExact: artifacts.filter((artifact) => artifact.status === 'resolved_exact').length,
-    multiTarget: artifacts.filter((artifact) => artifact.status === 'resolved_multi_target').length,
+    multiTarget: artifacts.filter((artifact) => ['resolved_multi_target', 'resolved_multi_target_curated'].includes(artifact.status)).length,
     needsManualReview: artifacts.filter((artifact) => ['needs_manual_company_review', 'resolved_low_confidence'].includes(artifact.status)).length,
     failed: artifacts.filter((artifact) => artifact.status === 'all_resolution_failed').length,
     nextActions,
@@ -527,8 +586,10 @@ module.exports = {
   buildCompanyResolution,
   buildCompanyResolutionArtifactPath,
   buildCompanyResolutionReportPath,
+  classifyCompanyEntityPriority,
   classifyCompanyResolutionStatus,
   companyNameFromLinkedInUrl,
+  compareCompanyTargetPriority,
   findCompanyAliasEntry,
   buildCompanyResolutionSearchDiagnostics,
   findLatestCompanyResolutionArtifact,

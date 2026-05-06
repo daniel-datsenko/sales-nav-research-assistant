@@ -79,11 +79,15 @@ test('assessApiCompanyResolution distinguishes exact, multi-target, and ambiguou
     { name: 'Process Analytics Factory - PAFnow by Celonis', companyId: '5286872' },
   ]).status, 'resolved_exact_api');
 
-  assert.equal(assessApiCompanyResolution('EDEKA', [
+  const edeka = assessApiCompanyResolution('EDEKA', [
     { name: 'EDEKA', companyId: '12267150' },
     { name: 'EDEKA IT', companyId: '905440' },
     { name: 'EDEKA ZENTRALE Stiftung & Co. KG', companyId: '2783130' },
-  ]).status, 'resolved_multi_target_api');
+  ]);
+  assert.equal(edeka.status, 'resolved_multi_target_api');
+  assert.equal(edeka.selectedTargets[0].name, 'EDEKA IT');
+  assert.equal(edeka.selectedTargets[0].entityPriority, 'it_digital_first');
+  assert.equal(edeka.selectedTargets.some((target) => target.name === 'EDEKA'), true);
 
   const metro = assessApiCompanyResolution('METRO', [
     { name: 'Metro', companyId: '332814' },

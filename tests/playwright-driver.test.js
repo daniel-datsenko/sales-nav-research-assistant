@@ -318,6 +318,51 @@ test('playwright API prefetch uses curated company IDs instead of ambiguous name
   assert.equal(requestedPaths.length, 2);
 });
 
+test('playwright API list snapshot reads direct list URLs and paginates members', async () => {
+  const driver = new PlaywrightSalesNavigatorDriver();
+  const requestedPaths = [];
+  driver.salesNavApiGet = async (requestPath) => {
+    requestedPaths.push(requestPath);
+    const start = Number(String(requestPath).match(/start=(\d+)/)?.[1] || 0);
+    const elements = start === 0
+      ? [
+        {
+          entityUrn: 'urn:li:fs_salesProfile:(lead-1,NAME_SEARCH,x)',
+          firstName: 'Lead',
+          lastName: 'One',
+          currentPositions: [{ title: 'SRE', companyName: 'METRO.digital', current: true }],
+        },
+        {
+          entityUrn: 'urn:li:fs_salesProfile:(lead-2,NAME_SEARCH,x)',
+          firstName: 'Lead',
+          lastName: 'Two',
+          currentPositions: [{ title: 'Cloud Engineer', companyName: 'METRO.digital', current: true }],
+        },
+      ]
+      : [
+        {
+          entityUrn: 'urn:li:fs_salesProfile:(lead-3,NAME_SEARCH,x)',
+          firstName: 'Lead',
+          lastName: 'Three',
+          currentPositions: [{ title: 'Platform Lead', companyName: 'METRO.digital', current: true }],
+        },
+      ];
+    return { ok: true, payload: { elements } };
+  };
+
+  const snapshot = await driver.readLeadListSnapshotViaApiReadOnly(
+    'https://www.linkedin.com/sales/lists/people/7457764280071872512',
+    { count: 2 },
+  );
+
+  assert.equal(snapshot.source, 'sales_nav_api');
+  assert.equal(snapshot.listId, '7457764280071872512');
+  assert.deepEqual(snapshot.rows.map((row) => row.salesNavigatorLeadId), ['lead-1', 'lead-2', 'lead-3']);
+  assert.equal(requestedPaths.length, 2);
+  assert.match(requestedPaths[0], /start=0&count=2/);
+  assert.match(requestedPaths[1], /start=2&count=2/);
+});
+
 test('playwright API prefetch recovers ambiguous enterprise accounts through entity resolver suggestions', async () => {
   const driver = new PlaywrightSalesNavigatorDriver();
   const requestedCompanyIds = [];

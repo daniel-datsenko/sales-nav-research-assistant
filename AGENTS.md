@@ -38,6 +38,8 @@ If LinkedIn/Sales Navigator is not logged in, explain the two safe paths:
 ## Safety Defaults
 
 - Do not save leads or send connection requests unless the user explicitly asks for that live action.
+- For live list saves, prefer the standard `sdr-research --live-save` or `fast-list-import --live-save` path. The app already uses read-only list readback when available to skip existing leads and verify the final Sales Navigator list.
+- Do not attempt API-based list creation, bulk add, delete, connect, or message actions. API usage in the normal flow is read-only verification and research acceleration only.
 - Treat `runtime/`, `.env`, browser profiles, cookies, screenshots, logs, and local databases as local-only.
 - Prefer research-only runs for first tests.
 - If LinkedIn login is missing, do not present that as a failure. It is a normal setup step.
@@ -64,4 +66,10 @@ If session check fails:
 
 ```bash
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
+```
+
+For enterprise accounts with unclear company scope, use the read-only resolver before retrying research:
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Account Name"
 ```

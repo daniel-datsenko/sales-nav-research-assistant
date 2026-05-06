@@ -51,3 +51,21 @@ These actions should never happen as part of a first-run setup or unattended boo
 In SDR-facing language, say:
 
 > I can research accounts safely. Saving leads or sending connection requests is a separate action and I will ask before doing it.
+
+## What The Agent Should Use Automatically
+
+For normal SDR list work, use:
+
+```bash
+npm run sdr-research -- --accounts="Account A, Account B, Account C"
+```
+
+If the SDR asks for a real Sales Navigator list, add `--live-save`. The tool will still stay supervised: it uses the browser UI for the actual save and uses read-only list checks when available to skip duplicates and verify the final list.
+
+For large enterprise accounts or unclear company names, use:
+
+```bash
+npm run resolve-enterprise-entities -- --account-name="Account Name"
+```
+
+Explain this as: "I am checking which related Sales Navigator company pages belong to the account, starting with IT and digital entities, then the parent company."

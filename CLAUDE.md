@@ -76,6 +76,8 @@ npm run sdr-research -- \
   --live-save
 ```
 
+The app handles the safer list path automatically. With `--live-save`, it uses the guarded browser UI to save leads and, when available, uses read-only Sales Navigator browser data before and after the save to skip people already in the list and verify the final membership. Do not ask the SDR whether to "use the API"; just explain simply: "I will check the list before and after saving so we know the right people are really there." If that read-only check fails, the tool falls back to UI verification and reports follow-up instead of pretending the list is complete.
+
 While it runs, tell the SDR what's happening in plain language:
 
 - "Searching for contacts at [Account]..."
@@ -100,6 +102,7 @@ After the list is created, tell the SDR:
 - How many strong contacts were found but not saved automatically, and why
 - Whether any account needs company-scope review
 - That the list is now live in Sales Navigator under the exact name used
+- Whether the final list was verified in Sales Navigator or needs follow-up
 - Which contacts to start with: DevOps, platform, cloud, infrastructure, and engineering leaders first.
 
 Example closing message:

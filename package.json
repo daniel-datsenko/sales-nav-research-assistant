@@ -13,6 +13,7 @@
     "doctor": "node src/cli.js doctor",
     "print-first-run-onboarding": "node src/cli.js print-first-run-onboarding",
     "check-driver-session": "node src/cli.js check-driver-session",
+    "test-sales-nav-api": "node src/cli.js test-sales-nav-api",
     "bootstrap-browser-harness": "automation/bootstrap-browser-harness",
     "bootstrap-session": "node src/cli.js bootstrap-session",
     "test-account-search": "node src/cli.js test-account-search",

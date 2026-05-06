@@ -92,6 +92,14 @@ Research only:
 npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
 ```
 
+Faster experimental read-only prefetch:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Thales Group, Skello, Oodrive" \
+  --api-read-prefetch
+```
+
 Research and create/update one Sales Navigator list:
 
 ```bash
@@ -136,6 +144,33 @@ See [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AG
 ```bash
 npm run check-driver-session -- --driver=playwright --session-mode=persistent
 ```
+
+### Experimental Read-Only Sales Nav API Probe
+
+Use this only to test whether the logged-in browser can read Sales Navigator API data. It does not save, delete, or connect anything.
+
+```bash
+npm run test-sales-nav-api -- --account-name="Example Company"
+```
+
+Optional list readback test:
+
+```bash
+npm run test-sales-nav-api -- \
+  --account-name="Example Company" \
+  --list-name="Existing Test List"
+```
+
+To use the same read-only API pool as an opt-in accelerator for account research:
+
+```bash
+npm run account-coverage -- \
+  --driver=playwright \
+  --account-name="Example Company" \
+  --api-read-prefetch
+```
+
+The API prefetch only reads data from the logged-in browser. Real list saves still require `--live-save`.
 
 ### Log In Again If Needed
 

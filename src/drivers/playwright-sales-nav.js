@@ -5,6 +5,18 @@ const { DriverAdapter } = require('./driver-adapter');
 const { classifyConnectMenuActionLabel } = require('../core/connect-menu');
 const { limitCandidatesByTemplate, normalizeCandidateLimit } = require('../core/candidate-limits');
 const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
+const {
+  buildCompanySearchPath,
+  buildLeadListReadbackPath,
+  buildLeadSearchPath,
+  buildSalesNavApiProbeArtifact,
+  assessApiCompanyResolution,
+  classifySalesNavApiFailure,
+  extractCsrfFromCookies,
+  normalizeApiLeadForCoverage,
+  normalizeCompanySearchResponse,
+  normalizeLeadSearchResponse,
+} = require('../core/sales-nav-api-probe');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const MIN_COMPANY_FILTER_CONFIDENCE = 0.7;
@@ -863,6 +875,238 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       screenshotPath: screenshotPath || null,
       htmlPath: htmlPath || null,
       textPath: textPath || null,
+    };
+  }
+
+  async getSalesNavApiCsrf() {
+    if (!this.context) {
+      throw new Error('sales_nav_api: browser context is not open');
+    }
+    const cookies = await this.context.cookies('https://www.linkedin.com').catch(() => []);
+    return extractCsrfFromCookies(cookies);
+  }
+
+  async salesNavApiGet(path) {
+    if (!this.page) {
+      throw new Error('sales_nav_api: playwright page is not open');
+    }
+
+    const sessionState = await this.getSessionState();
+    if (sessionState !== 'authenticated') {
+      const error = new Error(`sales_nav_api: not authenticated (${sessionState})`);
+      error.code = 'not_authenticated';
+      error.path = path;
+      throw error;
+    }
+
+    const csrf = await this.getSalesNavApiCsrf();
+    if (!csrf) {
+      const error = new Error('sales_nav_api: JSESSIONID/CSRF cookie missing');
+      error.code = 'csrf_missing';
+      error.path = path;
+      throw error;
+    }
+
+    const response = await this.page.evaluate(async ({ requestPath, token }) => {
+      const result = await fetch(requestPath, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'csrf-token': token,
+          'x-restli-protocol-version': '2.0.0',
+          accept: 'application/json',
+        },
+      });
+      const bodyText = await result.text();
+      let payload = null;
+      try {
+        payload = bodyText ? JSON.parse(bodyText) : null;
+      } catch {
+        payload = null;
+      }
+      return {
+        ok: result.ok,
+        status: result.status,
+        url: result.url,
+        bodyText,
+        payload,
+      };
+    }, { requestPath: path, token: csrf });
+
+    if (!response.ok || !response.payload) {
+      const error = new Error(`sales_nav_api: GET failed (${response.status})`);
+      error.code = classifySalesNavApiFailure({
+        status: response.status,
+        bodyText: response.bodyText,
+        sessionState,
+      });
+      error.status = response.status;
+      error.path = path;
+      throw error;
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      url: response.url,
+      path,
+      payload: response.payload,
+    };
+  }
+
+  async resolveLeadListIdReadOnly(listRef) {
+    const normalized = String(listRef || '').trim();
+    const urlMatch = normalized.match(/\/sales\/lists\/people\/(\d+)/i);
+    if (urlMatch) {
+      return {
+        listId: urlMatch[1],
+        listUrl: normalized,
+        listName: normalized,
+      };
+    }
+    if (!normalized) {
+      return null;
+    }
+
+    await this.navigateIfNeeded('https://www.linkedin.com/sales/lists/people');
+    const match = await this.page.evaluate((targetName) => {
+      const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
+      const links = [...document.querySelectorAll('a[href*="/sales/lists/people/"]')];
+      const link = links.find((item) => normalize(item.innerText || item.textContent || '') === targetName);
+      if (!link) return null;
+      const idMatch = String(link.href || '').match(/\/sales\/lists\/people\/(\d+)/i);
+      return {
+        listId: idMatch ? idMatch[1] : '',
+        listUrl: link.href || '',
+        listName: normalize(link.innerText || link.textContent || ''),
+      };
+    }, normalized).catch(() => null);
+
+    if (!match?.listId) {
+      const error = new Error(`sales_nav_api: unable to resolve lead list ${normalized}`);
+      error.code = 'unexpected_shape';
+      throw error;
+    }
+    return match;
+  }
+
+  async runSalesNavApiProbe({
+    accountName,
+    listName = null,
+    companyCount = 10,
+    leadCount = 25,
+  } = {}) {
+    const errors = [];
+    let companyResponse = null;
+    let leadResponse = null;
+    let listResponse = null;
+    let listId = null;
+
+    try {
+      companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
+    } catch (error) {
+      errors.push(error);
+    }
+
+    const companyId = companyResponse?.payload?.elements
+      ? normalizeCompanySearchResponse(companyResponse.payload)[0]?.companyId
+      : null;
+    if (companyId) {
+      try {
+        leadResponse = await this.salesNavApiGet(buildLeadSearchPath({ companyId, count: leadCount }));
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    if (listName) {
+      try {
+        const listRef = await this.resolveLeadListIdReadOnly(listName);
+        listId = listRef?.listId || null;
+        if (listId) {
+          listResponse = await this.salesNavApiGet(buildLeadListReadbackPath({ listId }));
+        }
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    return buildSalesNavApiProbeArtifact({
+      accountName,
+      listName,
+      listId,
+      companyResponse,
+      leadResponse,
+      listResponse,
+      errors,
+    });
+  }
+
+  async runSalesNavApiReadPrefetch({
+    accountName,
+    companyCount = 10,
+    leadCount = 100,
+    maxTargets = 3,
+  } = {}) {
+    const errors = [];
+    let companyResponse = null;
+    try {
+      companyResponse = await this.salesNavApiGet(buildCompanySearchPath(accountName, { count: companyCount }));
+    } catch (error) {
+      errors.push(error);
+    }
+
+    const companyCandidates = companyResponse?.payload
+      ? normalizeCompanySearchResponse(companyResponse.payload)
+      : [];
+    const companyResolution = assessApiCompanyResolution(accountName, companyCandidates);
+    const leadCandidates = [];
+    const targetResponses = [];
+
+    if (['resolved_exact_api', 'resolved_multi_target_api'].includes(companyResolution.status)) {
+      for (const target of companyResolution.selectedTargets.slice(0, Math.max(1, maxTargets))) {
+        try {
+          const response = await this.salesNavApiGet(buildLeadSearchPath({
+            companyId: target.companyId,
+            count: leadCount,
+          }));
+          targetResponses.push({
+            target,
+            status: 'ok',
+            count: Array.isArray(response.payload?.elements) ? response.payload.elements.length : 0,
+          });
+          leadCandidates.push(...normalizeLeadSearchResponse(response.payload).map((lead) =>
+            normalizeApiLeadForCoverage(lead, {
+              accountName,
+              sourceTarget: target,
+            })));
+        } catch (error) {
+          errors.push(error);
+          targetResponses.push({
+            target,
+            status: 'failed',
+            errorCode: error.code || 'unexpected_shape',
+          });
+        }
+      }
+    }
+
+    return {
+      status: errors.length > 0 ? 'completed_with_warnings' : 'completed',
+      mode: 'read_only',
+      source: 'api_read_prefetch',
+      accountName,
+      apiReadable: Boolean(companyResponse?.ok || leadCandidates.length > 0),
+      companyResolution,
+      companyCandidates,
+      leadCandidates,
+      targetResponses,
+      errors: errors.map((error) => ({
+        code: error.code || 'unexpected_shape',
+        message: String(error.message || error).slice(0, 500),
+        status: error.status || null,
+        path: error.path || null,
+      })),
     };
   }
 

@@ -5,27 +5,42 @@ const {
   buildSdrResearchBatchValues,
   buildSdrResearchListName,
   renderSdrResearchIntro,
+  validateSalesNavListName,
+  SALES_NAV_LIST_NAME_MAX,
 } = require('../src/core/sdr-workflow');
 
-test('buildSdrResearchListName creates a simple deterministic SDR list name', () => {
+test('buildSdrResearchListName produces a list name within the Sales Nav UI cap', () => {
   const name = buildSdrResearchListName(['Thales Group', 'Skello', 'Oodrive'], {
     startedAt: '2026-05-05T09:15:00.000Z',
   });
 
-  assert.equal(name, 'SDR Research 2026-05-05 0915 (Thales Group, Skello +1)');
+  assert.ok(name.length <= SALES_NAV_LIST_NAME_MAX, `list name "${name}" exceeds ${SALES_NAV_LIST_NAME_MAX} chars`);
+  assert.match(name, /2026-05-05/);
+});
+
+test('validateSalesNavListName throws on names that would be truncated by Sales Nav UI', () => {
+  assert.throws(
+    () => validateSalesNavListName('Grafana - Daniel Datsenko - PZU PKO Millennium TVN Polkomtel'),
+    /truncates beyond 32 chars/,
+  );
+});
+
+test('validateSalesNavListName accepts a 32-char list name', () => {
+  const okName = 'a'.repeat(32);
+  assert.equal(validateSalesNavListName(okName), okName);
 });
 
 test('buildSdrResearchBatchValues maps simple SDR input onto the guarded account batch flow', () => {
   const values = buildSdrResearchBatchValues({
     accounts: 'Thales Group, Skello, Oodrive',
-    'list-name': 'Polly Score Accounts - Guillaume Nolot',
+    'list-name': 'Polly DDS Score Accts',
     'live-save': true,
   }, {
     startedAt: '2026-05-05T09:15:00.000Z',
   });
 
   assert.equal(values['account-names'], 'Thales Group, Skello, Oodrive');
-  assert.equal(values['consolidate-list-name'], 'Polly Score Accounts - Guillaume Nolot');
+  assert.equal(values['consolidate-list-name'], 'Polly DDS Score Accts');
   assert.equal(values.driver, 'playwright');
   assert.equal(values['session-mode'], 'persistent');
   assert.equal(values['coverage-config'], 'config/account-coverage/default.json');
@@ -72,7 +87,7 @@ test('buildSdrResearchBatchValues refuses connect flags', () => {
 test('renderSdrResearchIntro makes live-save and connect behavior explicit', () => {
   const markdown = renderSdrResearchIntro({
     accountNames: ['Thales Group', 'Skello'],
-    listName: 'Polly Score Accounts - Guillaume Nolot',
+    listName: 'Polly DDS Score Accts',
     liveSave: true,
   });
 

@@ -27,36 +27,62 @@ function stripTruncationMarker(value) {
   return normalizeLabelText(value).replace(TRUNCATION_MARKERS, '').trim();
 }
 
-function matchesSalesNavLabel(fullName, candidateText) {
+// Conservative: only an exact match counts unless the candidate explicitly
+// signals truncation with a trailing ellipsis. This prevents false-positive
+// matches on random UI buttons whose text happens to share a prefix or contain
+// the target as substring (e.g. "DDS PL Wave 1 2026-05-12" matching a
+// "Search saved lists DDS..." input). The Hard-Cap in sdr-workflow.js
+// guarantees normal list names never get truncated in the first place; this
+// helper is the defense-in-depth fallback for edge cases.
+function matchesSalesNavLabel(fullName, candidateText, options = {}) {
   const target = normalizeLabelText(fullName);
-  const candidate = stripTruncationMarker(candidateText);
-  if (!target || !candidate) return false;
+  const candidateRaw = normalizeLabelText(candidateText);
+  if (!target || !candidateRaw) return false;
+  const candidate = stripTruncationMarker(candidateRaw);
+  if (!candidate) return false;
   if (target === candidate) return true;
-  if (candidate.length >= MIN_PREFIX_LEN && target.startsWith(candidate)) return true;
-  if (candidate.toLowerCase().includes(target.toLowerCase())) return true;
+  const wasTruncated = TRUNCATION_MARKERS.test(candidateRaw);
+  if (wasTruncated && candidate.length >= MIN_PREFIX_LEN && target.startsWith(candidate)) {
+    return true;
+  }
+  // Substring containment is only safe on attributes where the full target is
+  // usually embedded (aria-label, title) - never on arbitrary innerText. Callers
+  // must explicitly opt in via options.allowContains.
+  if (options.allowContains && candidate.length > target.length && candidate.toLowerCase().includes(target.toLowerCase())) {
+    return true;
+  }
   return false;
 }
 
 function matchesSalesNavLabelAcrossAttributes(fullName, { text, title, aria } = {}) {
-  return (
-    matchesSalesNavLabel(fullName, text)
-    || matchesSalesNavLabel(fullName, title)
-    || matchesSalesNavLabel(fullName, aria)
-  );
+  // innerText: strict (exact or explicitly truncated). Avoids matching the
+  // target as a substring of random nearby UI text.
+  if (matchesSalesNavLabel(fullName, text)) return true;
+  // title attribute: full string is usually verbatim. Allow contains as a soft
+  // fallback in case Sales Nav wraps the name (e.g. quotes).
+  if (matchesSalesNavLabel(fullName, title, { allowContains: true })) return true;
+  // aria-label: often contains the target inside a descriptive sentence like
+  // "Save this lead to <name>". Allow contains here too.
+  if (matchesSalesNavLabel(fullName, aria, { allowContains: true })) return true;
+  return false;
 }
 
 // Browser-side equivalent for use inside page.evaluate / harness JS payloads.
 // Returns a serializable function source string so callers can inject it.
 function browserSideMatcherSource() {
-  return `function matchesSalesNavLabel(fullName, candidateText) {
+  return `function matchesSalesNavLabel(fullName, candidateText, opts) {
+  opts = opts || {};
   var normalize = function (value) { return String(value || '').replace(/\\s+/g, ' ').trim(); };
-  var stripTrunc = function (value) { return normalize(value).replace(/…|\\.{3}$/u, '').trim(); };
+  var TRUNC = /…|\\.{3}$/u;
   var target = normalize(fullName);
-  var candidate = stripTrunc(candidateText);
-  if (!target || !candidate) return false;
+  var candidateRaw = normalize(candidateText);
+  if (!target || !candidateRaw) return false;
+  var candidate = candidateRaw.replace(TRUNC, '').trim();
+  if (!candidate) return false;
   if (target === candidate) return true;
-  if (candidate.length >= 8 && target.startsWith(candidate)) return true;
-  if (candidate.toLowerCase().indexOf(target.toLowerCase()) >= 0) return true;
+  var wasTruncated = TRUNC.test(candidateRaw);
+  if (wasTruncated && candidate.length >= 8 && target.startsWith(candidate)) return true;
+  if (opts.allowContains && candidate.length > target.length && candidate.toLowerCase().indexOf(target.toLowerCase()) >= 0) return true;
   return false;
 }`;
 }

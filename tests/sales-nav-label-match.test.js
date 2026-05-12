@@ -14,7 +14,7 @@ test('matchesSalesNavLabel: exact match', () => {
 
 test('matchesSalesNavLabel: truncated visible text (ellipsis) is a prefix of full name', () => {
   // The Sales Nav UI truncated bug repro: full name vs visible "Foo…"
-  assert.equal(matchesSalesNavLabel('Grafana - Daniel Datsenko - PZU PKO', 'Grafana - Daniel Datsenko - …'), true);
+  assert.equal(matchesSalesNavLabel('Grafana - Daniel Datsenko - PZU PKO', 'Grafana - Daniel Datsenko -…'), true);
 });
 
 test('matchesSalesNavLabel: truncated visible with three dots is a prefix', () => {
@@ -39,15 +39,30 @@ test('matchesSalesNavLabel: very short candidate is rejected for prefix-match (a
   assert.equal(matchesSalesNavLabel('Grafana - GTM Wave 1', 'Graf'), false);
 });
 
-test('matchesSalesNavLabel: 8-char prefix is the minimum (boundary case)', () => {
-  // After trim+normalize the candidate must be >= 8 chars to count as a prefix match
-  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana '), false);  // trims to 7 chars
-  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana -'), true);   // 9 chars, above MIN
-  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana'), false);   // 7 chars, below MIN_PREFIX_LEN
+test('matchesSalesNavLabel: 8-char prefix is the minimum (boundary case) - requires truncation marker', () => {
+  // After trim+normalize the candidate must be >= 8 chars AND have explicit truncation marker
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana ...'), false);  // trims to 7 chars
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana -...'), true);  // 9 chars + marker
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave', 'Grafana...'), false);   // 7 chars
 });
 
-test('matchesSalesNavLabel: case-insensitive substring match', () => {
-  assert.equal(matchesSalesNavLabel('grafana', 'My Lists: Grafana, Foo'), true);
+test('matchesSalesNavLabel: substring match requires explicit opt-in (anti-false-positive)', () => {
+  // Default: no substring matches. This is critical - the Sales Nav save dropdown
+  // contains many buttons whose text accidentally includes a target list name
+  // as a substring (search inputs, descriptive labels, etc).
+  assert.equal(matchesSalesNavLabel('grafana', 'My Lists: Grafana, Foo'), false);
+  // Opt-in: substring matching is allowed for aria-label / title.
+  assert.equal(matchesSalesNavLabel('grafana', 'My Lists: Grafana, Foo', { allowContains: true }), true);
+});
+
+test('matchesSalesNavLabel: prefix match requires explicit truncation marker', () => {
+  // Without trailing "…" or "...", a prefix is NOT enough. Random UI buttons
+  // whose text happens to be a prefix of the target must not match.
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave 1', 'Grafana '), false);
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave 1', 'Grafana - GTM'), false);
+  // With trailing ellipsis: truncation is signaled, prefix is allowed.
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave 1', 'Grafana - GTM…'), true);
+  assert.equal(matchesSalesNavLabel('Grafana - GTM Wave 1', 'Grafana - GTM...'), true);
 });
 
 test('matchesSalesNavLabel: trims whitespace from both sides', () => {

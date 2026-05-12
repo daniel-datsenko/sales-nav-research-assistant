@@ -1003,8 +1003,8 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
         const title = item.getAttribute('title') || '';
         const aria = item.getAttribute('aria-label') || '';
         return matchesSalesNavLabel(targetName, text)
-          || matchesSalesNavLabel(targetName, title)
-          || matchesSalesNavLabel(targetName, aria);
+          || matchesSalesNavLabel(targetName, title, { allowContains: true })
+          || matchesSalesNavLabel(targetName, aria, { allowContains: true });
       });
       if (!link) return null;
       const idMatch = String(link.href || '').match(/\/sales\/lists\/people\/(\d+)/i);

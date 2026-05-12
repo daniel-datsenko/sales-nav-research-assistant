@@ -1,6 +1,33 @@
 {
   "version": "1.0.0",
   "accounts": {
+    "grafana-labs": {
+      "accountSearchAliases": [
+        "Grafana Labs",
+        "Grafana"
+      ],
+      "companyFilterAliases": [
+        "Grafana Labs"
+      ],
+      "companyIds": ["11062162"],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/grafana"
+      ],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Internal network expansion target. Single canonical entity. NextLink Labs (id 5251900) is a homonym in Pittsburgh - explicitly excluded."
+    },
+    "agirc-arrco": {
+      "accountSearchAliases": [
+        "Agirc Arrco",
+        "Agirc-Arrco"
+      ],
+      "companyFilterAliases": [
+        "Agirc-Arrco"
+      ],
+      "companyIds": [
+        "998749"
+      ]
+    },
     "example-lists-first": {
       "accountSearchAliases": [
         "Example Lists First Account",
@@ -46,10 +73,14 @@
           "linkedinName": "Example Industry Association",
           "targetType": "brand",
           "territoryFit": "likely",
-          "evidence": ["alias"]
+          "evidence": [
+            "alias"
+          ]
         }
       ],
-      "territoryCountries": ["Germany"],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "EXORG is commonly used in calling lists, while Sales Navigator usually needs the full organization name."
     },
@@ -73,12 +104,21 @@
           "linkedinCompanyUrl": "https://www.linkedin.com/company/example-media-germany",
           "targetType": "brand",
           "territoryFit": "likely",
-          "evidence": ["alias", "linkedin_url"]
+          "evidence": [
+            "alias",
+            "linkedin_url"
+          ]
         }
       ],
-      "domains": ["example-media.test"],
-      "parentAliases": ["Example Media Group"],
-      "territoryCountries": ["Germany"],
+      "domains": [
+        "example-media.test"
+      ],
+      "parentAliases": [
+        "Example Media Group"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "LinkedIn public company page resolves the Salesforce-style account name to Example Media Germany."
     },
@@ -105,13 +145,25 @@
           "linkedinCompanyUrl": "https://www.linkedin.com/company/example-logistics",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["alias", "linkedin_url"]
+          "evidence": [
+            "alias",
+            "linkedin_url"
+          ]
         }
       ],
-      "domains": ["example-logistics.test"],
-      "parentAliases": ["Example Logistics Group"],
-      "subsidiaryAliases": ["Example Logistics Switzerland", "Example Logistics Switzerland"],
-      "territoryCountries": ["Switzerland"],
+      "domains": [
+        "example-logistics.test"
+      ],
+      "parentAliases": [
+        "Example Logistics Group"
+      ],
+      "subsidiaryAliases": [
+        "Example Logistics Switzerland",
+        "Example Logistics Switzerland"
+      ],
+      "territoryCountries": [
+        "Switzerland"
+      ],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "LinkedIn public company page resolves the Swiss territory name to the global Example Logistics company page."
     },
@@ -131,18 +183,30 @@
           "linkedinName": "Example Broadcaster",
           "targetType": "parent",
           "territoryFit": "unclear",
-          "evidence": ["alias", "parent_subsidiary"]
+          "evidence": [
+            "alias",
+            "parent_subsidiary"
+          ]
         },
         {
           "linkedinName": "Example Broadcast Studio",
           "targetType": "subsidiary",
           "territoryFit": "unclear",
-          "evidence": ["alias"]
+          "evidence": [
+            "alias"
+          ]
         }
       ],
-      "parentAliases": ["Example Broadcaster"],
-      "subsidiaryAliases": ["Example Broadcast Studio", "Example Broadcast News"],
-      "territoryCountries": ["Germany"],
+      "parentAliases": [
+        "Example Broadcaster"
+      ],
+      "subsidiaryAliases": [
+        "Example Broadcast Studio",
+        "Example Broadcast News"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "needs_manual_company_review",
       "resolutionNotes": "Timed-out reference account; keep parent/broadcast aliases available for supervised retry instead of treating the timeout as zero-lead evidence."
     },
@@ -165,11 +229,18 @@
           "linkedinCompanyUrl": "https://www.linkedin.com/company/example-mobility",
           "targetType": "parent",
           "territoryFit": "exact",
-          "evidence": ["alias", "post_run_manual_validation"]
+          "evidence": [
+            "alias",
+            "post_run_manual_validation"
+          ]
         }
       ],
-      "domains": ["example-mobility.test"],
-      "territoryCountries": ["Germany"],
+      "domains": [
+        "example-mobility.test"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "Post-run validation showed Sales Navigator partial matches can select Example Mobility France SARL; use the German Example Mobility entity for territory research."
     },
@@ -192,141 +263,274 @@
           "linkedinCompanyUrl": "https://www.linkedin.com/company/example-mobility",
           "targetType": "parent",
           "territoryFit": "exact",
-          "evidence": ["alias", "post_run_manual_validation"]
+          "evidence": [
+            "alias",
+            "post_run_manual_validation"
+          ]
         }
       ],
-      "domains": ["example-mobility.test"],
-      "territoryCountries": ["Germany"],
+      "domains": [
+        "example-mobility.test"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_exact",
       "resolutionNotes": "Avoid homonym matches such as unrelated broadband companies; route Example Mobility SE research to the Example Mobility LinkedIn company target."
     },
     "edeka": {
-      "accountSearchAliases": ["EDEKA", "EDEKA DIGITAL", "Edeka Digital", "Lunar"],
-      "companyFilterAliases": ["EDEKA", "EDEKA DIGITAL", "Edeka Digital", "EDEKA DIGITAL GmbH", "Lunar GmbH"],
+      "accountSearchAliases": [
+        "EDEKA",
+        "EDEKA DIGITAL",
+        "Edeka Digital",
+        "Lunar"
+      ],
+      "companyFilterAliases": [
+        "EDEKA",
+        "EDEKA DIGITAL",
+        "Edeka Digital",
+        "EDEKA DIGITAL GmbH",
+        "Lunar GmbH"
+      ],
       "targets": [
         {
           "linkedinName": "EDEKA",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["curated_parent"]
+          "evidence": [
+            "curated_parent"
+          ]
         },
         {
           "linkedinName": "EDEKA DIGITAL GmbH",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         },
         {
           "linkedinName": "Lunar GmbH",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         }
       ],
-      "subsidiaryAliases": ["EDEKA DIGITAL", "Edeka Digital", "EDEKA DIGITAL GmbH", "Lunar GmbH"],
-      "territoryCountries": ["Germany"],
+      "subsidiaryAliases": [
+        "EDEKA DIGITAL",
+        "Edeka Digital",
+        "EDEKA DIGITAL GmbH",
+        "Lunar GmbH"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Parent retail brand likely has separate IT entities; sweep parent plus curated IT subsidiaries, never unrelated companies."
     },
     "otto": {
-      "accountSearchAliases": ["Otto Group", "Otto GmbH & Co. KGaA", "About You", "Bonprix"],
-      "companyFilterAliases": ["Otto Group", "Otto GmbH & Co. KGaA", "About You", "Bonprix"],
+      "accountSearchAliases": [
+        "Otto Group",
+        "Otto GmbH & Co. KGaA",
+        "About You",
+        "Bonprix"
+      ],
+      "companyFilterAliases": [
+        "Otto Group",
+        "Otto GmbH & Co. KGaA",
+        "About You",
+        "Bonprix"
+      ],
       "targets": [
         {
           "linkedinName": "Otto Group",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["curated_parent"]
+          "evidence": [
+            "curated_parent"
+          ]
         },
         {
           "linkedinName": "About You",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         },
         {
           "linkedinName": "Bonprix",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         }
       ],
-      "subsidiaryAliases": ["About You", "Bonprix"],
-      "territoryCountries": ["Germany"],
+      "subsidiaryAliases": [
+        "About You",
+        "Bonprix"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Holding research should include known technology-heavy subsidiaries."
     },
     "schwarz": {
-      "accountSearchAliases": ["Schwarz Group", "Schwarz IT", "Lidl", "Kaufland"],
-      "companyFilterAliases": ["Schwarz Group", "Schwarz IT", "Lidl", "Kaufland"],
+      "accountSearchAliases": [
+        "Schwarz Group",
+        "Schwarz IT",
+        "Lidl",
+        "Kaufland"
+      ],
+      "companyFilterAliases": [
+        "Schwarz Group",
+        "Schwarz IT",
+        "Lidl",
+        "Kaufland"
+      ],
       "targets": [
         {
           "linkedinName": "Schwarz Group",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["curated_parent"]
+          "evidence": [
+            "curated_parent"
+          ]
         },
         {
           "linkedinName": "Schwarz IT",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         }
       ],
-      "subsidiaryAliases": ["Schwarz IT", "Lidl", "Kaufland"],
-      "territoryCountries": ["Germany"],
+      "subsidiaryAliases": [
+        "Schwarz IT",
+        "Lidl",
+        "Kaufland"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Retail parent often has a carved-out IT organization."
     },
     "rewe": {
-      "accountSearchAliases": ["REWE Group", "REWE digital", "REWE Systems"],
-      "companyFilterAliases": ["REWE Group", "REWE digital", "REWE Systems"],
+      "accountSearchAliases": [
+        "REWE Group",
+        "REWE digital",
+        "REWE Systems"
+      ],
+      "companyFilterAliases": [
+        "REWE Group",
+        "REWE digital",
+        "REWE Systems"
+      ],
       "targets": [
         {
           "linkedinName": "REWE Group",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["curated_parent"]
+          "evidence": [
+            "curated_parent"
+          ]
         },
         {
           "linkedinName": "REWE digital",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         },
         {
           "linkedinName": "REWE Systems",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         }
       ],
-      "subsidiaryAliases": ["REWE digital", "REWE Systems"],
-      "territoryCountries": ["Germany"],
+      "subsidiaryAliases": [
+        "REWE digital",
+        "REWE Systems"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Parent plus known IT entities should be reviewed together."
     },
     "bertelsmann": {
-      "accountSearchAliases": ["Bertelsmann", "Arvato Systems"],
-      "companyFilterAliases": ["Bertelsmann", "Arvato Systems"],
+      "accountSearchAliases": [
+        "Bertelsmann",
+        "Arvato Systems"
+      ],
+      "companyFilterAliases": [
+        "Bertelsmann",
+        "Arvato Systems"
+      ],
       "targets": [
         {
           "linkedinName": "Bertelsmann",
           "targetType": "parent",
           "territoryFit": "likely",
-          "evidence": ["curated_parent"]
+          "evidence": [
+            "curated_parent"
+          ]
         },
         {
           "linkedinName": "Arvato Systems",
           "targetType": "subsidiary",
           "territoryFit": "likely",
-          "evidence": ["curated_it_subsidiary"]
+          "evidence": [
+            "curated_it_subsidiary"
+          ]
         }
       ],
-      "subsidiaryAliases": ["Arvato Systems"],
-      "territoryCountries": ["Germany"],
+      "subsidiaryAliases": [
+        "Arvato Systems"
+      ],
+      "territoryCountries": [
+        "Germany"
+      ],
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Bertelsmann technology research should include Arvato Systems as a likely IT subsidiary."
+    },
+    "agirc arrco": {
+      "accountSearchAliases": [
+        "Agirc-Arrco",
+        "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page"
+      ],
+      "companyFilterAliases": [
+        "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page",
+        "Agirc-Arrco"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/agirc-arrco"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/agirc-arrco",
+          "targetType": "unknown",
+          "territoryFit": "likely",
+          "confidence": 0.82,
+          "evidence": [
+            "linkedin_company_search"
+          ]
+        }
+      ],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Resolved automatically from LinkedIn company search for \"Agirc-Arrco\".",
+      "lastVerifiedAt": "2026-05-07T11:33:37.901Z"
     }
   }
 }

@@ -2,225 +2,169 @@
   {
     "id": "champions-core",
     "name": "Technical Champions Core",
-    "keywords": [
-      "observability",
-      "monitoring",
-      "telemetry",
-      "reliability"
-    ],
+    "keywords": ["observability", "monitoring", "telemetry", "reliability"],
     "titleIncludes": [
-      "SRE",
-      "Platform",
-      "Infrastructure",
-      "DevOps",
-      "Reliability",
-      "Observability"
+      "SRE", "Platform", "Infrastructure", "DevOps", "Reliability", "Observability",
+      "Plateforme", "Plattform", "Piattaforma", "Plataforma",
+      "Infrastruktur", "Infrastruttura", "Infraestructura", "Infraestrutura",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto", "Architect",
+      "Ingénieur", "Ingenieur", "Ingegnere", "Ingeniero", "Engenheiro",
+      "Responsable", "Leiter", "Responsabile", "Director", "Diretor", "Hoofd",
+      "Expert", "Spécialiste", "Spezialist", "Esperto", "Specialista", "Experto", "Especialista",
+      "Pilote", "Gestionnaire", "Coordinateur", "Coordinador", "Coordenador",
+      "Tech Lead", "Lead Tech", "Technical Lead", "Engineering Lead"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing",
-      "Architecture & Construction",
-      "Real Estate",
-      "Process Engineering",
-      "Brand Platform"
+      "Recruiter", "Sales", "Marketing", "Architecture & Construction", "Real Estate",
+      "Process Engineering", "Brand Platform",
+      "Retired", "Retraité", "Retraitée", "En Retraite", "Rentner", "Im Ruhestand",
+      "Pensionato", "Pensionata", "Jubilado", "Reformado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Tirocinante", "Becario", "Estagiário", "Stagiair",
+      "Apprenti", "Auszubildender", "Apprendista", "Aprendiz"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "staff",
-      "principal",
-      "vp"
-    ],
-    "maxCandidates": 12,
+    "seniorityTargets": ["manager", "director", "head", "staff", "principal", "vp", "lead", "senior"],
+    "maxCandidates": 30,
     "minimumRelevantHits": 2,
     "listSegment": "champions"
   },
   {
     "id": "decision-makers",
     "name": "Decision Makers",
-    "keywords": [
-      "platform engineering",
-      "infrastructure",
-      "cloud operations"
-    ],
+    "keywords": ["platform engineering", "infrastructure", "cloud operations", "plateforme", "plattform", "piattaforma", "plataforma"],
     "titleIncludes": [
-      "Head of",
-      "Director",
-      "VP",
-      "Vice President",
-      "CTO"
+      "Head of", "Director", "VP", "Vice President", "CTO", "CIO", "CISO", "CDO",
+      "Directeur", "Directrice", "Diretor", "Diretora", "Direttore", "Direttrice",
+      "Leiter", "Leiterin", "Bereichsleiter", "Geschäftsführer",
+      "Responsable", "Responsabile", "Hoofd", "Jefe", "Jefa", "Chefe",
+      "DSI", "RSSI", "IT-Leiter"
     ],
     "titleExcludes": [
-      "Student",
-      "Intern"
+      "Student", "Intern", "Stagiaire", "Praktikant", "Becario", "Estagiário",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd"
     ],
-    "seniorityTargets": [
-      "director",
-      "vp",
-      "head"
-    ],
-    "maxCandidates": 8,
+    "seniorityTargets": ["director", "vp", "head", "c-level"],
+    "maxCandidates": 25,
     "minimumRelevantHits": 1,
     "listSegment": "decision-makers"
   },
   {
     "id": "account-platform-sweep",
     "name": "Account Platform Sweep",
-    "keywords": [
-      "platform"
-    ],
+    "keywords": ["platform", "plateforme", "plattform", "piattaforma", "plataforma"],
     "titleIncludes": [
-      "Platform",
-      "Architecture",
-      "Architect",
-      "Enterprise Architecture",
-      "Digital Product"
+      "Platform", "Architecture", "Architect", "Enterprise Architecture", "Digital Product",
+      "Plateforme", "Plattform", "Piattaforma", "Plataforma",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto",
+      "Ingénieur", "Ingenieur", "Ingegnere", "Ingeniero", "Engenheiro",
+      "Responsable", "Leiter", "Responsabile", "Director", "Hoofd",
+      "Expert", "Spécialiste", "Pilote", "Lead", "Tech Lead"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing",
-      "Architecture & Construction",
-      "Real Estate",
-      "Process Engineering",
-      "Brand Platform"
+      "Recruiter", "Sales", "Marketing", "Architecture & Construction", "Real Estate",
+      "Process Engineering", "Brand Platform",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "principal",
-      "lead"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "principal", "lead", "senior"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "account-platform"
   },
   {
     "id": "account-security-sweep",
     "name": "Account Security And Infrastructure Sweep",
-    "keywords": [
-      "security"
-    ],
+    "keywords": ["security", "sécurité", "sicherheit", "sicurezza", "seguridad", "segurança", "beveiliging"],
     "titleIncludes": [
-      "Security",
-      "Infrastructure",
-      "Technology",
-      "Engineer"
+      "Security", "Infrastructure", "Technology", "Engineer",
+      "Sécurité", "Sicherheit", "Sicurezza", "Seguridad", "Segurança", "Beveiliging",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto",
+      "Ingénieur", "Ingenieur", "Ingegnere", "Ingeniero", "Engenheiro",
+      "Responsable", "Leiter", "Responsabile", "Director", "Hoofd",
+      "Expert", "Spécialiste", "Pilote", "Coordinateur",
+      "RSSI", "CISO", "CSO", "SOC"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing",
-      "Architecture & Construction",
-      "Real Estate",
-      "Process Engineering",
-      "Brand Platform"
+      "Recruiter", "Sales", "Marketing", "Architecture & Construction", "Real Estate",
+      "Process Engineering", "Brand Platform",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "senior",
-      "lead"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "senior", "lead", "principal"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "account-security"
   },
   {
     "id": "account-cloud-sweep",
     "name": "Account Cloud And Delivery Sweep",
-    "keywords": [
-      "cloud"
-    ],
+    "keywords": ["cloud", "kubernetes", "container", "openshift"],
     "titleIncludes": [
-      "Cloud",
-      "DevOps",
-      "Software",
-      "Engineering",
-      "Development"
+      "Cloud", "DevOps", "Software", "Engineering", "Development",
+      "Kubernetes", "Container", "OpenShift", "Docker",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto",
+      "Ingénieur", "Ingenieur", "Ingegnere", "Ingeniero", "Engenheiro",
+      "Responsable", "Leiter", "Responsabile", "Director", "Hoofd",
+      "Expert", "Spécialiste", "Pilote", "Tech Lead", "Lead Tech",
+      "Plateforme", "Plattform", "Piattaforma", "Plataforma"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing",
-      "Architecture & Construction",
-      "Real Estate",
-      "Process Engineering",
-      "Brand Platform"
+      "Recruiter", "Sales", "Marketing", "Architecture & Construction", "Real Estate",
+      "Process Engineering", "Brand Platform",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "senior",
-      "lead"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "senior", "lead", "principal"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "account-cloud"
   },
   {
     "id": "account-architecture-sweep",
     "name": "Account Architecture Sweep",
-    "keywords": [
-      "architect"
-    ],
+    "keywords": ["architect", "architecture", "architecte", "architekt", "architetto", "arquitecto", "arquiteto"],
     "titleIncludes": [
-      "Architect",
-      "Architecture",
-      "Enterprise Architecture",
-      "System Engineer"
+      "Architect", "Architecture", "Enterprise Architecture", "System Engineer",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto",
+      "Solution Architect", "Cloud Architect", "Data Architect", "Security Architect",
+      "Technical Architect", "Application Architect",
+      "Architecte Technique", "Architecte Solution", "Architecte Cloud", "Architecte Données",
+      "Lösungsarchitekt", "Systemarchitekt", "Cloud Architekt",
+      "Architetto Soluzioni", "Architetto Cloud",
+      "Arquitecto Soluciones", "Oplossingsarchitect"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing",
-      "Architecture & Construction",
-      "Real Estate",
-      "Process Engineering",
-      "Brand Platform"
+      "Recruiter", "Sales", "Marketing", "Architecture & Construction", "Real Estate",
+      "Process Engineering", "Brand Platform",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "principal",
-      "lead"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "principal", "lead", "senior"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "account-architecture"
   },
   {
     "id": "account-data-sweep",
     "name": "Account Data And Analytics Sweep",
-    "keywords": [
-      "data"
-    ],
+    "keywords": ["data", "données", "daten", "dati", "datos", "dados", "hadoop", "big data", "power bi"],
     "titleIncludes": [
-      "Data",
-      "Analytics",
-      "Information Technology",
-      "Data Science",
-      "Engineer"
+      "Data", "Analytics", "Information Technology", "Data Science", "Engineer",
+      "Hadoop", "Big Data", "Power BI", "BI", "Datastage", "Spark",
+      "Données", "Daten", "Dati", "Datos", "Dados",
+      "Data Engineer", "Data Architect", "BI Engineer", "BI Architect",
+      "Décisionnel", "Datawarehouse", "Data Lake",
+      "Architecte Data", "Architecte Données", "Datenarchitekt",
+      "Architetto Dati", "Arquitecto de Datos", "Arquiteto de Dados",
+      "Ingénieur Data", "Datentechniker", "Ingegnere Dati",
+      "Tech Lead", "Lead Tech", "Lead Data"
     ],
     "titleExcludes": [
-      "Recruiter",
-      "Sales",
-      "Marketing"
+      "Recruiter", "Sales", "Marketing",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "senior",
-      "lead"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "senior", "lead", "principal"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "account-data"
   },
@@ -228,53 +172,30 @@
     "id": "emea-hidden-platform-personas",
     "name": "EMEA Hidden Platform Personas",
     "keywords": [
-      "FinOps",
-      "CCOE",
-      "Cloud Governance",
-      "Observability Leader",
-      "Data Platform Lead",
-      "MLOps",
-      "AIOps",
-      "DevSecOps",
-      "Kubernetes",
-      "Terraform",
-      "Datadog",
-      "Dynatrace",
-      "Prometheus",
-      "Grafana"
+      "FinOps", "CCOE", "Cloud Governance", "Observability Leader", "Data Platform Lead",
+      "MLOps", "AIOps", "DevSecOps", "Kubernetes", "Terraform",
+      "Datadog", "Dynatrace", "Prometheus", "Grafana", "Splunk", "New Relic",
+      "Technical Lead", "Tech Lead", "SRE Lead",
+      "Responsable Technique", "Leiter Cloud", "Direttore Tecnico", "Jefe de Plataforma"
     ],
     "titleIncludes": [
-      "Responsable",
-      "Directeur Technique",
-      "Leiter",
-      "Cloud Kompetenzzentrum",
-      "Responsabile",
-      "Direttore Tecnico",
-      "Jefe",
-      "Director T\u00e9cnico",
-      "Technical Lead",
-      "Tech Lead",
-      "SRE Lead"
+      "Responsable", "Directeur Technique", "Leiter", "Cloud Kompetenzzentrum",
+      "Responsabile", "Direttore Tecnico", "Jefe", "Director Técnico",
+      "Diretor", "Hoofd", "Verantwoordelijke",
+      "Technical Lead", "Tech Lead", "SRE Lead", "Platform Lead",
+      "Architecte", "Architekt", "Architetto", "Arquitecto", "Arquiteto",
+      "Ingénieur", "Ingenieur", "Ingegnere", "Ingeniero", "Engenheiro",
+      "Expert", "Spécialiste", "Pilote", "Gestionnaire", "Coordinateur",
+      "Esperto", "Specialista", "Experto", "Especialista"
     ],
     "titleExcludes": [
-      "Facilities",
-      "Fleet",
-      "HSEQ",
-      "Procurement",
-      "Purchasing",
-      "Category Manager",
-      "Sales Director",
-      "Commercial Finance"
+      "Facilities", "Fleet", "HSEQ", "Procurement", "Purchasing", "Category Manager",
+      "Sales Director", "Commercial Finance",
+      "Retired", "Retraité", "Rentner", "Pensionato", "Jubilado", "Gepensioneerd",
+      "Stagiaire", "Praktikant", "Becario", "Estagiário"
     ],
-    "seniorityTargets": [
-      "manager",
-      "director",
-      "head",
-      "lead",
-      "principal",
-      "vp"
-    ],
-    "maxCandidates": 10,
+    "seniorityTargets": ["manager", "director", "head", "lead", "principal", "vp", "senior"],
+    "maxCandidates": 40,
     "minimumRelevantHits": 1,
     "listSegment": "emea-hidden-platform"
   }

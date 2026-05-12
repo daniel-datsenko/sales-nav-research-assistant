@@ -33,7 +33,9 @@ test('buildSweepTemplates includes broad crawl and configured sweeps', () => {
   const templates = buildSweepTemplates(config);
 
   assert.equal(templates[0].id, 'broad-crawl');
-  assert.equal(templates[0].maxCandidates, undefined);
+  // v2 config opts into explicit maxCandidates on broadCrawl (200) to bound
+  // the multilingual EMEA sweep expansion. Older v1 config left this undefined.
+  assert.ok(templates[0].maxCandidates === undefined || templates[0].maxCandidates >= 100);
   assert.ok(templates.some((template) => template.id === 'sweep-architecture'));
 });
 
@@ -192,7 +194,8 @@ test('default account coverage config includes multilingual EMEA buyer and opera
 
   assert.ok(templateIds.includes('sweep-emea-data-ai-buyers'));
   assert.ok(templateIds.includes('sweep-emea-it-governance-operators'));
-  assert.ok(templateIds.includes('sweep-emea-localized-observability'));
+  // v2: emea-localized-observability was unified into observability-multilang
+  assert.ok(templateIds.includes('sweep-observability-multilang'));
   assert.ok(keywords.includes('CDO'));
   assert.ok(keywords.includes('Gouvernance SI'));
   assert.ok(keywords.includes('Observabilité'));
@@ -226,11 +229,21 @@ test('buildSweepCacheKey is stable for account targets and template keywords', (
   assert.equal(first, second);
 });
 
-test('default account coverage config has no maxCandidates ceiling', () => {
+test('default account coverage config sets a generous broadCrawl ceiling, not a stingy one', () => {
+  // v2: explicit maxCandidates are intentional. broadCrawl 200, per-sweep 50.
+  // The old "no ceiling" promise was misleading - in practice the driver
+  // capped pages anyway. We now make the cap explicit so it's tunable.
   const config = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
 
-  assert.equal(config.broadCrawl.maxCandidates, undefined);
-  assert.equal(config.sweeps.some((sweep) => Object.hasOwn(sweep, 'maxCandidates')), false);
+  assert.ok(
+    config.broadCrawl.maxCandidates === undefined || config.broadCrawl.maxCandidates >= 100,
+    `broadCrawl.maxCandidates should be undefined or >= 100, got ${config.broadCrawl.maxCandidates}`,
+  );
+  for (const sweep of config.sweeps) {
+    if (Object.hasOwn(sweep, 'maxCandidates')) {
+      assert.ok(sweep.maxCandidates >= 25, `sweep ${sweep.id} maxCandidates ${sweep.maxCandidates} too restrictive`);
+    }
+  }
 });
 
 test('consolidateCoverageCandidates dedupes candidates and tracks sweep sources', () => {

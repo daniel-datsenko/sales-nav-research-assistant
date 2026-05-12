@@ -6,6 +6,11 @@ const { classifyConnectMenuActionLabel } = require('../core/connect-menu');
 const { limitCandidatesByTemplate, normalizeCandidateLimit } = require('../core/candidate-limits');
 const { isSalesNavigatorLeadUrl } = require('../lib/live-readiness');
 const {
+  matchesSalesNavLabel,
+  matchesSalesNavLabelAcrossAttributes,
+  browserSideMatcherSource,
+} = require('../lib/sales-nav-label-match');
+const {
   buildCompanySearchPath,
   buildLeadListReadbackPath,
   buildLeadSearchPath,
@@ -212,7 +217,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       headless: false,
       slowMo: 0,
       settleMs: 350,
-      maxScrollSteps: 10,
+      maxScrollSteps: 30,
       humanize: true,
       userDataDir: null,
       storageState: null,
@@ -407,7 +412,10 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
       return;
     }
 
-    const keywords = (template.keywords || []).join(' ');
+    const keywordList = (template.keywords || []).filter(Boolean);
+    const keywords = keywordList.length > 1
+      ? keywordList.map((kw) => /\s/.test(kw) ? `"${kw}"` : kw).join(' OR ')
+      : (keywordList[0] || '');
     await waitForAnySelector(this.page, DEFAULT_SELECTORS.keywordInputs, 12000).catch(() => {});
     const keywordInput = await findFirstVisible(this.page, DEFAULT_SELECTORS.keywordInputs);
     if (keywordInput && keywords) {
@@ -483,7 +491,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
         stagnantScrolls = 0;
       }
 
-      if (stagnantScrolls >= 2) {
+      if (stagnantScrolls >= 5) {
         break;
       }
 
@@ -984,10 +992,20 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     }
 
     await this.navigateIfNeeded('https://www.linkedin.com/sales/lists/people');
-    const match = await this.page.evaluate((targetName) => {
+    const matcherSrc = browserSideMatcherSource();
+    const match = await this.page.evaluate(({ targetName, matcherFnSrc }) => {
       const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
+      // eslint-disable-next-line no-new-func
+      const matchesSalesNavLabel = new Function(`${matcherFnSrc}; return matchesSalesNavLabel;`)();
       const links = [...document.querySelectorAll('a[href*="/sales/lists/people/"]')];
-      const link = links.find((item) => normalize(item.innerText || item.textContent || '') === targetName);
+      const link = links.find((item) => {
+        const text = item.innerText || item.textContent || '';
+        const title = item.getAttribute('title') || '';
+        const aria = item.getAttribute('aria-label') || '';
+        return matchesSalesNavLabel(targetName, text)
+          || matchesSalesNavLabel(targetName, title)
+          || matchesSalesNavLabel(targetName, aria);
+      });
       if (!link) return null;
       const idMatch = String(link.href || '').match(/\/sales\/lists\/people\/(\d+)/i);
       return {
@@ -995,7 +1013,7 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
         listUrl: link.href || '',
         listName: normalize(link.innerText || link.textContent || ''),
       };
-    }, normalized).catch(() => null);
+    }, { targetName: normalized, matcherFnSrc: matcherSrc }).catch(() => null);
 
     if (!match?.listId) {
       const error = new Error(`sales_nav_api: unable to resolve lead list ${normalized}`);
@@ -3136,6 +3154,8 @@ async function evaluateSalesNavListRowSelected(locator) {
 
 async function clickVisibleListRow(page, listName) {
   const escaped = escapeRegex(listName);
+
+  // Pass 1: exact aria-label substring
   const exactAria = page.locator(`button[aria-label*="${listName}"]`);
   const count = await exactAria.count().catch(() => 0);
   for (let index = 0; index < count; index += 1) {
@@ -3157,6 +3177,29 @@ async function clickVisibleListRow(page, listName) {
     return { outcome: 'clicked', listName, selectionMode: 'existing_list' };
   }
 
+  // Pass 2: all buttons - check title attribute + innerText with truncated-prefix match
+  const allButtons = page.locator('button[aria-label], button[title], button');
+  const allCount = await allButtons.count().catch(() => 0);
+  for (let index = 0; index < Math.min(allCount, 200); index += 1) {
+    const locator = allButtons.nth(index);
+    const visible = await locator.isVisible().catch(() => false);
+    if (!visible) continue;
+    const title = await locator.getAttribute('title').catch(() => '') || '';
+    const aria = await locator.getAttribute('aria-label').catch(() => '') || '';
+    const text = await locator.innerText().catch(() => '') || '';
+    const combined = `${text} ${aria} ${title}`.toLowerCase();
+    if (combined.includes('create new list') || combined.includes('saved searches')) continue;
+    if (!matchesSalesNavLabelAcrossAttributes(listName, { text, title, aria })) {
+      continue;
+    }
+    if (await evaluateSalesNavListRowSelected(locator)) {
+      return { outcome: 'already_saved', listName, selectionMode: 'existing_list' };
+    }
+    await locator.click().catch(() => {});
+    return { outcome: 'clicked', listName, selectionMode: 'existing_list' };
+  }
+
+  // Pass 3: regex-by-name (kept for backward compat, may be needed for non-button roles)
   const buttonByText = page.getByRole('button', {
     name: new RegExp(escaped, 'i'),
   });

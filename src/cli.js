@@ -1613,7 +1613,15 @@ list_target = js(${JSON.stringify(`
 (() => {
   const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
   const links = [...document.querySelectorAll('a[href]')];
-  const match = links.find((link) => normalize(link.innerText || link.textContent || '') === ${JSON.stringify(normalizedListName)});
+  const target = ${JSON.stringify(normalizedListName)};
+  const match = links.find((link) => {
+    const text = normalize(link.innerText || link.textContent || '').replace(/…|\\.{3}$/u, '').trim();
+    const title = (link.getAttribute('title') || '').trim();
+    if (text === target || title === target) return true;
+    if (title && (title === target || title.includes(target))) return true;
+    if (text && text.length >= 8 && target.startsWith(text)) return true;
+    return false;
+  });
   if (!match || typeof match.getBoundingClientRect !== 'function') {
     return null;
   }
@@ -1732,7 +1740,14 @@ async function readLeadListSnapshotViaPlaywright(driver, listName) {
   const listLink = await driver.page.evaluateHandle((targetName) => {
     const normalize = (value) => (value || '').replace(/\s+/g, ' ').trim();
     const links = [...document.querySelectorAll('a[href]')];
-    const match = links.find((link) => normalize(link.innerText || link.textContent || '') === targetName);
+    const match = links.find((link) => {
+      const text = normalize(link.innerText || link.textContent || '').replace(/…|\.{3}$/u, '').trim();
+      const title = (link.getAttribute('title') || '').trim();
+      if (text === targetName || title === targetName) return true;
+      if (title && title.includes(targetName)) return true;
+      if (text && text.length >= 8 && targetName.startsWith(text)) return true;
+      return false;
+    });
     return match || null;
   }, normalizedListName);
 
@@ -1802,7 +1817,15 @@ list_target = js(${JSON.stringify(`
 (() => {
   const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
   const links = [...document.querySelectorAll('a[href]')];
-  const match = links.find((link) => normalize(link.innerText || link.textContent || '') === ${JSON.stringify(String(listName || '').trim())});
+  const target = ${JSON.stringify(String(listName || '').trim())};
+  const match = links.find((link) => {
+    const text = normalize(link.innerText || link.textContent || '').replace(/…|\\.{3}$/u, '').trim();
+    const title = (link.getAttribute('title') || '').trim();
+    if (text === target || title === target) return true;
+    if (title && title.includes(target)) return true;
+    if (text && text.length >= 8 && target.startsWith(text)) return true;
+    return false;
+  });
   return match ? { href: match.href } : null;
 })()
 `)})
@@ -3639,6 +3662,13 @@ async function handleRunAccountBatch(repository, values, logger) {
           dryRun: false,
         });
 
+        // Circuit breaker: if `created_list` fires consecutively, the list-match
+        // logic is failing on every save and we are spawning duplicate lists.
+        // See runtime/BUG-REPORT-list-duplication-2026-05-12.md. Abort early.
+        const DUPLICATE_LIST_CIRCUIT_TRIP = 3;
+        let consecutiveCreatedList = 0;
+        let circuitTripped = false;
+
         for (let saveIndex = 0; saveIndex < selectedForListSave.length; saveIndex += 1) {
           const candidate = selectedForListSave[saveIndex];
           const saveRow = await saveBatchCandidateWithRetry({
@@ -3650,6 +3680,38 @@ async function handleRunAccountBatch(repository, values, logger) {
           });
           saveResults.push(saveRow);
           logger.info(`${accountName} | save ${saveIndex + 1}/${selectedForListSave.length}: ${candidate.fullName} -> ${saveRow.status}`);
+
+          const mode = String(saveRow.selectionMode || '');
+          if (mode === 'created_list' || mode === 'results_row_created_list') {
+            consecutiveCreatedList += 1;
+          } else {
+            consecutiveCreatedList = 0;
+          }
+          if (consecutiveCreatedList >= DUPLICATE_LIST_CIRCUIT_TRIP) {
+            circuitTripped = true;
+            const remaining = selectedForListSave.length - (saveIndex + 1);
+            logger.warn(
+              `${accountName} | CIRCUIT BREAKER tripped: ${DUPLICATE_LIST_CIRCUIT_TRIP} consecutive 'created_list' outcomes. `
+              + `Save loop aborted to prevent duplicate-list spam. ${remaining} leads not attempted. `
+              + `Likely cause: list "${listName}" cannot be matched in Sales Nav UI (truncation, special chars, or stale DOM). `
+              + `Manual cleanup may be needed in Sales Nav.`,
+            );
+            break;
+          }
+        }
+        if (circuitTripped) {
+          for (let pendingIndex = saveResults.length; pendingIndex < selectedForListSave.length; pendingIndex += 1) {
+            const pending = selectedForListSave[pendingIndex];
+            saveResults.push({
+              fullName: pending.fullName,
+              title: pending.title || null,
+              status: 'aborted_duplicate_list_circuit',
+              note: 'skipped to prevent duplicate-list creation; investigate list-name match',
+              salesNavigatorUrl: pending.salesNavigatorUrl || pending.profileUrl || null,
+              score: pending.score ?? null,
+              coverageBucket: pending.coverageBucket || null,
+            });
+          }
         }
         if (!skipSaveVerification) {
           logger.info(`${accountName} | list verification started`);

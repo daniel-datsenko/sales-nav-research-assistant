@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "name": "full_account_coverage_v1",
+  "version": "2.0.0-emea-multilang",
+  "name": "full_account_coverage_v2_emea",
   "titleExcludes": [
     "Architecture & Construction",
     "Architecture and Construction",
@@ -15,107 +15,681 @@
     "Client Marketing Platform",
     "Global Travel Retail",
     "Workforce Management",
-    "Client Relations"
+    "Client Relations",
+    "Retired",
+    "Retraité",
+    "Retraitée",
+    "En Retraite",
+    "Pensionné",
+    "Pensionnée",
+    "Rentner",
+    "Rentnerin",
+    "Im Ruhestand",
+    "Pensionär",
+    "Pensioniert",
+    "Pensionato",
+    "Pensionata",
+    "In Pensione",
+    "Jubilado",
+    "Jubilada",
+    "Retirado",
+    "Retirada",
+    "Reformado",
+    "Reformada",
+    "Aposentado",
+    "Aposentada",
+    "Gepensioneerd",
+    "Met Pensioen",
+    "Stagiaire",
+    "Praktikant",
+    "Praktikantin",
+    "Tirocinante",
+    "Becario",
+    "Becaria",
+    "Estagiário",
+    "Estagiária",
+    "Stagiair",
+    "Apprenti",
+    "Apprentie",
+    "Auszubildender",
+    "Auszubildende",
+    "Apprendista",
+    "Aprendiz",
+    "Recruiter",
+    "Talent Acquisition",
+    "Sourcer",
+    "Sourcing Specialist"
   ],
   "broadCrawl": {
-    "enabled": true
+    "enabled": true,
+    "maxCandidates": 200,
+    "maxScrollSteps": 30
   },
   "sweeps": [
     {
       "id": "architecture",
-      "keywords": [
-        "architecture"
-      ]
+      "keywords": ["architecture", "architect"],
+      "maxCandidates": 50
     },
     {
       "id": "security",
-      "keywords": [
-        "security"
-      ]
+      "keywords": ["security"],
+      "maxCandidates": 50
     },
     {
       "id": "cloud",
-      "keywords": [
-        "cloud"
-      ]
+      "keywords": ["cloud"],
+      "maxCandidates": 50
     },
     {
       "id": "data",
-      "keywords": [
-        "data"
-      ]
+      "keywords": ["data"],
+      "maxCandidates": 50
     },
     {
       "id": "infrastructure",
-      "keywords": [
-        "infrastructure"
-      ]
+      "keywords": ["infrastructure"],
+      "maxCandidates": 50
     },
     {
       "id": "platform",
-      "keywords": [
-        "platform"
-      ]
+      "keywords": ["platform"],
+      "maxCandidates": 50
     },
     {
       "id": "engineering",
-      "keywords": [
-        "engineering"
-      ]
+      "keywords": ["engineering"],
+      "maxCandidates": 50
     },
     {
       "id": "software",
-      "keywords": [
-        "software"
-      ]
+      "keywords": ["software"],
+      "maxCandidates": 50
     },
     {
       "id": "devops",
-      "keywords": [
-        "devops"
-      ]
+      "keywords": ["devops"],
+      "maxCandidates": 50
     },
     {
       "id": "technology",
-      "keywords": [
-        "technology"
-      ]
-    },
-    {
-      "id": "it",
-      "keywords": [
-        "it"
-      ]
+      "keywords": ["technology"],
+      "maxCandidates": 50
     },
     {
       "id": "system",
-      "keywords": [
-        "system"
-      ]
+      "keywords": ["system"],
+      "maxCandidates": 50
     },
     {
       "id": "integration",
-      "keywords": [
-        "integration"
-      ]
+      "keywords": ["integration"],
+      "maxCandidates": 50
     },
     {
       "id": "operations",
-      "keywords": [
-        "operations"
-      ]
+      "keywords": ["operations"],
+      "maxCandidates": 50
     },
     {
       "id": "reliability",
-      "keywords": [
-        "reliability"
-      ]
+      "keywords": ["reliability"],
+      "maxCandidates": 50
     },
     {
       "id": "monitoring",
+      "keywords": ["monitoring"],
+      "maxCandidates": 50
+    },
+    {
+      "id": "kubernetes-container-experts",
       "keywords": [
-        "monitoring"
-      ]
+        "Kubernetes",
+        "K8s",
+        "Docker",
+        "Container",
+        "OpenShift",
+        "Helm",
+        "Rancher",
+        "EKS",
+        "AKS",
+        "GKE",
+        "Service Mesh",
+        "Istio"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "incident-itil-itsm",
+      "keywords": [
+        "Incident Manager",
+        "Problem Manager",
+        "Change Manager",
+        "ITIL",
+        "ITSM",
+        "Gestionnaire des Problèmes",
+        "Gestionnaire des Incidents",
+        "Problem Management",
+        "Incident Management",
+        "Resolution Manager",
+        "Resolution Engineer",
+        "Major Incident",
+        "Vorfallsmanager",
+        "Problemmanager",
+        "Änderungsmanager",
+        "Gestione Incidenti",
+        "Gestione Problemi",
+        "Gestor de Incidentes",
+        "Gestor de Problemas",
+        "Service Desk Manager",
+        "Operations Manager",
+        "Production Support",
+        "Application Support",
+        "Support N3"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "network-telecom-multilang",
+      "keywords": [
+        "Network Engineer",
+        "Network Architect",
+        "Network Operations",
+        "NetOps",
+        "Réseau",
+        "Réseaux",
+        "Télécoms",
+        "Sécurité Réseau",
+        "Ingénieur Réseau",
+        "Responsable Réseau",
+        "Netzwerk",
+        "Netzwerktechnik",
+        "Telekommunikation",
+        "Netzwerkarchitekt",
+        "Rete",
+        "Reti",
+        "Telecomunicazioni",
+        "Ingegnere Rete",
+        "Redes",
+        "Telecomunicaciones",
+        "Ingeniero de Redes",
+        "Engenheiro de Redes",
+        "Netwerk",
+        "Telecommunicatie"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "bi-data-platform",
+      "keywords": [
+        "Power BI",
+        "Hadoop",
+        "Big Data",
+        "Datastage",
+        "Spark",
+        "Cloudera",
+        "Iceberg",
+        "Snowflake",
+        "Databricks",
+        "BI Engineer",
+        "Data Platform",
+        "Data Lake",
+        "Data Warehouse",
+        "ETL",
+        "Data Pipeline",
+        "Tableau",
+        "Looker",
+        "Qlik",
+        "Décisionnel",
+        "Datawarehouse",
+        "BI Architect",
+        "Lakehouse"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "data-engineer-multilang",
+      "keywords": [
+        "Data Engineer",
+        "Senior Data Engineer",
+        "Lead Data Engineer",
+        "Ingénieur Data",
+        "Ingénieur Données",
+        "Datentechniker",
+        "Dateningenieur",
+        "Ingegnere Dati",
+        "Ingeniero de Datos",
+        "Engenheiro de Dados",
+        "Data Architect",
+        "Architecte Data",
+        "Architecte Données",
+        "Datenarchitekt",
+        "Architetto Dati",
+        "Arquitecto de Datos",
+        "Arquiteto de Dados"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "production-operations-multilang",
+      "keywords": [
+        "Production Informatique",
+        "Exploitation",
+        "Exploitation informatique",
+        "Fabrication",
+        "Mise en Production",
+        "IT-Betrieb",
+        "Betrieb",
+        "Produktion",
+        "Systembetrieb",
+        "Produzione",
+        "Produzione IT",
+        "Esercizio IT",
+        "Producción",
+        "Producción TI",
+        "Produção",
+        "Produção TI",
+        "Productie",
+        "IT-Productie",
+        "Operations Engineer",
+        "Operations Lead"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "architect-multilang-extended",
+      "keywords": [
+        "Solution Architect",
+        "Enterprise Architect",
+        "System Architect",
+        "Technical Architect",
+        "Cloud Architect",
+        "Data Architect",
+        "Security Architect",
+        "Application Architect",
+        "Architecte Technique",
+        "Architecte Solution",
+        "Architecte Système",
+        "Architecte d'Entreprise",
+        "Architecte Cloud",
+        "Architecte Sécurité",
+        "Architecte Applicatif",
+        "Lösungsarchitekt",
+        "Systemarchitekt",
+        "Technischer Architekt",
+        "Cloud Architekt",
+        "Sicherheitsarchitekt",
+        "Architetto Soluzioni",
+        "Architetto Sistemi",
+        "Architetto Cloud",
+        "Arquitecto Soluciones",
+        "Arquitecto de Sistemas",
+        "Arquitecto Cloud",
+        "Arquiteto de Soluções",
+        "Arquiteto de Sistemas",
+        "Oplossingsarchitect",
+        "Systeemarchitect"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "senior-tech-leadership",
+      "keywords": [
+        "CTO",
+        "CIO",
+        "CDO",
+        "CISO",
+        "DSI",
+        "RSSI",
+        "VP Engineering",
+        "VP Technology",
+        "VP Platform",
+        "VP Infrastructure",
+        "Head of IT",
+        "Head of Engineering",
+        "Head of Platform",
+        "Head of Infrastructure",
+        "Head of Cloud",
+        "Head of Data",
+        "Head of Observability",
+        "IT-Leiter",
+        "IT-Direktor",
+        "IT-Geschäftsführer",
+        "Bereichsleiter IT",
+        "Direttore Sistemi Informativi",
+        "Direttore IT",
+        "Director TI",
+        "Director de TI",
+        "Diretor TI",
+        "Diretor de TI",
+        "Hoofd IT",
+        "Directeur IT",
+        "Directeur Informatique",
+        "Director of Engineering",
+        "Director of Technology",
+        "Director of Platform",
+        "Director of Infrastructure"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "observability-multilang",
+      "keywords": [
+        "Observability",
+        "Observabilité",
+        "Observabilität",
+        "Beobachtbarkeit",
+        "Osservabilità",
+        "Observabilidad",
+        "Observabilidade",
+        "Monitoring",
+        "Surveillance IT",
+        "Surveillance Informatique",
+        "Überwachung",
+        "IT-Überwachung",
+        "Monitoraggio",
+        "Monitoraggio IT",
+        "Monitoreo",
+        "Monitoreo TI",
+        "Monitorização",
+        "APM",
+        "Application Performance",
+        "Telemetry",
+        "Télémétrie",
+        "Telemetria",
+        "Telemetría"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "devops-sre-platform-multilang",
+      "keywords": [
+        "DevOps",
+        "DevSecOps",
+        "SRE",
+        "Site Reliability",
+        "Site Reliability Engineer",
+        "Platform Engineer",
+        "Platform Engineering",
+        "Plateforme",
+        "Ingénieur Plateforme",
+        "Plattform-Engineering",
+        "Plattform Ingenieur",
+        "Plattformingenieur",
+        "Piattaforma",
+        "Ingegnere Piattaforma",
+        "Plataforma",
+        "Ingeniero de Plataforma",
+        "Engenheiro de Plataforma",
+        "Platform Engineer",
+        "Cloud Engineer",
+        "Ingénieur Cloud",
+        "Wolken-Ingenieur",
+        "Ingeniero Cloud",
+        "Engenheiro Cloud",
+        "GitOps",
+        "Internal Developer Platform",
+        "IDP"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "security-cybersecurity-multilang",
+      "keywords": [
+        "Cybersecurity",
+        "Cyber Security",
+        "Cybersécurité",
+        "Cyber-Sécurité",
+        "IT-Sicherheit",
+        "Cybersicherheit",
+        "Informationssicherheit",
+        "Sicurezza Informatica",
+        "Cybersicurezza",
+        "Ciberseguridad",
+        "Seguridad Informática",
+        "Cibersegurança",
+        "Segurança Informática",
+        "Cyberbeveiliging",
+        "Informatiebeveiliging",
+        "Security Operations",
+        "SOC",
+        "SIEM",
+        "Security Engineer",
+        "Security Analyst",
+        "Ingénieur Sécurité",
+        "Sicherheitsingenieur",
+        "Ingegnere Sicurezza",
+        "Ingeniero de Seguridad",
+        "Engenheiro de Segurança"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "java-tech-lead-fullstack",
+      "keywords": [
+        "Tech Lead",
+        "Lead Tech",
+        "Lead Developer",
+        "Lead Engineer",
+        "Développeur Senior",
+        "Senior Developer",
+        "Java",
+        "JEE",
+        "J2EE",
+        "Spring",
+        "Fullstack Lead",
+        "Backend Lead",
+        "Frontend Lead",
+        "Engineering Lead",
+        "Technical Lead",
+        "Responsable Technique",
+        "Technischer Leiter",
+        "Capo Tecnico",
+        "Líder Técnico",
+        "Líder Tecnológico"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "integration-middleware-multilang",
+      "keywords": [
+        "Middleware",
+        "Integration Engineer",
+        "Integration Architect",
+        "Integration Lead",
+        "Intégration",
+        "Ingénieur Intégration",
+        "Responsable Intégration",
+        "Integrationsingenieur",
+        "Integrationsarchitekt",
+        "Integrazione",
+        "Ingegnere Integrazione",
+        "Integración",
+        "Ingeniero de Integración",
+        "Integração",
+        "Engenheiro de Integração",
+        "API Manager",
+        "API Lead",
+        "ESB",
+        "MuleSoft",
+        "Boomi",
+        "Apache Camel",
+        "Kafka"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "fr-tech-roles-extended",
+      "keywords": [
+        "Responsable",
+        "Architecte",
+        "Ingénieur",
+        "Chef de Projet",
+        "Directeur Technique",
+        "DSI",
+        "Observabilité",
+        "Exploitation informatique",
+        "Responsable Domaine",
+        "Expert",
+        "Spécialiste",
+        "Pilote",
+        "Gestionnaire",
+        "Coordinateur",
+        "Coordinatrice",
+        "Chef de Service",
+        "Chef d'Équipe",
+        "Consultant Senior",
+        "Consultant Principal",
+        "Architecte Technique",
+        "Architecte Système",
+        "Architecte Solution",
+        "Architecte d'Entreprise",
+        "Architecte Données",
+        "Pôle",
+        "Référent Technique",
+        "Lead Tech"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "de-tech-roles-extended",
+      "keywords": [
+        "Leiter",
+        "Architekt",
+        "Ingenieur",
+        "Plattform",
+        "Betrieb",
+        "Systemadministrator",
+        "Lösungsarchitekt",
+        "IT-Leiter",
+        "Leiter Infrastruktur",
+        "Leiter Plattform",
+        "Leiter Cloud",
+        "Leiter IT-Betrieb",
+        "Verantwortlich",
+        "Verantwortlicher",
+        "Bereichsleiter",
+        "Teamleiter",
+        "Fachexperte",
+        "Spezialist",
+        "Sachbearbeiter IT",
+        "Berater",
+        "Senior Berater",
+        "Lead Engineer",
+        "Cloud Kompetenzzentrum",
+        "Digitale Transformation",
+        "IT-Architekt",
+        "Software-Architekt"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "it-tech-roles",
+      "keywords": [
+        "Responsabile",
+        "Direttore",
+        "Capo",
+        "Capo Progetto",
+        "Coordinatore",
+        "Coordinatrice",
+        "Gestore",
+        "Esperto",
+        "Specialista",
+        "Ingegnere",
+        "Consulente Senior",
+        "Architetto",
+        "Architetto Sistemi",
+        "Architetto Soluzioni",
+        "Architetto Cloud",
+        "Direttore Tecnico",
+        "Direttore Sistemi Informativi",
+        "Responsabile Piattaforma",
+        "Responsabile Infrastruttura",
+        "Responsabile Sicurezza",
+        "Lead Tecnico",
+        "Capo Tecnico"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "es-tech-roles",
+      "keywords": [
+        "Responsable",
+        "Director",
+        "Directora",
+        "Jefe",
+        "Jefa",
+        "Coordinador",
+        "Coordinadora",
+        "Gestor",
+        "Gestora",
+        "Experto",
+        "Especialista",
+        "Ingeniero",
+        "Ingeniera",
+        "Consultor Senior",
+        "Arquitecto",
+        "Arquitecta",
+        "Director Técnico",
+        "Director TI",
+        "Director de Sistemas",
+        "Jefe de Plataforma",
+        "Jefe de Infraestructura",
+        "Jefe de Sistemas",
+        "Líder Técnico"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "pt-tech-roles",
+      "keywords": [
+        "Responsável",
+        "Diretor",
+        "Diretora",
+        "Chefe",
+        "Coordenador",
+        "Coordenadora",
+        "Gestor",
+        "Gestora",
+        "Especialista",
+        "Engenheiro",
+        "Engenheira",
+        "Consultor Sénior",
+        "Arquiteto",
+        "Arquiteta",
+        "Diretor Técnico",
+        "Diretor TI",
+        "Diretor de Sistemas",
+        "Líder Técnico",
+        "Responsável de Plataforma",
+        "Responsável de Infraestrutura",
+        "Responsável de Sistemas"
+      ],
+      "maxCandidates": 50
+    },
+    {
+      "id": "nl-tech-roles",
+      "keywords": [
+        "Verantwoordelijke",
+        "Directeur",
+        "Hoofd",
+        "Hoofd IT",
+        "Coördinator",
+        "Beheerder",
+        "Specialist",
+        "Ingenieur",
+        "Senior Adviseur",
+        "Adviseur",
+        "Architect",
+        "Oplossingsarchitect",
+        "Systeemarchitect",
+        "Hoofd Platform",
+        "Hoofd Infrastructuur",
+        "Hoofd Cloud",
+        "Technisch Leider",
+        "Lead Engineer"
+      ],
+      "maxCandidates": 50
     },
     {
       "id": "emea-hidden-platform",
@@ -134,33 +708,24 @@
         "Dynatrace",
         "Prometheus",
         "Grafana",
-        "Technical Lead",
-        "Responsable Technique",
-        "Leiter Cloud",
-        "Direttore Tecnico",
-        "Jefe de Plataforma"
-      ]
-    },
-    {
-      "id": "emea-language-localized-titles",
-      "keywords": [
-        "Responsable Plateforme",
-        "Directeur Technique",
-        "Ing\u00e9nieur Cloud",
-        "Leiter Plattform",
-        "Cloud Kompetenzzentrum",
-        "Responsabile Piattaforma",
-        "Direttore Tecnico",
-        "Jefe de Plataforma",
-        "Director T\u00e9cnico",
-        "Ingeniero Cloud"
-      ]
+        "Splunk",
+        "New Relic",
+        "Elastic",
+        "OpenTelemetry",
+        "Pulumi",
+        "Ansible",
+        "Argo CD",
+        "GitOps",
+        "Backstage"
+      ],
+      "maxCandidates": 50
     },
     {
       "id": "emea-data-ai-buyers",
       "keywords": [
         "CDO",
         "Chief Data Officer",
+        "Chief AI Officer",
         "Data & AI",
         "Director Data",
         "Directeur Data",
@@ -171,8 +736,16 @@
         "Direttrice Dati",
         "Daten & KI",
         "Datos e IA",
-        "Dati e AI"
-      ]
+        "Dati e AI",
+        "Dados e IA",
+        "Head of Data",
+        "Head of AI",
+        "Director of Data",
+        "Director of AI",
+        "Diretor de Dados",
+        "Hoofd Data"
+      ],
+      "maxCandidates": 50
     },
     {
       "id": "emea-it-governance-operators",
@@ -180,7 +753,7 @@
         "Gouvernance SI",
         "Direction Informatique",
         "Responsable Domaine",
-        "Responsable Int\u00e9gration Cloud",
+        "Responsable Intégration Cloud",
         "IT-Governance",
         "Leiter Digitale Transformation",
         "Bereichsleiter IT",
@@ -190,55 +763,15 @@
         "Governo IT",
         "Trasformazione Digitale",
         "Transformation Digitale",
-        "Transformaci\u00f3n Digital",
+        "Transformación Digital",
+        "Transformação Digital",
+        "Digital Transformation",
         "Head of Tech",
-        "Architecture des Environnements"
-      ]
-    },
-    {
-      "id": "emea-localized-observability",
-      "keywords": [
-        "Observabilit\u00e9",
-        "Observabilit\u00e4t",
-        "Observabilidad",
-        "Osservabilit\u00e0",
-        "Chef de Projet Senior Cloud",
-        "Cloud & Observabilit\u00e9",
-        "Observability & Performance",
-        "Consultant Observability",
-        "Production Informatique",
-        "Produktion IT",
-        "Producci\u00f3n TI",
-        "Produzione IT"
-      ]
-    },
-    {
-      "id": "fr-titles",
-      "keywords": [
-        "Responsable",
-        "Architecte",
-        "Ing\u00e9nieur",
-        "Chef de Projet",
-        "Directeur Technique",
-        "DSI",
-        "Observabilit\u00e9",
-        "Exploitation informatique",
-        "Responsable Domaine"
-      ]
-    },
-    {
-      "id": "de-titles",
-      "keywords": [
-        "Leiter",
-        "Architekt",
-        "Ingenieur",
-        "Plattform",
-        "Betrieb",
-        "Systemadministrator",
-        "L\u00f6sungsarchitekt",
-        "IT-Leiter",
-        "Leiter Infrastruktur"
-      ]
+        "Architecture des Environnements",
+        "Architettura Aziendale",
+        "Arquitectura Empresarial"
+      ],
+      "maxCandidates": 50
     }
   ],
   "bucketRules": {

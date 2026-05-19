@@ -30,7 +30,7 @@ test('extractCsrfFromCookies reads quoted JSESSIONID without leaking cookies', (
 
 test('build read-only Sales Nav API paths do not use mutation endpoints', () => {
   const paths = [
-    buildCompanySearchPath('Fnac Darty'),
+    buildCompanySearchPath('Example Retail Chain'),
     buildLeadSearchPath({ companyId: '123', count: 5 }),
     buildLeadListReadbackPath({ listId: '456' }),
   ];
@@ -45,12 +45,12 @@ test('normalizes company and lead API responses into stable identities', () => {
   const companies = normalizeCompanySearchResponse({
     elements: [{
       entityUrn: 'urn:li:fs_salesCompany:12345',
-      name: 'Fnac Darty',
+      name: 'Example Retail Chain',
       navigationUrl: 'https://www.linkedin.com/sales/company/12345',
     }],
   });
   assert.deepEqual(companies[0], {
-    name: 'Fnac Darty',
+    name: 'Example Retail Chain',
     companyId: '12345',
     entityUrn: 'urn:li:fs_salesCompany:12345',
     salesNavigatorUrl: 'https://www.linkedin.com/sales/company/12345',
@@ -59,36 +59,36 @@ test('normalizes company and lead API responses into stable identities', () => {
   const leads = normalizeLeadSearchResponse({
     elements: [{
       entityUrn: 'urn:li:fs_salesProfile:(ACwAA123,NAME_SEARCH,abc)',
-      firstName: 'Sébastien',
-      lastName: 'Toumazet',
-      currentPositions: [{ title: 'CTO FNAC / DARTY', companyName: 'Fnac Darty', current: true }],
+      firstName: 'Example',
+      lastName: 'Executive',
+      currentPositions: [{ title: 'CTO Example Retail', companyName: 'Example Retail Chain', current: true }],
       pendingInvitation: true,
       saved: true,
     }],
   });
 
   assert.equal(leads[0].salesNavigatorLeadId, 'ACwAA123');
-  assert.equal(leads[0].fullName, 'Sébastien Toumazet');
-  assert.equal(leads[0].title, 'CTO FNAC / DARTY');
+  assert.equal(leads[0].fullName, 'Example Executive');
+  assert.equal(leads[0].title, 'CTO Example Retail');
   assert.equal(leads[0].pendingInvitation, true);
   assert.equal(leads[0].saved, true);
 });
 
 test('assessApiCompanyResolution distinguishes exact, multi-target, and ambiguous companies', () => {
-  assert.equal(assessApiCompanyResolution('Celonis', [
-    { name: 'Celonis', companyId: '3118913' },
-    { name: 'Process Analytics Factory - PAFnow by Celonis', companyId: '5286872' },
+  assert.equal(assessApiCompanyResolution('Example Analytics Co', [
+    { name: 'Example Analytics Co', companyId: '300001' },
+    { name: 'Example Analytics Factory', companyId: '300002' },
   ]).status, 'resolved_exact_api');
 
-  const edeka = assessApiCompanyResolution('EDEKA', [
-    { name: 'EDEKA', companyId: '12267150' },
-    { name: 'EDEKA IT', companyId: '905440' },
-    { name: 'EDEKA ZENTRALE Stiftung & Co. KG', companyId: '2783130' },
+  const edeka = assessApiCompanyResolution('Example Retail Group', [
+    { name: 'Example Retail Group', companyId: '12267150' },
+    { name: 'Example Retail IT', companyId: '905440' },
+    { name: 'Example Retail HQ GmbH', companyId: '2783130' },
   ]);
   assert.equal(edeka.status, 'resolved_multi_target_api');
-  assert.equal(edeka.selectedTargets[0].name, 'EDEKA IT');
+  assert.equal(edeka.selectedTargets[0].name, 'Example Retail IT');
   assert.equal(edeka.selectedTargets[0].entityPriority, 'it_digital_first');
-  assert.equal(edeka.selectedTargets.some((target) => target.name === 'EDEKA'), true);
+  assert.equal(edeka.selectedTargets.some((target) => target.name === 'Example Retail Group'), true);
 
   const globex = assessApiCompanyResolution('Globex', [
     { name: 'Globex', companyId: '332814' },
@@ -139,10 +139,10 @@ test('entityUrn is a first-class Sales Navigator identity match', () => {
 
 test('probe artifact excludes CSRF/cookies and records read-only counts', () => {
   const artifact = buildSalesNavApiProbeArtifact({
-    accountName: 'Fnac Darty',
+    accountName: 'Example Retail Chain',
     companyResponse: {
       ok: true,
-      payload: { elements: [{ name: 'Fnac Darty', entityUrn: 'urn:li:fs_salesCompany:123' }] },
+      payload: { elements: [{ name: 'Example Retail Chain', entityUrn: 'urn:li:fs_salesCompany:123' }] },
     },
     leadResponse: {
       ok: true,

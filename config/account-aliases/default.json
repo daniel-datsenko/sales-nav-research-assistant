@@ -1,32 +1,51 @@
 {
   "version": "1.0.0",
   "accounts": {
-    "grafana-labs": {
+    "example-software-company": {
       "accountSearchAliases": [
-        "Grafana Labs",
-        "Grafana"
+        "Example Software Company",
+        "Example Observability Co"
       ],
       "companyFilterAliases": [
-        "Grafana Labs"
-      ],
-      "companyIds": ["11062162"],
-      "linkedinCompanyUrls": [
-        "https://www.linkedin.com/company/grafana"
-      ],
-      "resolutionStatus": "resolved_exact",
-      "resolutionNotes": "Internal network expansion target. Single canonical entity. NextLink Labs (id 5251900) is a homonym in Pittsburgh - explicitly excluded."
-    },
-    "agirc-arrco": {
-      "accountSearchAliases": [
-        "Agirc Arrco",
-        "Agirc-Arrco"
-      ],
-      "companyFilterAliases": [
-        "Agirc-Arrco"
+        "Example Software Company"
       ],
       "companyIds": [
-        "998749"
-      ]
+        "100000"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-software-company"
+      ],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Synthetic first-party example. Same-name homonyms should be explicitly excluded in local operator config, not public defaults."
+    },
+    "example-public-fund": {
+      "accountSearchAliases": [
+        "Example Public Fund",
+        "Example Public Pension Fund"
+      ],
+      "companyFilterAliases": [
+        "Example Public Fund"
+      ],
+      "companyIds": [
+        "100001"
+      ],
+      "linkedinCompanyUrls": [
+        "https://www.linkedin.com/company/example-public-fund"
+      ],
+      "targets": [
+        {
+          "linkedinName": "Example Public Fund",
+          "linkedinCompanyUrl": "https://www.linkedin.com/company/example-public-fund",
+          "targetType": "parent",
+          "territoryFit": "likely",
+          "confidence": 0.82,
+          "evidence": [
+            "linkedin_company_search"
+          ]
+        }
+      ],
+      "resolutionStatus": "resolved_exact",
+      "resolutionNotes": "Synthetic example for an organization whose public abbreviation differs from the Sales Navigator company name."
     },
     "example-lists-first": {
       "accountSearchAliases": [
@@ -87,12 +106,10 @@
     "example-media-group-germany": {
       "accountSearchAliases": [
         "Example Media Germany",
-        "Example Media Group",
         "Example Media Group"
       ],
       "companyFilterAliases": [
         "Example Media Germany",
-        "Example Media Group",
         "Example Media Group"
       ],
       "linkedinCompanyUrls": [
@@ -120,19 +137,17 @@
         "Germany"
       ],
       "resolutionStatus": "resolved_exact",
-      "resolutionNotes": "LinkedIn public company page resolves the Salesforce-style account name to Example Media Germany."
+      "resolutionNotes": "LinkedIn public company page resolves the CRM-style account name to Example Media Germany."
     },
     "example-logistics-switzerland": {
       "accountSearchAliases": [
         "Example Logistics",
         "Example Logistics Group",
-        "Example Logistics Switzerland",
         "Example Logistics Switzerland"
       ],
       "companyFilterAliases": [
         "Example Logistics",
         "Example Logistics Group",
-        "Example Logistics Switzerland",
         "Example Logistics Switzerland"
       ],
       "linkedinCompanyUrls": [
@@ -158,7 +173,6 @@
         "Example Logistics Group"
       ],
       "subsidiaryAliases": [
-        "Example Logistics Switzerland",
         "Example Logistics Switzerland"
       ],
       "territoryCountries": [
@@ -242,7 +256,7 @@
         "Germany"
       ],
       "resolutionStatus": "resolved_exact",
-      "resolutionNotes": "Post-run validation showed Sales Navigator partial matches can select Example Mobility France SARL; use the German Example Mobility entity for territory research."
+      "resolutionNotes": "Post-run validation showed Sales Navigator partial matches can select a regional homonym; use the intended parent entity for territory research."
     },
     "example-mobility-se": {
       "accountSearchAliases": [
@@ -276,25 +290,23 @@
         "Germany"
       ],
       "resolutionStatus": "resolved_exact",
-      "resolutionNotes": "Avoid homonym matches such as unrelated broadband companies; route Example Mobility SE research to the Example Mobility LinkedIn company target."
+      "resolutionNotes": "Avoid homonym matches; route research to the intended mobility company target."
     },
-    "edeka": {
+    "example-retail-group": {
       "accountSearchAliases": [
-        "EDEKA",
-        "EDEKA DIGITAL",
-        "Edeka Digital",
-        "Lunar"
+        "Example Retail Group",
+        "Example Retail Digital",
+        "Example Retail Labs"
       ],
       "companyFilterAliases": [
-        "EDEKA",
-        "EDEKA DIGITAL",
-        "Edeka Digital",
-        "EDEKA DIGITAL GmbH",
-        "Lunar GmbH"
+        "Example Retail Group",
+        "Example Retail Digital",
+        "Example Retail Digital GmbH",
+        "Example Retail Labs GmbH"
       ],
       "targets": [
         {
-          "linkedinName": "EDEKA",
+          "linkedinName": "Example Retail Group",
           "targetType": "parent",
           "territoryFit": "likely",
           "evidence": [
@@ -302,7 +314,7 @@
           ]
         },
         {
-          "linkedinName": "EDEKA DIGITAL GmbH",
+          "linkedinName": "Example Retail Digital GmbH",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -310,7 +322,7 @@
           ]
         },
         {
-          "linkedinName": "Lunar GmbH",
+          "linkedinName": "Example Retail Labs GmbH",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -319,10 +331,9 @@
         }
       ],
       "subsidiaryAliases": [
-        "EDEKA DIGITAL",
-        "Edeka Digital",
-        "EDEKA DIGITAL GmbH",
-        "Lunar GmbH"
+        "Example Retail Digital",
+        "Example Retail Digital GmbH",
+        "Example Retail Labs GmbH"
       ],
       "territoryCountries": [
         "Germany"
@@ -330,22 +341,22 @@
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Parent retail brand likely has separate IT entities; sweep parent plus curated IT subsidiaries, never unrelated companies."
     },
-    "otto": {
+    "example-retail-holding": {
       "accountSearchAliases": [
-        "Otto Group",
-        "Otto GmbH & Co. KGaA",
-        "About You",
-        "Bonprix"
+        "Example Retail Holding",
+        "Example Retail Operating GmbH",
+        "Example Fashion Subsidiary",
+        "Example Commerce Subsidiary"
       ],
       "companyFilterAliases": [
-        "Otto Group",
-        "Otto GmbH & Co. KGaA",
-        "About You",
-        "Bonprix"
+        "Example Retail Holding",
+        "Example Retail Operating GmbH",
+        "Example Fashion Subsidiary",
+        "Example Commerce Subsidiary"
       ],
       "targets": [
         {
-          "linkedinName": "Otto Group",
+          "linkedinName": "Example Retail Holding",
           "targetType": "parent",
           "territoryFit": "likely",
           "evidence": [
@@ -353,7 +364,7 @@
           ]
         },
         {
-          "linkedinName": "About You",
+          "linkedinName": "Example Fashion Subsidiary",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -361,7 +372,7 @@
           ]
         },
         {
-          "linkedinName": "Bonprix",
+          "linkedinName": "Example Commerce Subsidiary",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -370,8 +381,8 @@
         }
       ],
       "subsidiaryAliases": [
-        "About You",
-        "Bonprix"
+        "Example Fashion Subsidiary",
+        "Example Commerce Subsidiary"
       ],
       "territoryCountries": [
         "Germany"
@@ -379,22 +390,22 @@
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Holding research should include known technology-heavy subsidiaries."
     },
-    "schwarz": {
+    "example-discount-group": {
       "accountSearchAliases": [
-        "Schwarz Group",
-        "Schwarz IT",
-        "Lidl",
-        "Kaufland"
+        "Example Discount Group",
+        "Example Discount IT",
+        "Example Discount Brand A",
+        "Example Discount Brand B"
       ],
       "companyFilterAliases": [
-        "Schwarz Group",
-        "Schwarz IT",
-        "Lidl",
-        "Kaufland"
+        "Example Discount Group",
+        "Example Discount IT",
+        "Example Discount Brand A",
+        "Example Discount Brand B"
       ],
       "targets": [
         {
-          "linkedinName": "Schwarz Group",
+          "linkedinName": "Example Discount Group",
           "targetType": "parent",
           "territoryFit": "likely",
           "evidence": [
@@ -402,7 +413,7 @@
           ]
         },
         {
-          "linkedinName": "Schwarz IT",
+          "linkedinName": "Example Discount IT",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -411,9 +422,9 @@
         }
       ],
       "subsidiaryAliases": [
-        "Schwarz IT",
-        "Lidl",
-        "Kaufland"
+        "Example Discount IT",
+        "Example Discount Brand A",
+        "Example Discount Brand B"
       ],
       "territoryCountries": [
         "Germany"
@@ -421,20 +432,20 @@
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Retail parent often has a carved-out IT organization."
     },
-    "rewe": {
+    "example-grocery-group": {
       "accountSearchAliases": [
-        "REWE Group",
-        "REWE digital",
-        "REWE Systems"
+        "Example Grocery Group",
+        "Example Grocery Digital",
+        "Example Grocery Systems"
       ],
       "companyFilterAliases": [
-        "REWE Group",
-        "REWE digital",
-        "REWE Systems"
+        "Example Grocery Group",
+        "Example Grocery Digital",
+        "Example Grocery Systems"
       ],
       "targets": [
         {
-          "linkedinName": "REWE Group",
+          "linkedinName": "Example Grocery Group",
           "targetType": "parent",
           "territoryFit": "likely",
           "evidence": [
@@ -442,7 +453,7 @@
           ]
         },
         {
-          "linkedinName": "REWE digital",
+          "linkedinName": "Example Grocery Digital",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -450,7 +461,7 @@
           ]
         },
         {
-          "linkedinName": "REWE Systems",
+          "linkedinName": "Example Grocery Systems",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -459,8 +470,8 @@
         }
       ],
       "subsidiaryAliases": [
-        "REWE digital",
-        "REWE Systems"
+        "Example Grocery Digital",
+        "Example Grocery Systems"
       ],
       "territoryCountries": [
         "Germany"
@@ -468,18 +479,18 @@
       "resolutionStatus": "resolved_multi_target",
       "resolutionNotes": "Parent plus known IT entities should be reviewed together."
     },
-    "bertelsmann": {
+    "example-media-holding": {
       "accountSearchAliases": [
-        "Bertelsmann",
-        "Arvato Systems"
+        "Example Media Holding",
+        "Example Media Systems"
       ],
       "companyFilterAliases": [
-        "Bertelsmann",
-        "Arvato Systems"
+        "Example Media Holding",
+        "Example Media Systems"
       ],
       "targets": [
         {
-          "linkedinName": "Bertelsmann",
+          "linkedinName": "Example Media Holding",
           "targetType": "parent",
           "territoryFit": "likely",
           "evidence": [
@@ -487,7 +498,7 @@
           ]
         },
         {
-          "linkedinName": "Arvato Systems",
+          "linkedinName": "Example Media Systems",
           "targetType": "subsidiary",
           "territoryFit": "likely",
           "evidence": [
@@ -496,41 +507,13 @@
         }
       ],
       "subsidiaryAliases": [
-        "Arvato Systems"
+        "Example Media Systems"
       ],
       "territoryCountries": [
         "Germany"
       ],
       "resolutionStatus": "resolved_multi_target",
-      "resolutionNotes": "Bertelsmann technology research should include Arvato Systems as a likely IT subsidiary."
-    },
-    "agirc arrco": {
-      "accountSearchAliases": [
-        "Agirc-Arrco",
-        "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page"
-      ],
-      "companyFilterAliases": [
-        "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page",
-        "Agirc-Arrco"
-      ],
-      "linkedinCompanyUrls": [
-        "https://www.linkedin.com/company/agirc-arrco"
-      ],
-      "targets": [
-        {
-          "linkedinName": "Agirc-Arrco Insurance PARIS Follow L’Agirc-Arrco est le régime de retraite complémentaire obligatoire des salariés du secteur privé. Porteur d’une mission d’intérêt général, il repose sur les... 37K followers Enrico follows this page",
-          "linkedinCompanyUrl": "https://www.linkedin.com/company/agirc-arrco",
-          "targetType": "unknown",
-          "territoryFit": "likely",
-          "confidence": 0.82,
-          "evidence": [
-            "linkedin_company_search"
-          ]
-        }
-      ],
-      "resolutionStatus": "resolved_exact",
-      "resolutionNotes": "Resolved automatically from LinkedIn company search for \"Agirc-Arrco\".",
-      "lastVerifiedAt": "2026-05-07T11:33:37.901Z"
+      "resolutionNotes": "Example Media Holding technology research should include Example Media Systems as a likely IT subsidiary."
     }
   }
 }

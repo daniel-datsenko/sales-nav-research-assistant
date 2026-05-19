@@ -221,11 +221,11 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
     driver: 'playwright',
     liveSave: true,
     liveConnect: false,
-    accountNames: ['Skello'],
+    accountNames: ['Example Account B'],
     results: [
       {
-        accountName: 'Skello',
-        listName: 'SDR Research Skello',
+        accountName: 'Example Account B',
+        listName: 'SDR Research Example Account B',
         candidateCount: 30,
         listCandidateCount: 6,
         selectedForListSaveCount: 6,
@@ -234,15 +234,15 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
         relativeRankFallbackApplied: true,
         companyScope: {
           warning: 'cross_company_contamination_detected',
-          unrelatedCompanies: ['Deutsche Bank'],
+          unrelatedCompanies: ['Unrelated Bank'],
         },
         strongButNotAutoSavedCount: 2,
         apiReadPrefetch: {
           companyResolution: {
             status: 'resolved_multi_target_api',
             selectedTargets: [
-              { name: 'EDEKA IT', entityPriority: 'it_digital_first' },
-              { name: 'EDEKA', entityPriority: 'parent_buyer_scope' },
+              { name: 'Example Retail IT', entityPriority: 'it_digital_first' },
+              { name: 'Example Retail Group', entityPriority: 'parent_buyer_scope' },
             ],
           },
           leadCandidateCount: 30,
@@ -251,7 +251,7 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
         saveResults: [],
         strongButNotAutoSavedCandidates: [
           {
-            fullName: 'Nicolas di Giuseppe',
+            fullName: 'Example Engineering Manager',
             title: 'Senior Engineering Manager - AI & Scheduling Squads',
             coverageBucket: 'direct_observability',
             score: 72,
@@ -282,13 +282,13 @@ test('renderAccountBatchReportMarkdown shows strong report-only candidates and n
 
   assert.match(markdown, /SDR summary: found=`30` \| selected=`6` .* out_of_network=`2` \| failed_sweeps=`8`/);
   assert.match(markdown, /Coverage status: `needs_company_scope_review`/);
-  assert.match(markdown, /Entity priority: `EDEKA IT=it_digital_first, EDEKA=parent_buyer_scope`/);
-  assert.match(markdown, /Company scope warning: `cross_company_contamination_detected` \(Deutsche Bank\)/);
+  assert.match(markdown, /Entity priority: `Example Retail IT=it_digital_first, Example Retail Group=parent_buyer_scope`/);
+  assert.match(markdown, /Company scope warning: `cross_company_contamination_detected` \(Unrelated Bank\)/);
   assert.match(markdown, /Manual review fallback: `top candidates shown because no candidate passed the normal save threshold`/);
   assert.match(markdown, /Sweeps: `12\/20 succeeded`/);
   assert.match(markdown, /Next action: `retry_company_scope, review_strong_not_saved, review_relative_rank_candidates`/);
   assert.match(markdown, /### Strong but not auto-saved/);
-  assert.match(markdown, /Nicolas di Giuseppe: `direct_observability` - Senior Engineering Manager - AI & Scheduling Squads \| reason=strong_but_not_auto_saved \| next=review_strong_not_saved \| score=72 \| bucket=direct_observability \| tier=operator/);
+  assert.match(markdown, /Example Engineering Manager: `direct_observability` - Senior Engineering Manager - AI & Scheduling Squads \| reason=strong_but_not_auto_saved \| next=review_strong_not_saved \| score=72 \| bucket=direct_observability \| tier=operator/);
   assert.match(markdown, /strong_but_not_auto_saved: `2`/);
   assert.match(markdown, /### Review Before Saving/);
   assert.match(markdown, /Relative Rank Candidate: `broad_it_stakeholder` - IT Platform Specialist \| reason=relative_rank_manual_review \| next=review_before_save \| score=24/);

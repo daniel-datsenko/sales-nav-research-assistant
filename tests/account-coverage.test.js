@@ -1076,28 +1076,28 @@ test('runAccountCoverageWorkflow uses API read prefetch and skips UI sweeps when
         companyResolution: {
           status: 'resolved_exact_api',
           confidence: 0.95,
-          selectedTargets: [{ name: 'Celonis', companyId: '3118913' }],
+          selectedTargets: [{ name: 'Example Analytics Co', companyId: '300001' }],
         },
-        companyCandidates: [{ name: 'Celonis', companyId: '3118913' }],
+        companyCandidates: [{ name: 'Example Analytics Co', companyId: '300001' }],
         leadCandidates: [
           {
             fullName: 'API Buyer',
             title: 'Chief Technology Officer',
-            company: 'Celonis',
+            company: 'Example Analytics Co',
             salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-buyer',
             entityUrn: 'urn:li:fs_salesProfile:(api-buyer,NAME_SEARCH,x)',
           },
           {
             fullName: 'API Operator',
             title: 'Head of Platform Engineering',
-            company: 'Celonis',
+            company: 'Example Analytics Co',
             salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-operator',
             entityUrn: 'urn:li:fs_salesProfile:(api-operator,NAME_SEARCH,x)',
           },
           {
             fullName: 'API User',
             title: 'Senior Site Reliability Engineer',
-            company: 'Celonis',
+            company: 'Example Analytics Co',
             salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-user',
             entityUrn: 'urn:li:fs_salesProfile:(api-user,NAME_SEARCH,x)',
           },
@@ -1117,7 +1117,7 @@ test('runAccountCoverageWorkflow uses API read prefetch and skips UI sweeps when
 
   const run = await runAccountCoverageWorkflow({
     driver,
-    accountName: 'Celonis',
+    accountName: 'Example Analytics Co',
     coverageConfig,
     icpConfig,
     priorityModel: null,
@@ -1250,21 +1250,21 @@ test('runAccountCoverageWorkflow filters cross-company contamination before list
     async scrollAndCollectCandidates() {
       return [
         {
-          fullName: 'EDEKA Platform Lead',
+          fullName: 'Example Retail Group Platform Lead',
           title: 'Head of Platform Engineering',
-          company: 'EDEKA DIGITAL GmbH',
-          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/edeka-platform',
+          company: 'Example Retail Digital GmbH',
+          salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/example-retail-platform',
         },
         {
           fullName: 'Wrong Bank Lead',
           title: 'Head of Platform Engineering',
-          company: 'Deutsche Bank',
+          company: 'Unrelated Bank',
           salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/wrong-bank',
         },
         {
           fullName: 'Wrong Club Lead',
           title: 'Head of Platform Engineering',
-          company: 'Dynamics e.V.',
+          company: 'Unrelated Club',
           salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/wrong-club',
         },
       ];
@@ -1273,7 +1273,7 @@ test('runAccountCoverageWorkflow filters cross-company contamination before list
 
   const run = await runAccountCoverageWorkflow({
     driver,
-    accountName: 'EDEKA',
+    accountName: 'Example Retail Group',
     coverageConfig,
     icpConfig,
     priorityModel: null,
@@ -1281,9 +1281,9 @@ test('runAccountCoverageWorkflow filters cross-company contamination before list
 
   assert.equal(run.result.companyScope.warning, 'cross_company_contamination_detected');
   assert.equal(run.result.resolutionStatus, 'needs_company_scope_review');
-  assert.deepEqual(run.result.companyScope.unrelatedCompanies, ['Deutsche Bank', 'Dynamics e.V.']);
-  assert.deepEqual(run.result.candidates.map((candidate) => candidate.fullName), ['EDEKA Platform Lead']);
-  assert.equal(run.result.companyResolution.selectedTargets.includes('Deutsche Bank'), false);
+  assert.deepEqual(run.result.companyScope.unrelatedCompanies, ['Unrelated Bank', 'Unrelated Club']);
+  assert.deepEqual(run.result.candidates.map((candidate) => candidate.fullName), ['Example Retail Group Platform Lead']);
+  assert.equal(run.result.companyResolution.selectedTargets.includes('Unrelated Bank'), false);
 });
 
 test('runAccountCoverageWorkflow falls back to the last successful artifact when live coverage is empty', async () => {
@@ -1584,8 +1584,8 @@ test('findAccountAliasEntry tolerates legal suffix and punctuation variants', ()
     'Example Broadcaster',
   );
   assert.equal(
-    findAccountAliasEntry(config, 'EDEKA DIGITAL').targets
-      .some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'),
+    findAccountAliasEntry(config, 'Example Retail Digital').targets
+      .some((target) => target.linkedinName === 'Example Retail Digital GmbH'),
     true,
   );
 });

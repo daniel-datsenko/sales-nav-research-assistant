@@ -55,8 +55,10 @@ npm run doctor
 Install dependencies:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 ```
+
+The repo intentionally uses locked, script-free installs for public/shared setup. This reduces npm supply-chain risk by using the checked-in lockfile and preventing dependency lifecycle scripts from running during install.
 
 For contributors: run all tests:
 
@@ -89,14 +91,14 @@ For day-to-day SDR testing, start here. Give the tool three to five accounts and
 Research only:
 
 ```bash
-npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
+npm run sdr-research -- --accounts="Example Account A, Example Account B, Example Account C"
 ```
 
 Faster experimental read-only prefetch:
 
 ```bash
 npm run sdr-research -- \
-  --accounts="Thales Group, Skello, Oodrive" \
+  --accounts="Example Account A, Example Account B, Example Account C" \
   --api-read-prefetch
 ```
 
@@ -106,8 +108,8 @@ Research and create/update one Sales Navigator list:
 
 ```bash
 npm run sdr-research -- \
-  --accounts="Thales Group, Skello, Oodrive" \
-  --list-name="SDR Research - Thales Skello Oodrive" \
+  --accounts="Example Account A, Example Account B, Example Account C" \
+  --list-name="SDR Research - Account A Account B Account C" \
   --live-save
 ```
 

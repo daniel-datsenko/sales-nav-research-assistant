@@ -45,7 +45,7 @@ function buildFirstRunChecklist({ nodeVersion = process.version } = {}) {
       label: 'NPM dependencies',
       ok: hasNodeModules,
       status: hasNodeModules ? 'ok' : 'missing',
-      next: hasNodeModules ? 'Dependencies are installed.' : 'Run `npm install`.',
+      next: hasNodeModules ? 'Dependencies are installed.' : 'Run `npm ci --ignore-scripts`.',
     },
     {
       id: 'env',
@@ -86,7 +86,7 @@ function buildFirstRunChecklist({ nodeVersion = process.version } = {}) {
     checks,
     missingRequired: missingRequired.map((check) => check.id),
     nextCommand: !hasNodeModules
-      ? 'npm install'
+      ? 'npm ci --ignore-scripts'
       : !(hasBrowserProfile || hasStorageState)
         ? 'npm run bootstrap-session -- --driver=playwright --wait-minutes=10'
         : 'npm run check-driver-session -- --driver=playwright --session-mode=persistent',
@@ -128,7 +128,7 @@ function renderFirstRunOnboarding(checklist = buildFirstRunChecklist()) {
   lines.push('If the repo is not installed or LinkedIn is not logged in yet, offer two safe paths:');
   lines.push('');
   lines.push('- A) Produce a research Markdown/calling-list artifact now; Sales Navigator push happens after setup.');
-  lines.push('- B) Finish tool setup first (`npm install`, tests, `bootstrap-session`), then run the browser-backed workflow.');
+  lines.push('- B) Finish tool setup first (`npm ci --ignore-scripts`, tests, `bootstrap-session`), then run the browser-backed workflow.');
   lines.push('');
   lines.push('Do not run live-save or live-connect until the operator explicitly asks for it and the dry-safe output has been reviewed.');
   return `${lines.join('\n')}\n`;

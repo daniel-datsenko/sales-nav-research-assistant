@@ -10,7 +10,7 @@ const {
 } = require('../src/core/sdr-workflow');
 
 test('buildSdrResearchListName produces a list name within the Sales Nav UI cap', () => {
-  const name = buildSdrResearchListName(['Thales Group', 'Skello', 'Oodrive'], {
+  const name = buildSdrResearchListName(['Example Account A', 'Example Account B', 'Example Account C'], {
     startedAt: '2026-05-05T09:15:00.000Z',
   });
 
@@ -20,7 +20,7 @@ test('buildSdrResearchListName produces a list name within the Sales Nav UI cap'
 
 test('validateSalesNavListName throws on names that would be truncated by Sales Nav UI', () => {
   assert.throws(
-    () => validateSalesNavListName('Grafana - Daniel Datsenko - PZU PKO Millennium TVN Polkomtel'),
+    () => validateSalesNavListName('Example SDR - Account A Account B Account C Account D'),
     /truncates beyond 32 chars/,
   );
 });
@@ -32,14 +32,14 @@ test('validateSalesNavListName accepts a 32-char list name', () => {
 
 test('buildSdrResearchBatchValues maps simple SDR input onto the guarded account batch flow', () => {
   const values = buildSdrResearchBatchValues({
-    accounts: 'Thales Group, Skello, Oodrive',
+    accounts: 'Example Account A, Example Account B, Example Account C',
     'list-name': 'Polly DDS Score Accts',
     'live-save': true,
   }, {
     startedAt: '2026-05-05T09:15:00.000Z',
   });
 
-  assert.equal(values['account-names'], 'Thales Group, Skello, Oodrive');
+  assert.equal(values['account-names'], 'Example Account A, Example Account B, Example Account C');
   assert.equal(values['consolidate-list-name'], 'Polly DDS Score Accts');
   assert.equal(values.driver, 'playwright');
   assert.equal(values['session-mode'], 'persistent');
@@ -55,7 +55,7 @@ test('buildSdrResearchBatchValues maps simple SDR input onto the guarded account
 
 test('buildSdrResearchBatchValues supports exhaustive mode without exposing internal sweep flags', () => {
   const values = buildSdrResearchBatchValues({
-    accounts: 'FnacDarty',
+    accounts: 'Example Retail Chain',
     exhaustive: true,
   });
 
@@ -65,7 +65,7 @@ test('buildSdrResearchBatchValues supports exhaustive mode without exposing inte
 
 test('buildSdrResearchBatchValues preserves opt-in API read prefetch for guarded speed tests', () => {
   const values = buildSdrResearchBatchValues({
-    accounts: 'Celonis',
+    accounts: 'Example Analytics Co',
     'api-read-prefetch': true,
     'api-prefetch-lead-count': '100',
   });
@@ -77,7 +77,7 @@ test('buildSdrResearchBatchValues preserves opt-in API read prefetch for guarded
 test('buildSdrResearchBatchValues refuses connect flags', () => {
   assert.throws(
     () => buildSdrResearchBatchValues({
-      accounts: 'Thales Group',
+      accounts: 'Example Account A',
       'live-connect': true,
     }),
     /never sends connects/,
@@ -86,7 +86,7 @@ test('buildSdrResearchBatchValues refuses connect flags', () => {
 
 test('renderSdrResearchIntro makes live-save and connect behavior explicit', () => {
   const markdown = renderSdrResearchIntro({
-    accountNames: ['Thales Group', 'Skello'],
+    accountNames: ['Example Account A', 'Example Account B'],
     listName: 'Polly DDS Score Accts',
     liveSave: true,
   });

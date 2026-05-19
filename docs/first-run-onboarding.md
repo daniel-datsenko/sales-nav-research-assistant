@@ -23,7 +23,7 @@ Say:
 Run:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm test
 npm run test:release-readiness
 ```

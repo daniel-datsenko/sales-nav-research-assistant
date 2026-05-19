@@ -6,7 +6,7 @@ Do not treat a large account as only one company page. Resolve the company targe
 
 Examples:
 
-- Prioritize `About You`, `Bonprix`, or another confirmed tech subsidiary before a generic retail holding page, but do not drop the parent/main company when it is related.
+- Prioritize confirmed tech subsidiaries such as `Example Fashion Subsidiary` or `Example Commerce Subsidiary` before a generic retail holding page, but do not drop the parent/main company when it is related.
 - Prefer the exact LinkedIn/Sales Navigator company page over the Salesforce display name when they differ.
 - If the selected company filter has low confidence or points to an unrelated homonym, stop with `needs_manual_alias` instead of collecting leads from a likely wrong entity.
 

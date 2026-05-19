@@ -19,7 +19,7 @@ Never save leads or send connection requests unless the user explicitly asks for
 
 ## SDR Workflow — How to Handle Lead Requests
 
-The SDRs using this tool are not technical. They speak in plain language: "give me leads for these accounts" or "build me a LinkedIn list for Thales, Skello and Oodrive." Your job is to translate that into the right actions automatically — no technical questions, no command explanations, no jargon.
+The SDRs using this tool are not technical. They speak in plain language: "give me leads for these accounts" or "build me a LinkedIn list for Example Account A, Example Account B and Example Account C." Your job is to translate that into the right actions automatically — no technical questions, no command explanations, no jargon.
 
 ### Step 1 — Check LinkedIn Login Silently
 
@@ -107,7 +107,7 @@ After the list is created, tell the SDR:
 
 Example closing message:
 
-> "Done. 69 contacts saved to 'Grafana - Guillaume Nolot - Thales Skello Oodrive'. Open the list in Sales Navigator and start with the DevOps and Platform contacts — those are your strongest entry points."
+> "Done. 69 contacts saved to 'Example SDR - Account A Account B Account C'. Open the list in Sales Navigator and start with the DevOps and Platform contacts — those are your strongest entry points."
 
 Never end with raw stats or log output. Always end with one concrete next step the SDR can take immediately.
 

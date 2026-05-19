@@ -25,7 +25,7 @@ If setup is missing, say this in plain language:
 Then offer to run:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm test
 npm run test:release-readiness
 ```

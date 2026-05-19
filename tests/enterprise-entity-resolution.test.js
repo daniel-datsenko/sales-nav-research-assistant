@@ -55,20 +55,20 @@ test('enterprise resolver includes IT and parent entities while excluding unrela
 test('enterprise resolver keeps curated config as source of truth without learned suggestions', () => {
   const aliasConfig = loadCompanyAliasConfig();
   const resolution = resolveEnterpriseEntities({
-    accountName: 'EDEKA',
+    accountName: 'Example Retail Group',
     aliasConfig,
     companyCandidates: [
-      { name: 'EDEKA', companyId: '1' },
-      { name: 'EDEKA DIGITAL GmbH', companyId: '4' },
-      { name: 'Lunar GmbH', companyId: '5' },
-      { name: 'Deutsche Bank', companyId: '2' },
+      { name: 'Example Retail Group', companyId: '1' },
+      { name: 'Example Retail Digital GmbH', companyId: '4' },
+      { name: 'Example Retail Labs GmbH', companyId: '5' },
+      { name: 'Unrelated Bank', companyId: '2' },
     ],
   });
 
   assert.equal(resolution.status, 'resolved_multi_target_curated');
   assert.equal(resolution.source, 'curated_company_targets');
   assert.equal(resolution.learnedSuggestions.length, 0);
-  assert.equal(resolution.selectedTargets.some((target) => /edeka/i.test(target.name)), true);
+  assert.equal(resolution.selectedTargets.some((target) => /Example Retail Digital/i.test(target.name)), true);
 });
 
 test('unrelated homonym is excluded even when it shares the account token', () => {

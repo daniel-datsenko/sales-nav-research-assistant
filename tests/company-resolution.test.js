@@ -39,8 +39,8 @@ test('findCompanyAliasEntry matches configured target and subsidiary aliases', (
   const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
 
   assert.equal(
-    findCompanyAliasEntry(aliasConfig, 'EDEKA DIGITAL').targets
-      .some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'),
+    findCompanyAliasEntry(aliasConfig, 'Example Retail Digital').targets
+      .some((target) => target.linkedinName === 'Example Retail Digital GmbH'),
     true,
   );
 });
@@ -48,7 +48,7 @@ test('findCompanyAliasEntry matches configured target and subsidiary aliases', (
 test('company entity priority ranks IT and digital targets before parent while keeping parent in scope', () => {
   const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
   const resolution = buildCompanyResolution({
-    accountName: 'EDEKA',
+    accountName: 'Example Retail Group',
     source: 'territory',
     aliasConfig,
     now: new Date('2026-05-06T12:00:00.000Z'),
@@ -56,9 +56,9 @@ test('company entity priority ranks IT and digital targets before parent while k
 
   assert.equal(resolution.status, 'resolved_multi_target_curated');
   assert.equal(resolution.targets[0].entityPriority, 'it_digital_first');
-  assert.equal(resolution.targets.some((target) => target.linkedinName === 'EDEKA'), true);
+  assert.equal(resolution.targets.some((target) => target.linkedinName === 'Example Retail Group'), true);
   assert.equal(
-    resolution.targets.find((target) => target.linkedinName === 'EDEKA').entityPriority,
+    resolution.targets.find((target) => target.linkedinName === 'Example Retail Group').entityPriority,
     'parent_buyer_scope',
   );
   assert.equal(classifyCompanyEntityPriority({ linkedinName: 'Retail Brand', targetType: 'brand' }), 'related_entity');
@@ -86,18 +86,18 @@ test('buildCompanyResolution resolves seeded hard accounts', () => {
   assert.equal(logisticsGroup.targets[0].linkedinName, 'Example Logistics');
 });
 
-test('buildCompanyResolution resolves EDEKA DIGITAL through curated subsidiary target', () => {
+test('buildCompanyResolution resolves Example Retail Digital through curated subsidiary target', () => {
   const aliasConfig = readJson(resolveProjectPath('config', 'account-aliases', 'default.json'));
   const resolution = buildCompanyResolution({
-    accountName: 'EDEKA DIGITAL',
+    accountName: 'Example Retail Digital',
     source: 'territory',
     aliasConfig,
     now: new Date('2026-05-05T17:00:00.000Z'),
   });
 
   assert.notEqual(resolution.status, 'all_resolution_failed');
-  assert.equal(resolution.targets.some((target) => target.linkedinName === 'EDEKA DIGITAL GmbH'), true);
-  assert.ok(resolution.searchVariantsTried.includes('EDEKA DIGITAL'));
+  assert.equal(resolution.targets.some((target) => target.linkedinName === 'Example Retail Digital GmbH'), true);
+  assert.ok(resolution.searchVariantsTried.includes('Example Retail Digital'));
   assert.match(resolution.manualSearchUrls.linkedinCompanySearchUrl, /linkedin\.com\/search\/results\/companies/);
 });
 

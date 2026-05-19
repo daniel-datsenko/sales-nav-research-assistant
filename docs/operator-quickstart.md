@@ -5,7 +5,7 @@ This is the shortest safe path for an SDR who wants leads from Sales Navigator.
 ## 1. Install And Check The Tool
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm test
 npm run test:release-readiness
 ```
@@ -27,13 +27,13 @@ npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 For normal SDR work, use this:
 
 ```bash
-npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive"
+npm run sdr-research -- --accounts="Example Account A, Example Account B, Example Account C"
 ```
 
 For large or messy enterprise accounts, add the faster read-only lookup:
 
 ```bash
-npm run sdr-research -- --accounts="Thales Group, Skello, Oodrive" --api-read-prefetch
+npm run sdr-research -- --accounts="Example Account A, Example Account B, Example Account C" --api-read-prefetch
 ```
 
 This lets the tool read company and lead IDs from the logged-in browser before running slower UI sweeps. If a company has several related pages, the tool should search IT/digital entities first, then the parent company, and stop only for truly unrelated same-name companies.
@@ -42,8 +42,8 @@ To also create/update a Sales Navigator list:
 
 ```bash
 npm run sdr-research -- \
-  --accounts="Thales Group, Skello, Oodrive" \
-  --list-name="SDR Research - Thales Skello Oodrive" \
+  --accounts="Example Account A, Example Account B, Example Account C" \
+  --list-name="SDR Research - Account A Account B Account C" \
   --live-save
 ```
 

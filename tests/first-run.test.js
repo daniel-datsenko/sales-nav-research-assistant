@@ -18,7 +18,7 @@ test('buildFirstRunChecklist explains install and session readiness', () => {
   assert.equal(checklist.title, 'Sales Navigator Research Assistant first-run check');
   assert.ok(checklist.checks.some((check) => check.id === 'dependencies'));
   assert.ok(checklist.checks.some((check) => check.id === 'linkedin-session'));
-  assert.match(checklist.nextCommand, /npm run (bootstrap-session|check-driver-session)|npm install/);
+  assert.match(checklist.nextCommand, /npm run (bootstrap-session|check-driver-session)|npm ci --ignore-scripts/);
 });
 
 test('renderFirstRunOnboarding gives safe setup choices and no live mutation instruction', () => {

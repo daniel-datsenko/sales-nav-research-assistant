@@ -11,7 +11,7 @@ Metacritic's internal backend API is publicly accessible with a stable key embed
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def get_game_scores(slug):
     """slug = URL slug e.g. 'elden-ring', 'the-last-of-us'"""
@@ -90,7 +90,7 @@ print(ld.get("datePublished"))      # "2022-02-25"
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 BASE = "https://backend.metacritic.com"
 
 # Games
@@ -138,7 +138,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 import urllib.request, gzip
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def _fetch(url):
     h = {"User-Agent": "Mozilla/5.0", "Accept-Encoding": "gzip"}
@@ -179,7 +179,7 @@ results = batch_game_scores([
 ```python
 import json, urllib.parse
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def search(query, media_type=None, limit=10):
     """
@@ -220,7 +220,7 @@ results = search("elden ring", media_type="games")
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def browse_games(sort_by="-metaScore", year_min=None, year_max=None, offset=0, limit=24):
     """
@@ -265,7 +265,7 @@ Finder API totals (confirmed 2026-04-18):
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def game_platforms(slug):
     url = (
@@ -299,7 +299,7 @@ print(game_platforms("elden-ring"))
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def get_critic_reviews(slug, media="games", offset=0, limit=10, sort="date"):
     """sort: 'date' | 'score' | 'publication'"""
@@ -333,7 +333,7 @@ print(reviews[0])
 ```python
 import json
 
-API_KEY = "1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u"
+API_KEY = "API_KEY_PLACEHOLDER"
 
 def get_user_reviews(slug, media="games", offset=0, limit=10, order_by="score", order_type="desc"):
     """order_by: 'score' | 'date' | 'helpfulness'"""
@@ -454,7 +454,7 @@ slug_from_url("https://www.metacritic.com/game/the-last-of-us/")  # "the-last-of
 
 ## Gotchas
 
-- **API key is embedded in every Metacritic page HTML** — find it by searching for `apiKey=` in `backend.metacritic.com` URLs. The key `1MOZgmNFxvmljaQR1X9KAij9Mo4xAY3u` was confirmed active as of 2026-04-18. If it rotates, fetch any Metacritic page and extract it: `re.search(r'apiKey=([A-Za-z0-9]+)', html).group(1)`.
+- **API key is embedded in every Metacritic page HTML** — find it by searching for `apiKey=` in `backend.metacritic.com` URLs. The key `API_KEY_PLACEHOLDER` was confirmed active as of 2026-04-18. If it rotates, fetch any Metacritic page and extract it: `re.search(r'apiKey=([A-Za-z0-9]+)', html).group(1)`.
 
 - **userScore is None in search results** — the `/finder/metacritic/search/` endpoint returns `userScore: null` for all results. Call the stats API separately with the slug to get user score + review count.
 

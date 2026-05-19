@@ -15,11 +15,11 @@ Add a curated target when a run shows one of these signs:
 
 Common examples:
 
-- `EDEKA` -> `EDEKA DIGITAL GmbH`, `Lunar GmbH`
-- `Otto Group` -> `About You`, `Bonprix`
-- `Schwarz Group` -> `Schwarz IT`
-- `REWE Group` -> `REWE digital`, `REWE Systems`
-- `Bertelsmann` -> `Arvato Systems`
+- `Example Retail Group` -> `Example Retail Digital GmbH`, `Example Retail Labs GmbH`
+- `Example Retail Holding` -> `Example Fashion Subsidiary`, `Example Commerce Subsidiary`
+- `Example Discount Group` -> `Example Discount IT`
+- `Example Grocery Group` -> `Example Grocery Digital`, `Example Grocery Systems`
+- `Example Media Holding` -> `Example Media Systems`
 
 ## How To Add One
 

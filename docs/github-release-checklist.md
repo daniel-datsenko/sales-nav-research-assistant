@@ -7,9 +7,11 @@ This checklist prepares the current supervised MVP snapshot for a shared GitHub 
 - `npm test` passes.
 - `npm run test:release-readiness` passes.
 - `git status --short` is clean.
+- Shared installs use `npm ci --ignore-scripts`, not plain `npm install`.
 - No local runtime artifacts are tracked.
 - No browser sessions, cookies, storage state, screenshots, local databases, logs, `.env` files, or credentials are tracked.
 - If the repository is public, remove internal handoff notes, dated acceptance reports, customer-specific artifacts, and any private account history first.
+- If the repository is public, config and tests should use synthetic account names unless a public brand example is explicitly intentional and approved.
 
 ## What The First Repo Snapshot Contains
 
@@ -46,6 +48,7 @@ Run these before sharing:
 ```bash
 git status --short
 git ls-files runtime .env .env.local '*.log' 'playwright-report/**' 'test-results/**'
+gitleaks detect --no-git --source . --redact
 rg -n "(access_token|refresh_token|client_secret|session_key|cookie|password|private_key)" \
   --glob '!node_modules/**' \
   --glob '!runtime/**' \

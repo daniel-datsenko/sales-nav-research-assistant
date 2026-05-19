@@ -236,10 +236,10 @@ test('playwright API prefetch reads every selected related target in entity-prio
         ok: true,
         payload: {
           elements: [
-            { entityUrn: 'urn:li:fs_salesCompany:1', name: 'EDEKA', navigationUrl: 'https://www.linkedin.com/sales/company/1' },
-            { entityUrn: 'urn:li:fs_salesCompany:2', name: 'EDEKA IT', navigationUrl: 'https://www.linkedin.com/sales/company/2' },
-            { entityUrn: 'urn:li:fs_salesCompany:3', name: 'EDEKA ZENTRALE Stiftung & Co. KG', navigationUrl: 'https://www.linkedin.com/sales/company/3' },
-            { entityUrn: 'urn:li:fs_salesCompany:4', name: 'EDEKA DIGITAL GmbH', navigationUrl: 'https://www.linkedin.com/sales/company/4' },
+            { entityUrn: 'urn:li:fs_salesCompany:1', name: 'Example Retail Group', navigationUrl: 'https://www.linkedin.com/sales/company/1' },
+            { entityUrn: 'urn:li:fs_salesCompany:2', name: 'Example Retail IT', navigationUrl: 'https://www.linkedin.com/sales/company/2' },
+            { entityUrn: 'urn:li:fs_salesCompany:3', name: 'Example Retail HQ GmbH', navigationUrl: 'https://www.linkedin.com/sales/company/3' },
+            { entityUrn: 'urn:li:fs_salesCompany:4', name: 'Example Retail Digital GmbH', navigationUrl: 'https://www.linkedin.com/sales/company/4' },
           ],
         },
       };
@@ -260,7 +260,7 @@ test('playwright API prefetch reads every selected related target in entity-prio
   };
 
   const result = await driver.runSalesNavApiReadPrefetch({
-    accountName: 'EDEKA',
+    accountName: 'Example Retail Group',
     leadCount: 5,
   });
 
@@ -330,13 +330,13 @@ test('playwright API list snapshot reads direct list URLs and paginates members'
           entityUrn: 'urn:li:fs_salesProfile:(lead-1,NAME_SEARCH,x)',
           firstName: 'Lead',
           lastName: 'One',
-          currentPositions: [{ title: 'SRE', companyName: 'METRO.digital', current: true }],
+          currentPositions: [{ title: 'SRE', companyName: 'Example Wholesale Digital', current: true }],
         },
         {
           entityUrn: 'urn:li:fs_salesProfile:(lead-2,NAME_SEARCH,x)',
           firstName: 'Lead',
           lastName: 'Two',
-          currentPositions: [{ title: 'Cloud Engineer', companyName: 'METRO.digital', current: true }],
+          currentPositions: [{ title: 'Cloud Engineer', companyName: 'Example Wholesale Digital', current: true }],
         },
       ]
       : [
@@ -344,7 +344,7 @@ test('playwright API list snapshot reads direct list URLs and paginates members'
           entityUrn: 'urn:li:fs_salesProfile:(lead-3,NAME_SEARCH,x)',
           firstName: 'Lead',
           lastName: 'Three',
-          currentPositions: [{ title: 'Platform Lead', companyName: 'METRO.digital', current: true }],
+          currentPositions: [{ title: 'Platform Lead', companyName: 'Example Wholesale Digital', current: true }],
         },
       ];
     return { ok: true, payload: { elements } };

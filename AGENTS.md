@@ -73,3 +73,14 @@ For enterprise accounts with unclear company scope, use the read-only resolver b
 ```bash
 npm run resolve-enterprise-entities -- --account-name="Account Name"
 ```
+
+## Research Routing Cheat Sheet
+
+- Normal SDR request: `npm run sdr-research -- --accounts="Account A, Account B, Account C"`.
+- Large enterprise or messy company pages: add `--api-read-prefetch`. Treat it as hybrid recall by default: fast read-only lookup first, then a bounded Sales Nav rescue pass for obvious high-value personas.
+- Unclear subsidiaries or same-name companies: run `npm run resolve-enterprise-entities -- --account-name="Account Name"` before retrying.
+- Smaller SaaS/scaleup accounts with good engineering titles not being selected: add `--scaleup-selection-expanded`.
+- Important benchmark or quality-sensitive accounts: add `--deep-profile-pass --profile-read-method=voyager --deep-profile-limit=20`.
+- Real Sales Navigator list creation/update: add `--live-save` only after explicit operator request.
+
+Voyager is a read-only quality layer after discovery, not a replacement for search. Keep `voyager_reviewed_but_pitch_unknown` in manual review and report `voyager_identity_missing` as an identity-mapping gap.

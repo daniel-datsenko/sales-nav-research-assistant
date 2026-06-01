@@ -51,11 +51,37 @@ Run the friendly SDR command. It researches the accounts one by one and can crea
 npm run sdr-research -- --accounts="Account A, Account B, Account C"
 ```
 
-For faster guarded tests, you may add `--api-read-prefetch`. Explain it simply as "a faster read-only lookup in the logged-in Sales Navigator browser." It must never be described as an official LinkedIn API, and it does not save or connect anything by itself.
+For faster guarded tests, you may add `--api-read-prefetch`. Explain it simply as "a faster read-only lookup in the logged-in Sales Navigator browser, followed by a small Sales Nav page check so we do not miss obvious people." It must never be described as an official LinkedIn API, and it does not save or connect anything by itself.
 
 ```bash
 npm run sdr-research -- --accounts="Account A, Account B, Account C" --api-read-prefetch
 ```
+
+In normal SDR runs, API prefetch uses hybrid recall: it reads fast first, then still runs a bounded UI rescue pass for first-page and high-value persona patterns such as Product Owner Engineering, Product Owner DevOps, IT-Architekt, Software-Architekt, Principal Architect, Senior Software Engineer, and Head of Engineering.
+
+For smaller SaaS or scaleup accounts, add `--scaleup-selection-expanded` when strong engineering titles are being found but too few are selected. Use this for accounts like Skello where Engineering Manager, Engineering Director, Cloud Engineer, Data Platform Engineer, Staff Engineer AI, or VP Product & Data are likely useful prospects.
+
+```bash
+npm run sdr-research -- \
+  --accounts="Scaleup Account" \
+  --api-read-prefetch \
+  --scaleup-selection-expanded
+```
+
+For better persona quality on important accounts, you may add the opt-in deep profile pass:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Account A, Account B, Account C" \
+  --api-read-prefetch \
+  --deep-profile-pass \
+  --profile-read-method=voyager \
+  --deep-profile-limit=20
+```
+
+Explain it simply: "I will do one extra read-only profile check for the strongest and borderline people, so hidden signals like Grafana, Prometheus, OpenTelemetry, Datadog, Kubernetes, SRE, or localized observability wording can improve the ranking." Do not call it a live action. It must not save leads, create lists, or send connects by itself.
+
+Voyager is not a discovery replacement. If the report shows `voyager_reviewed_but_pitch_unknown`, keep that person in manual review. If it shows `voyager_identity_missing`, explain that the tool could not map the Sales Nav row to a readable profile yet; it is a tool-improvement signal, not proof that the person is irrelevant.
 
 For large enterprise accounts, think in related company entities, not one page. Prioritize IT, digital, systems, technology, and platform subsidiaries first because they often own infrastructure and observability. Still keep the parent or main company in scope because buyers and observability owners can sit there too. Only treat a company as out of scope when it is clearly unrelated or a same-name homonym.
 
@@ -116,6 +142,9 @@ Never end with raw stats or log output. Always end with one concrete next step t
 - `direct_observability` → strongest contacts, start here.
 - `technical_adjacent` → still useful, second priority.
 - `likely_noise` → not useful enough, do not show unless asked.
+- `scaleup_selection_expanded` → useful for smaller SaaS/scaleup accounts where Engineering Manager, Cloud Engineer, Data Platform Engineer, Staff Engineer AI, or VP Product & Data are valid prospects.
+- `voyager_reviewed_but_pitch_unknown` → Voyager looked at the profile, but did not find a clear observability/platform/competitive signal; keep for manual review, do not auto-save.
+- `voyager_identity_missing` → the tool could not map the Sales Nav row to a readable Voyager profile; this is an identity-mapping gap, not a bad lead.
 
 ### Output format when showing contacts in chat
 

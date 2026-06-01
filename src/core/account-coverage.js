@@ -30,6 +30,7 @@ const {
   buildLanguageSplitListNames,
   splitCandidatesByProfileLanguage,
 } = require('./emea-territory');
+const { resolveVoyagerIdentity } = require('./voyager-profile');
 
 function loadAccountCoverageConfig(configPath) {
   return readJson(configPath || resolveProjectPath('config', 'account-coverage', 'default.json'));
@@ -116,6 +117,10 @@ function normalizeCandidateKey(candidate) {
   if (url) {
     try {
       const parsed = new URL(url);
+      const salesLeadMatch = parsed.pathname.match(/^(\/sales\/lead\/[^,/]+)/i);
+      if (salesLeadMatch) {
+        return `${parsed.origin}${salesLeadMatch[1]}`;
+      }
       parsed.search = '';
       parsed.hash = '';
       return parsed.toString();
@@ -149,6 +154,12 @@ const PRIORITY_SWEEP_HINTS = [
   'architecture',
   'monitoring',
 ];
+const API_RESCUE_SWEEP_IDS = new Set([
+  'broad-crawl',
+  'sweep-api-rescue-personas',
+]);
+const API_RESCUE_DEFAULT_MAX_CANDIDATES = 30;
+const API_RESCUE_DEFAULT_MAX_SCROLL_STEPS = 3;
 
 function normalizeSpeedProfile(value = 'balanced') {
   const profile = String(value || 'balanced').toLowerCase();
@@ -353,6 +364,49 @@ function buildSweepTemplates(config, maxCandidatesOverride = null, options = {})
   return applySpeedProfileToTemplates(ordered, options.speedProfile || 'balanced', {
     adaptiveSweepPruning: options.adaptiveSweepPruning,
   });
+}
+
+function buildApiRescueSweepTemplates(templates = []) {
+  return (templates || [])
+    .filter((template) => API_RESCUE_SWEEP_IDS.has(template.id))
+    .map((template) => ({
+      ...template,
+      rescuePass: true,
+      maxCandidates: Math.min(
+        Number.isFinite(Number(template.maxCandidates))
+          ? Number(template.maxCandidates)
+          : API_RESCUE_DEFAULT_MAX_CANDIDATES,
+        API_RESCUE_DEFAULT_MAX_CANDIDATES,
+      ),
+      maxScrollSteps: Math.min(
+        Number.isFinite(Number(template.maxScrollSteps))
+          ? Number(template.maxScrollSteps)
+          : API_RESCUE_DEFAULT_MAX_SCROLL_STEPS,
+        API_RESCUE_DEFAULT_MAX_SCROLL_STEPS,
+      ),
+    }));
+}
+
+function summarizeApiRescuePass(candidates = []) {
+  const rescued = (candidates || []).filter((candidate) => (
+    (candidate.sweeps || []).some((sweepId) => API_RESCUE_SWEEP_IDS.has(sweepId))
+    && !(candidate.sweeps || []).includes('api-broad-pool')
+  ));
+  return {
+    status: rescued.length > 0 ? 'rescued_candidates_found' : 'completed_no_new_rescue_candidates',
+    candidateCount: rescued.length,
+    selectedCount: rescued.filter((candidate) => candidate.selectedForList).length,
+    examples: rescued.slice(0, 10).map((candidate) => ({
+      fullName: candidate.fullName,
+      title: candidate.title,
+      company: candidate.company,
+      score: candidate.score,
+      coverageBucket: candidate.coverageBucket,
+      personaTier: candidate.personaTier,
+      sweeps: candidate.sweeps,
+      listSelectionReason: candidate.listSelectionReason || null,
+    })),
+  };
 }
 
 function classifySweepErrorCategory(error) {
@@ -603,15 +657,32 @@ function selectDeepReviewCandidates(coverageResult, limit = 8) {
   const titleHints = /(data|technology|integration|engineer|software|system|platform|cloud|infrastructure|architecture|project|operations)/i;
   const bucketRank = {
     technical_adjacent: 0,
-    likely_noise: 1,
+    broad_it_stakeholder: 1,
     direct_observability: 2,
-    broad_it_stakeholder: 3,
+    likely_noise: 3,
   };
 
   return (coverageResult?.candidates || [])
-    .filter((candidate) =>
-      ['technical_adjacent', 'likely_noise'].includes(candidate.coverageBucket)
-      && titleHints.test(candidate.title || ''))
+    .filter((candidate) => {
+      if (candidate.deepReview?.reviewedAt) {
+        return false;
+      }
+      if (getHardExclusionReason(candidate)) {
+        return false;
+      }
+      if (candidate.coverageBucket === 'technical_adjacent') {
+        return true;
+      }
+      if (candidate.coverageBucket === 'broad_it_stakeholder') {
+        return Number(candidate.score || 0) >= 15 || titleHints.test(candidate.title || '');
+      }
+      if (candidate.coverageBucket === 'direct_observability') {
+        return Number(candidate.score || 0) < 70;
+      }
+      return candidate.coverageBucket === 'likely_noise'
+        && Number(candidate.score || 0) > 0
+        && titleHints.test(`${candidate.title || ''} ${candidate.headline || ''}`);
+    })
     .sort((left, right) => {
       const bucketDiff = (bucketRank[left.coverageBucket] ?? 9) - (bucketRank[right.coverageBucket] ?? 9);
       if (bucketDiff !== 0) {
@@ -622,9 +693,27 @@ function selectDeepReviewCandidates(coverageResult, limit = 8) {
     .slice(0, Math.max(1, limit));
 }
 
+function getVoyagerIdentityMissingReason(candidate = {}) {
+  const identity = resolveVoyagerIdentity(candidate);
+  return identity.status === 'resolved' ? null : identity.status;
+}
+
+function hasStrongVoyagerPromotionSignal(evidence = {}) {
+  const signals = evidence.signals || {};
+  return [
+    ...(signals.observabilitySignals || []),
+    ...(signals.competitiveSignals || []),
+    ...(signals.legacySignals || []),
+    ...(signals.platformSignals || []),
+  ].filter(Boolean).length > 0;
+}
+
 function applyDeepReviewResult(candidate, rescored, priorityModel, reviewedBucket, evidence) {
   const previousBucket = candidate.coverageBucket;
   const previousScore = candidate.score;
+  const method = evidence?.method || evidence?.source || 'ui';
+  const signals = evidence?.signals || null;
+  const pitchStrategy = evidence?.pitchStrategy || signals?.pitchStrategy || 'unknown';
 
   return {
     ...candidate,
@@ -636,12 +725,21 @@ function applyDeepReviewResult(candidate, rescored, priorityModel, reviewedBucke
     coverageBucket: reviewedBucket,
     deepReview: {
       reviewedAt: new Date().toISOString(),
+      method,
+      status: evidence?.status || 'reviewed',
       previousBucket,
       reviewedBucket,
       previousScore,
       reviewedScore: rescored.score,
+      scoreBefore: previousScore,
+      scoreAfter: rescored.score,
+      bucketBefore: previousBucket,
+      bucketAfter: reviewedBucket,
       changed: previousBucket !== reviewedBucket || previousScore !== rescored.score,
       snippet: String(evidence?.snippet || '').slice(0, 500),
+      ...(signals ? { signals } : {}),
+      pitchStrategy,
+      ...(evidence?.blockedReason ? { blockedReason: evidence.blockedReason } : {}),
     },
   };
 }
@@ -894,6 +992,222 @@ function consolidateCoverageCandidates(rawResults, { icpConfig, priorityModel, c
   };
 }
 
+function buildDeepReviewEvidenceForScoring(candidate, evidence = {}) {
+  const signals = evidence.signals || {};
+  return [
+    evidence.snippet,
+    signals.headline,
+    ...(signals.about || []),
+    ...(signals.currentTitles || []),
+    ...(signals.recentExperienceTitles || []),
+    ...(signals.skills || []),
+    ...(signals.observabilitySignals || []),
+    ...(signals.stackSignals || []),
+    ...(signals.languageSignals || []),
+  ].filter(Boolean).join(' ');
+}
+
+async function runCoverageDeepProfilePass({
+  driver,
+  coverageResult,
+  coverageConfig,
+  icpConfig,
+  priorityModel,
+  reviewLimit = 20,
+  profileReadMethod = 'ui',
+  force = false,
+  strictVoyagerPromotion = true,
+  reportVoyagerIdentityGaps = true,
+  logger = null,
+  now = Date.now,
+} = {}) {
+  const normalizedMethod = String(profileReadMethod || 'ui').toLowerCase() === 'voyager' ? 'voyager' : 'ui';
+  const limit = Math.max(1, Number(reviewLimit) || 20);
+  const reviewPool = force
+    ? (coverageResult?.candidates || []).filter((candidate) => !getHardExclusionReason(candidate))
+    : selectDeepReviewCandidates(coverageResult, (coverageResult?.candidates || []).length || limit);
+  const identityMissingCandidates = normalizedMethod === 'voyager' && reportVoyagerIdentityGaps
+    ? reviewPool
+      .map((candidate) => ({
+        candidate,
+        reason: getVoyagerIdentityMissingReason(candidate),
+      }))
+      .filter((entry) => entry.reason)
+    : [];
+  const selected = (normalizedMethod === 'voyager'
+    ? reviewPool.filter((candidate) => !getVoyagerIdentityMissingReason(candidate))
+    : reviewPool)
+    .slice(0, limit);
+  const startedAt = new Date(now()).toISOString();
+  const updates = new Map();
+  const summary = {
+    enabled: true,
+    requested: true,
+    method: normalizedMethod,
+    reviewLimit: limit,
+    selectedCount: selected.length,
+    reviewedCount: 0,
+    promotedCount: 0,
+    promotionBlockedCount: 0,
+    failedCount: 0,
+    skippedCount: 0,
+    identityMissingCount: identityMissingCandidates.length,
+    identityMissingCandidates: identityMissingCandidates
+      .slice(0, 20)
+      .map(({ candidate, reason }) => ({
+        fullName: candidate.fullName || candidate.name || '',
+        title: candidate.title || '',
+        reason,
+      })),
+    selectionPolicy: 'account_coverage_deep_profile_v1',
+    strictPromotion: normalizedMethod === 'voyager' ? Boolean(strictVoyagerPromotion) : false,
+    startedAt,
+    finishedAt: null,
+  };
+
+  for (const { candidate, reason } of identityMissingCandidates) {
+    updates.set(normalizeCandidateKey(candidate), {
+      ...candidate,
+      deepReview: {
+        reviewedAt: new Date(now()).toISOString(),
+        method: 'voyager',
+        status: 'skipped',
+        skippedReason: reason,
+        budgetConsumed: false,
+      },
+    });
+  }
+
+  for (const candidate of selected) {
+    const key = normalizeCandidateKey(candidate);
+    try {
+      let evidence;
+      if (normalizedMethod === 'voyager') {
+        if (typeof driver.readVoyagerProfile !== 'function') {
+          throw new Error('Driver does not support Voyager profile reads');
+        }
+        const voyagerArtifact = await driver.readVoyagerProfile(candidate);
+        if (!voyagerArtifact.voyagerReadable) {
+          updates.set(key, {
+            ...candidate,
+            deepReview: {
+              reviewedAt: new Date(now()).toISOString(),
+              method: 'voyager',
+              status: 'skipped',
+              skippedReason: voyagerArtifact.error?.code || 'voyager_unreadable',
+              message: voyagerArtifact.error?.message || 'Voyager profile was not readable.',
+            },
+          });
+          summary.skippedCount += 1;
+          continue;
+        }
+        evidence = {
+          method: 'voyager',
+          source: 'voyager',
+          status: 'reviewed',
+          snippet: voyagerArtifact.signals?.snippet || '',
+          signals: voyagerArtifact.signals,
+          pitchStrategy: voyagerArtifact.signals?.pitchStrategy || 'unknown',
+          profileIdentity: voyagerArtifact.profileIdentity,
+        };
+      } else {
+        await driver.openCandidate(candidate, { runId: 'account-coverage-deep-profile', accountKey: 'coverage' });
+        evidence = await driver.captureEvidence({
+          ...candidate,
+          fromListPage: false,
+        }, {
+          runId: 'account-coverage-deep-profile',
+          accountKey: 'coverage',
+          deepProfileReview: true,
+        });
+        evidence.method = 'ui';
+        evidence.status = 'reviewed';
+      }
+
+      const detailText = buildDeepReviewEvidenceForScoring(candidate, evidence);
+      const rescored = scoreCandidate({
+        ...candidate,
+        headline: evidence.signals?.headline || candidate.headline,
+        about: detailText,
+        summary: detailText,
+        evidence,
+      }, icpConfig);
+      const reviewedPriority = priorityModel
+        ? scoreCandidateWithPriorityModel({
+          ...candidate,
+          about: detailText,
+          summary: detailText,
+        }, priorityModel)
+        : candidate.priorityModel || null;
+      const reviewedBucket = classifyReviewedCoverageBucket({
+        roleFamily: rescored.roleFamily,
+        score: rescored.score,
+        scoreBreakdown: rescored.breakdown,
+      }, coverageConfig);
+      const shouldBlockUnknownVoyagerPromotion = normalizedMethod === 'voyager'
+        && strictVoyagerPromotion
+        && candidate.coverageBucket !== 'direct_observability'
+        && reviewedBucket === 'direct_observability'
+        && evidence.pitchStrategy === 'unknown'
+        && !hasStrongVoyagerPromotionSignal(evidence);
+      const finalReviewedBucket = shouldBlockUnknownVoyagerPromotion
+        ? 'technical_adjacent'
+        : reviewedBucket;
+      if (shouldBlockUnknownVoyagerPromotion) {
+        evidence.status = 'manual_review';
+        evidence.blockedReason = 'voyager_reviewed_but_pitch_unknown';
+      }
+      const reviewed = {
+        ...applyDeepReviewResult(candidate, rescored, reviewedPriority, finalReviewedBucket, evidence),
+        ...(shouldBlockUnknownVoyagerPromotion
+          ? {
+            manualReviewSuggested: true,
+            manualReviewReason: 'voyager_reviewed_but_pitch_unknown',
+          }
+          : {}),
+      };
+      updates.set(key, reviewed);
+      summary.reviewedCount += 1;
+      if (shouldBlockUnknownVoyagerPromotion) {
+        summary.promotionBlockedCount += 1;
+      }
+      if (candidate.coverageBucket !== 'direct_observability' && reviewed.coverageBucket === 'direct_observability') {
+        summary.promotedCount += 1;
+      }
+      if (logger && typeof logger.info === 'function') {
+        logger.info(`Deep profile reviewed: ${candidate.fullName || 'Unknown'} | method=${normalizedMethod} | ${candidate.score || 0}->${reviewed.score || 0}`);
+      }
+    } catch (error) {
+      updates.set(key, {
+        ...candidate,
+        deepReview: {
+          reviewedAt: new Date(now()).toISOString(),
+          method: normalizedMethod,
+          status: 'failed',
+          failed: true,
+          message: String(error.message || error).slice(0, 240),
+        },
+      });
+      summary.failedCount += 1;
+    }
+  }
+
+  const nextCandidates = (coverageResult?.candidates || []).map((candidate) =>
+    updates.get(normalizeCandidateKey(candidate)) || candidate);
+  summary.finishedAt = new Date(now()).toISOString();
+
+  return {
+    ...coverageResult,
+    candidates: nextCandidates.sort((left, right) => Number(right.score || 0) - Number(left.score || 0)),
+    candidateCount: nextCandidates.length,
+    personaCoverage: summarizePersonaCoverage(nextCandidates),
+    personaFollowUpPlan: buildPersonaCoverageFollowUpPlan(summarizePersonaCoverage(nextCandidates), {
+      researchMode: coverageResult?.researchMode || 'persona-led',
+    }),
+    deepProfilePass: summary,
+  };
+}
+
 function summarizeCoverageBuckets(candidates) {
   const counts = {
     direct_observability: 0,
@@ -946,6 +1260,12 @@ async function runAccountCoverageWorkflow({
   interSweepDelayMs = 0,
   apiReadPrefetch = false,
   apiReadPrefetchLeadCount = 100,
+  deepProfilePass = false,
+  profileReadMethod = 'ui',
+  deepProfileLimit = 20,
+  forceDeepProfilePass = false,
+  strictVoyagerPromotion = true,
+  reportVoyagerIdentityGaps = true,
   logger = null,
   now = Date.now,
 }) {
@@ -1005,6 +1325,7 @@ async function runAccountCoverageWorkflow({
   }, { now });
 
   let apiReadPrefetchResult = null;
+  let uiSweepMode = 'full';
   let skipUiSweeps = false;
   if (apiReadPrefetch && typeof driver.runSalesNavApiReadPrefetch === 'function') {
     try {
@@ -1067,9 +1388,17 @@ async function runAccountCoverageWorkflow({
       }), { now });
       const preliminaryPersona = summarizePersonaCoverage(preliminary.candidates || []);
       if (preliminaryPersona.status === 'coverage_sufficient') {
-        skipUiSweeps = true;
-        if (logger && typeof logger.info === 'function') {
-          logger.info(`API read prefetch covered buyer/operator/user personas; skipping UI sweeps`);
+        if (effectiveSpeedProfile === 'fast') {
+          uiSweepMode = 'skipped';
+          skipUiSweeps = true;
+          if (logger && typeof logger.info === 'function') {
+            logger.info(`API read prefetch covered buyer/operator/user personas; skipping UI sweeps in fast mode`);
+          }
+        } else {
+          uiSweepMode = 'rescue_only';
+          if (logger && typeof logger.info === 'function') {
+            logger.info(`API read prefetch covered buyer/operator/user personas; running bounded UI rescue pass`);
+          }
         }
       }
       timings.events.push({
@@ -1097,6 +1426,21 @@ async function runAccountCoverageWorkflow({
     profile: effectiveSpeedProfile,
   };
   const executedUniqueAdds = [];
+  const templatesToRun = uiSweepMode === 'rescue_only'
+    ? buildApiRescueSweepTemplates(templates)
+    : templates;
+  if (uiSweepMode === 'rescue_only') {
+    const rescueIds = new Set(templatesToRun.map((template) => template.id));
+    adaptivePruningTelemetry.skippedTemplates.push(
+      ...templates
+        .filter((template) => !rescueIds.has(template.id))
+        .map((template) => template.id),
+    );
+    adaptivePruningTelemetry.triggered = adaptivePruningTelemetry.skippedTemplates.length > 0;
+    adaptivePruningTelemetry.reason = adaptivePruningTelemetry.triggered
+      ? 'api_prefetch_hybrid_recall_rescue_only'
+      : null;
+  }
 
   function registerSweepAdds(uniqueNew, templateId) {
     adaptivePruningTelemetry.executedTemplates.push(templateId);
@@ -1104,9 +1448,9 @@ async function runAccountCoverageWorkflow({
     executedUniqueAdds.push(uniqueNew);
   }
 
-  for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
+  for (let templateIndex = 0; templateIndex < templatesToRun.length; templateIndex += 1) {
     if (skipUiSweeps) {
-      adaptivePruningTelemetry.skippedTemplates.push(...templates.slice(templateIndex).map((template) => template.id));
+      adaptivePruningTelemetry.skippedTemplates.push(...templatesToRun.slice(templateIndex).map((template) => template.id));
       adaptivePruningTelemetry.triggered = true;
       adaptivePruningTelemetry.reason = apiReadPrefetchResult?.companyResolution?.status === 'needs_company_scope_review'
         ? 'api_company_scope_review_required'
@@ -1116,9 +1460,9 @@ async function runAccountCoverageWorkflow({
     if (stopSweeps) {
       break;
     }
-    const template = templates[templateIndex];
+    const template = templatesToRun[templateIndex];
     if (logger && typeof logger.info === 'function') {
-      logger.info(`Sweep ${templateIndex + 1}/${templates.length} started: ${template.id}`);
+      logger.info(`Sweep ${templateIndex + 1}/${templatesToRun.length} started: ${template.id}${template.rescuePass ? ' (rescue)' : ''}`);
     }
 
     if (
@@ -1127,7 +1471,7 @@ async function runAccountCoverageWorkflow({
         thresholds: pruningThresholds,
         adaptiveEnabled: adaptivePruningActive,
         executedUniqueAdds,
-        templates,
+        templates: templatesToRun,
         templateIndex,
       })
     ) {
@@ -1163,7 +1507,7 @@ async function runAccountCoverageWorkflow({
         }
         registerSweepAdds(uniqueNew, template.id);
         if (logger && typeof logger.info === 'function') {
-          logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${cacheHit.candidates.length} | new=${uniqueNew} | cache=hit`);
+          logger.info(`Sweep ${templateIndex + 1}/${templatesToRun.length} finished: ${template.id} | candidates=${cacheHit.candidates.length} | new=${uniqueNew} | cache=hit`);
         }
       }, {
         now,
@@ -1208,9 +1552,9 @@ async function runAccountCoverageWorkflow({
           seenCandidateKeys.add(key);
         }
         registerSweepAdds(uniqueNew, template.id);
-        if (logger && typeof logger.info === 'function') {
-          logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
-        }
+      if (logger && typeof logger.info === 'function') {
+        logger.info(`Sweep ${templateIndex + 1}/${templatesToRun.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
+      }
         if (reuseSweepCache) {
           writeSweepCache(sweepCacheDir, cacheKey, {
             accountName,
@@ -1251,7 +1595,7 @@ async function runAccountCoverageWorkflow({
       }
     }
 
-    if (!stopSweeps && Number(interSweepDelayMs) > 0 && templateIndex < templates.length - 1) {
+    if (!stopSweeps && Number(interSweepDelayMs) > 0 && templateIndex < templatesToRun.length - 1) {
       await waitForInterSweepDelay(driver, Number(interSweepDelayMs));
     }
   }
@@ -1292,6 +1636,8 @@ async function runAccountCoverageWorkflow({
       targetResponses: apiReadPrefetchResult.targetResponses || [],
       errors: apiReadPrefetchResult.errors || [],
       uiSweepsSkipped: skipUiSweeps,
+      uiSweepMode,
+      uiRescuePass: uiSweepMode === 'rescue_only',
     };
     if (apiReadPrefetchResult.companyResolution?.status === 'needs_company_scope_review') {
       finalResult.companyScope = {
@@ -1328,6 +1674,9 @@ async function runAccountCoverageWorkflow({
     finalResult.resolutionStatus = 'needs_company_scope_review';
     finalResult.coverageError = `${companyScopeAssessment.warning}: ${companyScopeAssessment.unrelatedCompanies.join(', ')}`;
   }
+  if (apiReadPrefetchResult && uiSweepMode === 'rescue_only') {
+    finalResult.apiRescuePass = summarizeApiRescuePass(finalResult.candidates || []);
+  }
   finalResult.companyResolution = summarizeCompanyResolutionForCoverage({
     companyResolution,
     companyResolutionArtifact,
@@ -1352,7 +1701,42 @@ async function runAccountCoverageWorkflow({
       recovered: !rateLimited,
     };
   }
+  let reviewedResult = finalResult;
+  if (deepProfilePass && !rateLimited && finalResult.candidateCount > 0) {
+    reviewedResult = await timePhase(timings, 'deep_profile_pass', async () =>
+      runCoverageDeepProfilePass({
+        driver,
+        coverageResult: finalResult,
+        coverageConfig,
+        icpConfig,
+        priorityModel,
+        reviewLimit: deepProfileLimit,
+        profileReadMethod,
+        force: forceDeepProfilePass,
+        strictVoyagerPromotion,
+        reportVoyagerIdentityGaps,
+        logger,
+        now,
+      }), { now });
+  } else if (deepProfilePass) {
+    finalResult.deepProfilePass = {
+      enabled: false,
+      requested: true,
+      method: String(profileReadMethod || 'ui').toLowerCase(),
+      reviewLimit: Math.max(1, Number(deepProfileLimit) || 20),
+      selectedCount: 0,
+      reviewedCount: 0,
+      promotedCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      selectionPolicy: 'account_coverage_deep_profile_v1',
+      strictPromotion: String(profileReadMethod || 'ui').toLowerCase() === 'voyager' ? Boolean(strictVoyagerPromotion) : false,
+      identityMissingCount: 0,
+      skippedReason: rateLimited ? 'rate_limited' : 'no_candidates',
+    };
+  }
   const finalTimings = finishRunTimings(timings, now);
+  Object.assign(finalResult, reviewedResult);
   finalResult.timings = finalTimings;
   finalResult.slowestSweeps = summarizeSlowestSweeps(timings.events);
   finalResult.cacheHits = cacheHits;
@@ -1444,6 +1828,29 @@ function isSeniorPlatformLeader(candidate) {
     ]).has(roleFamily);
 }
 
+function hasScaleupTechnicalAdjacentScope(candidate) {
+  const title = normalizeSelectionText(candidate.title || '');
+  const roleFamily = String(candidate.roleFamily || '').toLowerCase();
+  if (/\b(engineering director|director of engineering|engineering manager|senior engineering manager)\b/.test(title)) {
+    return true;
+  }
+  if (/\b(vp product\s*&\s*data|vp product and data|head of product\s*&\s*data|head of product and data)\b/.test(title)) {
+    return true;
+  }
+  if (/\b(cloud engineer|senior cloud engineer|data platform engineer|staff engineer ai|staff ai engineer|senior ai software engineer)\b/.test(title)) {
+    return true;
+  }
+  if (
+    /\b(senior|staff|principal)\b/.test(title)
+    && /\b(software engineer|software developer|developer|engineer)\b/.test(title)
+    && /\b(cloud|platform|ai|data|ml|machine learning)\b/.test(title)
+  ) {
+    return true;
+  }
+  return ['software_engineering', 'executive_engineering', 'data'].includes(roleFamily)
+    && /\b(cloud|platform|ai|data platform|engineering manager|engineering director)\b/.test(title);
+}
+
 function getHardExclusionReason(candidate, options = {}) {
   const title = normalizeSelectionText(candidate.title || '');
   const roleFamily = String(candidate.roleFamily || '').toLowerCase();
@@ -1508,9 +1915,18 @@ function classifyCoverageListSelection(candidate, options = {}) {
     ? Number(options.minScore)
     : 25;
   const title = normalizeSelectionText(candidate.title || '');
+  const technicalContext = normalizeSelectionText(`${candidate.title || ''} ${candidate.headline || ''} ${candidate.summary || ''}`);
   const seniority = String(candidate.seniority || '').toLowerCase();
   const roleFamily = String(candidate.roleFamily || '').toLowerCase();
   const reportOnlyOutOfNetwork = Boolean(options.reportOnlyOutOfNetwork || options.excludeOutOfNetwork);
+
+  if (candidate.deepReview?.blockedReason === 'voyager_reviewed_but_pitch_unknown') {
+    return {
+      selected: false,
+      reason: 'voyager_reviewed_but_pitch_unknown',
+      rank: 0,
+    };
+  }
 
   if (
     reportOnlyOutOfNetwork
@@ -1525,7 +1941,7 @@ function classifyCoverageListSelection(candidate, options = {}) {
   }
 
   if (candidate.coverageBucket === 'direct_observability') {
-    if (/\b(platform|architecture|architect)\b/.test(title) && !hasTechnicalAmbiguousQualifier(title)) {
+    if (/\b(platform|architecture|architect)\b/.test(title) && !hasTechnicalAmbiguousQualifier(technicalContext)) {
       return {
         selected: false,
         reason: 'direct_observability_needs_technical_qualifier',
@@ -1554,6 +1970,13 @@ function classifyCoverageListSelection(candidate, options = {}) {
   }
 
   if (candidate.coverageBucket === 'technical_adjacent') {
+    if (options.scaleupSelectionExpanded && hasScaleupTechnicalAdjacentScope(candidate)) {
+      return {
+        selected: true,
+        reason: 'scaleup_selection_expanded',
+        rank: 79,
+      };
+    }
     if (roleFamily === 'software_engineering') {
       return {
         selected: true,
@@ -1720,6 +2143,7 @@ function writeAccountCoverageArtifact(accountName, coverageResult) {
 module.exports = {
   annotateCoverageCandidatesForListSelection,
   applyDeepReviewResult,
+  buildApiRescueSweepTemplates,
   buildSweepTemplates,
   classifyCoverageBucket,
   classifyReviewedCoverageBucket,
@@ -1737,6 +2161,7 @@ module.exports = {
   normalizeResearchMode,
   normalizeSpeedProfile,
   resolveSweepTemplateOptions,
+  runCoverageDeepProfilePass,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   selectDeepReviewCandidates,

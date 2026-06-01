@@ -36,7 +36,31 @@ For large or messy enterprise accounts, add the faster read-only lookup:
 npm run sdr-research -- --accounts="Example Account A, Example Account B, Example Account C" --api-read-prefetch
 ```
 
-This lets the tool read company and lead IDs from the logged-in browser before running slower UI sweeps. If a company has several related pages, the tool should search IT/digital entities first, then the parent company, and stop only for truly unrelated same-name companies.
+This lets the tool read company and lead IDs from the logged-in browser before running slower UI sweeps. In normal SDR runs it still performs a small Sales Nav rescue check for obvious high-value personas, so the tool does not silently miss people like Product Owner Engineering, Product Owner DevOps, IT-Architekt, Software-Architekt, Principal Architect, Senior Software Engineer, or Head of Engineering. If a company has several related pages, the tool should search IT/digital entities first, then the parent company, and stop only for truly unrelated same-name companies.
+
+For important accounts where persona quality matters more than raw speed, add the opt-in deep profile pass:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Example Account A, Example Account B, Example Account C" \
+  --api-read-prefetch \
+  --deep-profile-pass \
+  --profile-read-method=voyager \
+  --deep-profile-limit=20
+```
+
+This is still read-only. It checks bounded profile signals for top and borderline candidates, then improves the ranking and report. It does not save leads or send connection requests unless you also use the explicit live-save flow below.
+
+For smaller SaaS or scaleup accounts, add the scaleup selection expansion if good engineering titles are being found but not selected:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Example Scaleup" \
+  --api-read-prefetch \
+  --scaleup-selection-expanded
+```
+
+This keeps hard excludes in place, but allows Engineering Manager, Engineering Director, Cloud Engineer, Data Platform Engineer, Staff Engineer AI, and VP Product & Data style roles into the reviewable lead set.
 
 To also create/update a Sales Navigator list:
 

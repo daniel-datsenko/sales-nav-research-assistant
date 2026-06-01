@@ -86,6 +86,9 @@ function renderSdrResearchIntro({
   liveSave = false,
   researchMode = 'persona-led',
   speedProfile = 'balanced',
+  deepProfilePass = false,
+  profileReadMethod = 'ui',
+  scaleupSelectionExpanded = false,
 } = {}) {
   const lines = [];
   lines.push('# SDR Research Run');
@@ -94,6 +97,8 @@ function renderSdrResearchIntro({
   lines.push(`- Target list: \`${listName}\``);
   lines.push(`- Research mode: \`${researchMode}\``);
   lines.push(`- Speed profile: \`${speedProfile}\``);
+  lines.push(`- Deep profile review: \`${deepProfilePass ? profileReadMethod : 'off'}\``);
+  lines.push(`- Scaleup selection expansion: \`${scaleupSelectionExpanded ? 'on' : 'off'}\``);
   lines.push(`- Live save: \`${liveSave ? 'yes' : 'no'}\``);
   lines.push('- Connects: `never in this command`');
   lines.push('');

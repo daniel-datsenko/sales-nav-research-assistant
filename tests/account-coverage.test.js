@@ -19,6 +19,7 @@ const {
   normalizeResearchMode,
   normalizeSpeedProfile,
   resolveSweepTemplateOptions,
+  runCoverageDeepProfilePass,
   runAccountCoverageWorkflow,
   selectCoverageListCandidates,
   writeAccountCoverageArtifact,
@@ -202,6 +203,11 @@ test('default account coverage config includes multilingual EMEA buyer and opera
   assert.ok(keywords.includes('Leiter Digitale Transformation'));
   assert.ok(keywords.includes('Director de Datos'));
   assert.ok(keywords.includes('Direttore Dati'));
+  assert.ok(keywords.includes('Data & AI Factory Director'));
+  assert.ok(keywords.includes('Responsable du domaine Exploitation e-Commerce'));
+  assert.ok(keywords.includes('Chef de Projet Senior Cloud Observabilité'));
+  assert.ok(keywords.includes('Marketplace Director'));
+  assert.ok(keywords.includes('Customer Experience Technology'));
 });
 
 test('buildSweepCacheKey is stable for account targets and template keywords', () => {
@@ -325,6 +331,14 @@ test('normalizeCandidateKey strips query-string noise from lead urls', () => {
   });
 
   assert.equal(key, 'https://www.linkedin.com/sales/lead/abc123');
+});
+
+test('normalizeCandidateKey treats Sales Nav lead search suffixes as the same lead', () => {
+  const key = normalizeCandidateKey({
+    salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/ACwAAAK0k30Bq0sHYcVDDnyPu4nKY81v4lV3KlI,NAME_SEARCH,71nH?_ntb=abc',
+  });
+
+  assert.equal(key, 'https://www.linkedin.com/sales/lead/ACwAAAK0k30Bq0sHYcVDDnyPu4nKY81v4lV3KlI');
 });
 
 test('buildCoverageLanguageSplits produces DE and EN email-list buckets from selected coverage candidates', () => {
@@ -761,6 +775,123 @@ test('selectCoverageListCandidates broadly keeps technical-adjacent ICP personas
   ]);
 });
 
+test('selectCoverageListCandidates can expand scaleup engineering and data-platform personas', () => {
+  const result = {
+    candidates: [
+      {
+        fullName: 'Scaleup Engineering Manager',
+        title: 'Engineering Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        seniority: 'manager',
+        score: 10,
+      },
+      {
+        fullName: 'Scaleup Data Platform',
+        title: 'Data Platform Engineer',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'data',
+        seniority: 'individual_contributor',
+        score: 10,
+      },
+      {
+        fullName: 'Finance Engineering',
+        title: 'Finance Engineering Manager',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        seniority: 'manager',
+        score: 90,
+      },
+    ],
+  };
+
+  assert.deepEqual(
+    selectCoverageListCandidates(result, { minScore: 50 }).map((candidate) => candidate.fullName),
+    ['Scaleup Data Platform'],
+  );
+  const expanded = selectCoverageListCandidates(result, {
+    minScore: 50,
+    scaleupSelectionExpanded: true,
+  });
+  assert.deepEqual(expanded.map((candidate) => candidate.fullName), [
+    'Scaleup Engineering Manager',
+    'Scaleup Data Platform',
+  ]);
+  assert.deepEqual(expanded.map((candidate) => candidate.listSelectionReason), [
+    'scaleup_selection_expanded',
+    'scaleup_selection_expanded',
+  ]);
+});
+
+test('selectCoverageListCandidates recognizes Lekkerland-style product-owner and architect rescue personas', () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const consolidated = consolidateCoverageCandidates([{
+    templateId: 'sweep-api-rescue-personas',
+    candidates: [
+      {
+        fullName: 'Technical Product Owner',
+        title: 'Technical Product Owner - Engineering Platform',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/technical-product-owner',
+      },
+      {
+        fullName: 'Product Owner DevOps',
+        title: 'Product Owner DevOps / Cloud GCP / AWS',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/product-owner-devops',
+      },
+      {
+        fullName: 'Software Architekt',
+        title: 'Software-Architekt',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/software-architekt',
+      },
+      {
+        fullName: 'Principal Architect With Cloud',
+        title: 'Principal Architect',
+        headline: 'Cloud engineering and software architecture',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/principal-architect-cloud',
+      },
+      {
+        fullName: 'Principal Architect No Context',
+        title: 'Principal Architect',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/principal-architect-no-context',
+      },
+      {
+        fullName: 'CRM Consultant',
+        title: 'Solution Consultant CRM Sales Solutions',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/crm-consultant',
+      },
+    ],
+  }], {
+    icpConfig,
+    priorityModel: null,
+    coverageConfig,
+    accountName: 'Lekkerland',
+  });
+
+  const annotated = annotateCoverageCandidatesForListSelection(consolidated, { minScore: 25 });
+  const byName = new Map(annotated.map((candidate) => [candidate.fullName, candidate]));
+  const selected = selectCoverageListCandidates(consolidated, { minScore: 25 }).map((candidate) => candidate.fullName);
+
+  assert.equal(byName.get('Technical Product Owner').roleFamily, 'platform_engineering');
+  assert.equal(byName.get('Product Owner DevOps').roleFamily, 'platform_engineering');
+  assert.equal(byName.get('Software Architekt').roleFamily, 'platform_engineering');
+  assert.equal(byName.get('Principal Architect With Cloud').roleFamily, 'platform_engineering');
+  assert.equal(byName.get('Principal Architect No Context').listSelectionReason, 'direct_observability_needs_technical_qualifier');
+  assert.equal(byName.get('CRM Consultant').selectedForList, false);
+  assert.ok(selected.includes('Technical Product Owner'));
+  assert.ok(selected.includes('Product Owner DevOps'));
+  assert.ok(selected.includes('Software Architekt'));
+  assert.ok(selected.includes('Principal Architect With Cloud'));
+  assert.equal(selected.includes('Principal Architect No Context'), false);
+  assert.equal(selected.includes('CRM Consultant'), false);
+});
+
 test('annotateCoverageCandidatesForListSelection surfaces relative-rank manual review when nothing passes threshold', () => {
   const annotated = annotateCoverageCandidatesForListSelection({
     candidates: [
@@ -920,6 +1051,178 @@ test('applyDeepReviewResult annotates reviewed candidate changes', () => {
   assert.equal(updated.deepReview.reviewedScore, 41);
 });
 
+test('runCoverageDeepProfilePass uses Voyager signals to promote hidden relevant personas', async () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const driver = {
+    async readVoyagerProfile(candidate) {
+      assert.equal(candidate.fullName, 'Hidden Platform Owner');
+      return {
+        voyagerReadable: true,
+        profileIdentity: { publicIdentifier: 'hidden-platform-owner' },
+        signals: {
+          headline: 'Cloud Platform and SRE leader',
+          about: ['Owns Kubernetes, Prometheus, Grafana, OpenTelemetry and production monitoring.'],
+          currentTitles: ['Cloud Transformation Manager'],
+          recentExperienceTitles: ['SRE Platform Lead'],
+          skills: ['Kubernetes', 'Prometheus', 'Grafana', 'OpenTelemetry'],
+          observabilitySignals: ['prometheus', 'grafana', 'opentelemetry', 'monitoring'],
+          competitiveSignals: [],
+          legacySignals: [],
+          platformSignals: ['kubernetes', 'platform engineering'],
+          stackSignals: ['prometheus', 'grafana', 'opentelemetry', 'kubernetes'],
+          languageSignals: [],
+          pitchStrategy: 'advocate',
+          snippet: 'Owns Kubernetes, Prometheus, Grafana, OpenTelemetry and production monitoring.',
+        },
+      };
+    },
+    async saveCandidateToList() {
+      assert.fail('Deep profile review must not save leads');
+    },
+    async connectCandidate() {
+      assert.fail('Deep profile review must not send connects');
+    },
+  };
+
+  const result = await runCoverageDeepProfilePass({
+    driver,
+    coverageResult: {
+      accountName: 'Example Account',
+      researchMode: 'persona-led',
+      candidates: [{
+        fullName: 'Hidden Platform Owner',
+        title: 'Cloud Transformation Manager',
+        company: 'Example Account',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/hidden-platform-owner',
+        publicProfileUrl: 'https://www.linkedin.com/in/hidden-platform-owner',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        score: 26,
+      }],
+    },
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    profileReadMethod: 'voyager',
+    reviewLimit: 5,
+  });
+
+  const reviewed = result.candidates[0];
+  assert.equal(result.deepProfilePass.method, 'voyager');
+  assert.equal(result.deepProfilePass.reviewedCount, 1);
+  assert.equal(result.deepProfilePass.promotedCount, 1);
+  assert.equal(reviewed.deepReview.method, 'voyager');
+  assert.equal(reviewed.deepReview.pitchStrategy, 'advocate');
+  assert.equal(reviewed.coverageBucket, 'direct_observability');
+  assert.equal(reviewed.score > 26, true);
+});
+
+test('runCoverageDeepProfilePass leaves unreadable Voyager candidates unchanged and marked skipped', async () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const driver = {
+    async readVoyagerProfile() {
+      return {
+        voyagerReadable: false,
+        error: {
+          code: 'missing_voyager_identity',
+          message: 'No public profile identity was found.',
+        },
+      };
+    },
+  };
+
+  const result = await runCoverageDeepProfilePass({
+    driver,
+    coverageResult: {
+      accountName: 'Example Account',
+      candidates: [{
+        fullName: 'Borderline Candidate',
+        title: 'Cloud Transformation Manager',
+        company: 'Example Account',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/borderline',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'unknown',
+        score: 26,
+      }],
+    },
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    profileReadMethod: 'voyager',
+    reviewLimit: 5,
+  });
+
+  assert.equal(result.deepProfilePass.reviewedCount, 0);
+  assert.equal(result.deepProfilePass.skippedCount, 0);
+  assert.equal(result.deepProfilePass.identityMissingCount, 1);
+  assert.equal(result.candidates[0].score, 26);
+  assert.equal(result.candidates[0].coverageBucket, 'technical_adjacent');
+  assert.equal(result.candidates[0].deepReview.status, 'skipped');
+  assert.equal(result.candidates[0].deepReview.skippedReason, 'missing_voyager_identity');
+  assert.equal(result.candidates[0].deepReview.budgetConsumed, false);
+});
+
+test('runCoverageDeepProfilePass blocks unknown-pitch Voyager auto-promotion', async () => {
+  const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'default.json'));
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const driver = {
+    async readVoyagerProfile() {
+      return {
+        voyagerReadable: true,
+        profileIdentity: { publicIdentifier: 'devops-owner' },
+        signals: {
+          headline: 'DevOps Engineer',
+          about: ['Owns delivery workflows.'],
+          currentTitles: ['DevOps Engineer'],
+          recentExperienceTitles: [],
+          skills: [],
+          observabilitySignals: [],
+          competitiveSignals: [],
+          legacySignals: [],
+          platformSignals: [],
+          stackSignals: [],
+          languageSignals: [],
+          pitchStrategy: 'unknown',
+          snippet: 'DevOps Engineer owns delivery workflows.',
+        },
+      };
+    },
+  };
+
+  const result = await runCoverageDeepProfilePass({
+    driver,
+    coverageResult: {
+      accountName: 'Example Account',
+      candidates: [{
+        fullName: 'DevOps Owner',
+        title: 'DevOps Engineer',
+        company: 'Example Account',
+        publicProfileUrl: 'https://www.linkedin.com/in/devops-owner',
+        coverageBucket: 'technical_adjacent',
+        roleFamily: 'software_engineering',
+        score: 22,
+      }],
+    },
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    profileReadMethod: 'voyager',
+    reviewLimit: 5,
+  });
+
+  const reviewed = result.candidates[0];
+  assert.equal(result.deepProfilePass.reviewedCount, 1);
+  assert.equal(result.deepProfilePass.promotedCount, 0);
+  assert.equal(result.deepProfilePass.promotionBlockedCount, 1);
+  assert.equal(reviewed.coverageBucket, 'technical_adjacent');
+  assert.equal(reviewed.manualReviewSuggested, true);
+  assert.equal(reviewed.deepReview.status, 'manual_review');
+  assert.equal(reviewed.deepReview.blockedReason, 'voyager_reviewed_but_pitch_unknown');
+  assert.deepEqual(selectCoverageListCandidates(result), []);
+});
+
 test('runAccountCoverageWorkflow uses resolved accounts from enumerateAccounts when available', async () => {
   const coverageConfig = readJson(resolveProjectPath('config', 'account-coverage', 'lean-observability.json'));
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -1054,7 +1357,7 @@ test('runAccountCoverageWorkflow upgrades failed company resolution when live sw
   assert.deepEqual(run.result.companyResolution.selectedTargets, ['Live Scoped Unknown Account']);
 });
 
-test('runAccountCoverageWorkflow uses API read prefetch and skips UI sweeps when persona coverage is sufficient', async () => {
+test('runAccountCoverageWorkflow runs bounded UI rescue after sufficient API prefetch in balanced mode', async () => {
   const coverageConfig = {
     broadCrawl: { enabled: true, maxCandidates: 3 },
     sweeps: [
@@ -1124,11 +1427,174 @@ test('runAccountCoverageWorkflow uses API read prefetch and skips UI sweeps when
     apiReadPrefetch: true,
   });
 
-  assert.equal(peopleSearchCalls, 0);
+  assert.equal(peopleSearchCalls, 1);
   assert.equal(run.result.candidateCount, 3);
   assert.equal(run.result.apiReadPrefetch.companyResolution.status, 'resolved_exact_api');
-  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, true);
+  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, false);
+  assert.equal(run.result.apiReadPrefetch.uiRescuePass, true);
+  assert.equal(run.result.apiReadPrefetch.uiSweepMode, 'rescue_only');
   assert.equal(run.result.personaCoverage.status, 'coverage_sufficient');
+});
+
+test('runAccountCoverageWorkflow can still skip UI sweeps in fast API-prefetch mode', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  let peopleSearchCalls = 0;
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async runSalesNavApiReadPrefetch() {
+      return {
+        status: 'completed',
+        source: 'api_read_prefetch',
+        companyResolution: {
+          status: 'resolved_exact_api',
+          confidence: 0.95,
+          selectedTargets: [{ name: 'Example Analytics Co', companyId: '300001' }],
+        },
+        companyCandidates: [{ name: 'Example Analytics Co', companyId: '300001' }],
+        leadCandidates: [
+          {
+            fullName: 'API Buyer',
+            title: 'Chief Technology Officer',
+            company: 'Example Analytics Co',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-buyer',
+          },
+          {
+            fullName: 'API Operator',
+            title: 'Head of Platform Engineering',
+            company: 'Example Analytics Co',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-operator',
+          },
+          {
+            fullName: 'API User',
+            title: 'Senior Site Reliability Engineer',
+            company: 'Example Analytics Co',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-user',
+          },
+        ],
+        targetResponses: [{ status: 'ok', count: 3 }],
+        errors: [],
+      };
+    },
+    async openPeopleSearch() {
+      peopleSearchCalls += 1;
+    },
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Example Analytics Co',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    apiReadPrefetch: true,
+    speedProfile: 'fast',
+  });
+
+  assert.equal(peopleSearchCalls, 0);
+  assert.equal(run.result.apiReadPrefetch.uiSweepsSkipped, true);
+  assert.equal(run.result.apiReadPrefetch.uiRescuePass, false);
+  assert.equal(run.result.apiReadPrefetch.uiSweepMode, 'skipped');
+});
+
+test('runAccountCoverageWorkflow reports candidates rescued by bounded UI pass after API prefetch', async () => {
+  const coverageConfig = {
+    broadCrawl: { enabled: true, maxCandidates: 3 },
+    sweeps: [
+      {
+        id: 'api-rescue-personas',
+        keywords: ['Technical Product Owner', 'Product Owner DevOps'],
+        maxCandidates: 30,
+        maxScrollSteps: 3,
+      },
+      { id: 'platform', keywords: ['platform'], maxCandidates: 3 },
+    ],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  let currentTemplate = null;
+
+  const driver = {
+    async openAccountSearch() {},
+    async enumerateAccounts(accounts) {
+      return accounts;
+    },
+    async runSalesNavApiReadPrefetch() {
+      return {
+        status: 'completed',
+        source: 'api_read_prefetch',
+        companyResolution: {
+          status: 'resolved_exact_api',
+          confidence: 0.95,
+          selectedTargets: [{ name: 'Lekkerland SE', companyId: '25226' }],
+        },
+        companyCandidates: [{ name: 'Lekkerland SE', companyId: '25226' }],
+        leadCandidates: [
+          {
+            fullName: 'API Buyer',
+            title: 'Chief Technology Officer',
+            company: 'Lekkerland SE',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-buyer',
+          },
+          {
+            fullName: 'API Operator',
+            title: 'Head of Platform Engineering',
+            company: 'Lekkerland SE',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-operator',
+          },
+          {
+            fullName: 'API User',
+            title: 'Senior Site Reliability Engineer',
+            company: 'Lekkerland SE',
+            salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/api-user',
+          },
+        ],
+        targetResponses: [{ status: 'ok', count: 3 }],
+        errors: [],
+      };
+    },
+    async openPeopleSearch() {},
+    async applySearchTemplate(template) {
+      currentTemplate = template;
+    },
+    async scrollAndCollectCandidates() {
+      if (currentTemplate?.id !== 'sweep-api-rescue-personas') {
+        return [];
+      }
+      return [{
+        fullName: 'Najim El Jallouli',
+        title: 'Technical Product Owner - Engineering Platform',
+        company: 'Lekkerland SE',
+        salesNavigatorUrl: 'https://www.linkedin.com/sales/lead/najim-el-jallouli',
+      }];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Lekkerland',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    apiReadPrefetch: true,
+  });
+
+  assert.equal(run.result.apiReadPrefetch.uiRescuePass, true);
+  assert.equal(run.result.apiRescuePass.candidateCount, 1);
+  assert.equal(run.result.apiRescuePass.examples[0].fullName, 'Najim El Jallouli');
+  assert.ok(run.result.candidates.some((candidate) => candidate.fullName === 'Najim El Jallouli'));
 });
 
 test('runAccountCoverageWorkflow stops before UI sweeps when API company scope is ambiguous', async () => {

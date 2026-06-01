@@ -418,7 +418,7 @@ function renderAccountBatchReportMarkdown(payload) {
     lines.push(`- SDR summary: found=\`${sdrSummary.found}\` | selected=\`${sdrSummary.selectedForList}\` | saved_verified=\`${sdrSummary.savedVerified}\` | save_unverified=\`${sdrSummary.saveClickedUnverified}\` | failed_save=\`${sdrSummary.failedSave}\` | manual_review=\`${sdrSummary.manualReview}\` | out_of_network=\`${sdrSummary.outOfNetwork}\` | failed_sweeps=\`${sdrSummary.failedSweeps}\` | not_auto_saved=\`${sdrSummary.notAutoSaved}\``);
     lines.push(`- Coverage status: \`${sdrSummary.coverageStatus}\``);
     if (result.apiReadPrefetch) {
-      lines.push(`- API read prefetch: \`${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status}\` | leads=\`${result.apiReadPrefetch.leadCandidateCount || 0}\` | ui_sweeps_skipped=\`${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}\``);
+      lines.push(`- API read prefetch: \`${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status}\` | leads=\`${result.apiReadPrefetch.leadCandidateCount || 0}\` | ui_sweeps_skipped=\`${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}\` | ui_rescue_pass=\`${result.apiReadPrefetch.uiRescuePass ? 'yes' : 'no'}\``);
       if (result.apiReadPrefetch.companyResolution?.source === 'enterprise_entity_resolver') {
         lines.push(`- Enterprise entity resolver: \`used\` | report=\`${result.apiReadPrefetch.companyResolution.reportPath || 'runtime/artifacts/company-resolution/enterprise-entities'}\``);
       }
@@ -428,6 +428,9 @@ function renderAccountBatchReportMarkdown(payload) {
       if (entityPriorities.length > 0) {
         lines.push(`- Entity priority: \`${entityPriorities.join(', ')}\``);
       }
+    }
+    if (result.apiRescuePass) {
+      lines.push(`- UI rescue pass: \`${result.apiRescuePass.status || 'completed'}\` | rescued=\`${result.apiRescuePass.candidateCount || 0}\` | selected=\`${result.apiRescuePass.selectedCount || 0}\``);
     }
     if (result.companyScope?.warning) {
       lines.push(`- Company scope warning: \`${result.companyScope.warning}\` (${(result.companyScope.unrelatedCompanies || []).join(', ') || 'unknown company'})`);
@@ -540,6 +543,27 @@ function renderAccountBatchReportMarkdown(payload) {
     if (strongNotSaved.length > 0) {
       lines.push(`### Strong but not auto-saved`);
       for (const item of strongNotSaved) {
+        const noteParts = [];
+        if (item.title) {
+          noteParts.push(item.title);
+        }
+        if (item.reason) {
+          noteParts.push(`reason=${item.reason}`);
+        }
+        if (item.nextAction) {
+          noteParts.push(`next=${item.nextAction}`);
+        }
+        noteParts.push(...formatScoreContext(item));
+        const note = noteParts.length > 0 ? ` - ${noteParts.join(' | ')}` : '';
+        lines.push(`- ${item.fullName}: \`${item.coverageBucket || 'unknown'}\`${note}`);
+      }
+      lines.push('');
+    }
+
+    const apiRescueExamples = (result.apiRescuePass?.examples || []).slice(0, 10);
+    if (apiRescueExamples.length > 0) {
+      lines.push(`### Not found by API but rescued by UI`);
+      for (const item of apiRescueExamples) {
         const noteParts = [];
         if (item.title) {
           noteParts.push(item.title);

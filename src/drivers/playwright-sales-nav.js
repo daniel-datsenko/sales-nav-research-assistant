@@ -28,6 +28,13 @@ const {
   resolveEnterpriseEntities,
   writeEnterpriseEntityResolutionArtifact,
 } = require('../core/enterprise-entity-resolution');
+const {
+  buildVoyagerProfileArtifact,
+  buildVoyagerProfilePaths,
+  classifyVoyagerFailure,
+  extractVoyagerCsrfFromCookies,
+  resolveVoyagerIdentity,
+} = require('../core/voyager-profile');
 
 const SALES_HOME_URL = 'https://www.linkedin.com/sales/home';
 const MIN_COMPANY_FILTER_CONFIDENCE = 0.7;
@@ -899,6 +906,132 @@ class PlaywrightSalesNavigatorDriver extends DriverAdapter {
     }
     const cookies = await this.context.cookies('https://www.linkedin.com').catch(() => []);
     return extractCsrfFromCookies(cookies);
+  }
+
+  async getVoyagerCsrf() {
+    if (!this.context) {
+      throw new Error('voyager: browser context is not open');
+    }
+    const cookies = await this.context.cookies('https://www.linkedin.com').catch(() => []);
+    return extractVoyagerCsrfFromCookies(cookies);
+  }
+
+  async voyagerApiGet(path) {
+    if (!this.page) {
+      throw new Error('voyager: playwright page is not open');
+    }
+
+    const sessionState = await this.getSessionState();
+    if (sessionState !== 'authenticated') {
+      const error = new Error(`voyager: not authenticated (${sessionState})`);
+      error.code = 'not_authenticated';
+      error.path = path;
+      throw error;
+    }
+
+    const csrf = await this.getVoyagerCsrf();
+    if (!csrf) {
+      const error = new Error('voyager: JSESSIONID/CSRF cookie missing');
+      error.code = 'csrf_missing';
+      error.path = path;
+      throw error;
+    }
+
+    const response = await this.page.evaluate(async ({ requestPath, token }) => {
+      const result = await fetch(requestPath, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'csrf-token': token,
+          'x-restli-protocol-version': '2.0.0',
+          accept: 'application/json',
+        },
+      });
+      const bodyText = await result.text();
+      let payload = null;
+      try {
+        payload = bodyText ? JSON.parse(bodyText) : null;
+      } catch {
+        payload = null;
+      }
+      return {
+        ok: result.ok,
+        status: result.status,
+        url: result.url,
+        bodyText,
+        payload,
+      };
+    }, { requestPath: path, token: csrf });
+
+    if (!response.ok || !response.payload) {
+      const error = new Error(`voyager: GET failed (${response.status})`);
+      error.code = classifyVoyagerFailure({
+        status: response.status,
+        bodyText: response.bodyText,
+        sessionState,
+      });
+      error.status = response.status;
+      error.path = path;
+      throw error;
+    }
+
+    return {
+      ok: true,
+      status: response.status,
+      url: response.url,
+      path,
+      payload: response.payload,
+    };
+  }
+
+  async readVoyagerProfile(candidate = {}) {
+    let identity = resolveVoyagerIdentity(candidate);
+    if (identity.status !== 'resolved' && candidate.salesNavigatorUrl) {
+      await this.openCandidate(candidate).catch(() => {});
+      const pageIdentity = await extractVoyagerIdentityFromCurrentPage(this.page).catch(() => ({}));
+      identity = resolveVoyagerIdentity({
+        ...candidate,
+        ...pageIdentity,
+      });
+    }
+
+    if (identity.status !== 'resolved') {
+      return buildVoyagerProfileArtifact({
+        candidate,
+        identity,
+        error: {
+          code: 'missing_voyager_identity',
+          message: 'No public LinkedIn slug or Voyager profile URN could be derived for this candidate.',
+        },
+      });
+    }
+
+    const paths = buildVoyagerProfilePaths(identity);
+    let lastError = null;
+    for (const requestPath of paths) {
+      try {
+        const response = await this.voyagerApiGet(requestPath);
+        const artifact = buildVoyagerProfileArtifact({
+          candidate,
+          identity,
+          response,
+        });
+        if (artifact.voyagerReadable) {
+          return artifact;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    return buildVoyagerProfileArtifact({
+      candidate,
+      identity,
+      error: lastError || {
+        code: 'unexpected_shape',
+        message: 'No readable Voyager profile response was returned.',
+      },
+    });
   }
 
   async salesNavApiGet(path) {
@@ -1790,6 +1923,23 @@ async function extractLeadDetailSnippet(page, candidate) {
   const fallback = candidate.summary || candidate.headline || candidate.title || '';
   const merged = String(snippet || fallback || '').replace(/\s+/g, ' ').trim();
   return merged.slice(0, 2000);
+}
+
+async function extractVoyagerIdentityFromCurrentPage(page) {
+  if (!page) {
+    return {};
+  }
+  return page.evaluate(() => {
+    const publicProfileLink = [...document.querySelectorAll('a[href*="linkedin.com/in/"], a[href^="/in/"]')]
+      .map((link) => link.href || link.getAttribute('href') || '')
+      .find(Boolean) || '';
+    const body = document.body?.innerHTML || '';
+    const profileUrnMatch = body.match(/urn:li:fsd?_profile:[A-Za-z0-9_-]+/i);
+    return {
+      publicProfileUrl: publicProfileLink,
+      profileUrn: profileUrnMatch ? profileUrnMatch[0] : '',
+    };
+  });
 }
 
 async function readConnectState(page) {

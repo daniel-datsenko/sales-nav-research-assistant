@@ -135,6 +135,15 @@ const {
   writeMvpAutoresearchRun,
 } = require('./core/autoresearch-mvp');
 const {
+  buildVoyagerAutoresearchEvaluation,
+  loadCoverageArtifact,
+  parseAccountInput,
+  readGoldListFixtures,
+  renderVoyagerAutoresearchMarkdown,
+  runVoyagerAutoresearchExperiments,
+  writeVoyagerAutoresearchEvaluation,
+} = require('./core/autoresearch-voyager');
+const {
   buildCompanyResolution,
   findLatestCompanyResolutionArtifact,
   loadCompanyAliasConfig,
@@ -185,6 +194,9 @@ async function main() {
         break;
       case 'test-sales-nav-api':
         await handleTestSalesNavApi(values, logger);
+        break;
+      case 'test-voyager-profile':
+        await handleTestVoyagerProfile(values, logger);
         break;
       case 'resolve-enterprise-entities':
         await handleResolveEnterpriseEntities(values, logger);
@@ -300,6 +312,9 @@ async function main() {
         break;
       case 'autoresearch-speed-eval':
         await handleAutoresearchSpeedEval(values, logger);
+        break;
+      case 'autoresearch-voyager':
+        await handleAutoresearchVoyager(values, logger);
         break;
       case 'parallel-account-research':
         await handleParallelAccountResearch(values, logger);
@@ -534,6 +549,60 @@ async function handleTestSalesNavApi(values, logger) {
   }
 }
 
+async function handleTestVoyagerProfile(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-mutations')) {
+    throw new Error('test-voyager-profile is read-only and refuses live mutation flags');
+  }
+  const driverName = getString(values, 'driver') || 'playwright';
+  const salesNavigatorUrl = getString(values, 'sales-nav-lead-url', 'candidate-url');
+  const publicProfileUrl = getString(values, 'public-profile-url');
+  const fullName = getString(values, 'full-name') || 'Voyager Probe Candidate';
+  if (!salesNavigatorUrl && !publicProfileUrl) {
+    throw new Error('test-voyager-profile requires --sales-nav-lead-url or --public-profile-url');
+  }
+  const driver = createDriver(driverName, buildDriverOptions(values, { dryRun: true }, {
+    sessionMode: 'persistent',
+    headless: true,
+  }));
+  try {
+    await driver.openSession({
+      runId: 'test-voyager-profile',
+      territoryId: 'test-voyager-profile',
+      dryRun: true,
+      weeklyCap: 140,
+    });
+    const health = await driver.checkSessionHealth();
+    if (!health.ok) {
+      throw new Error(`Driver session is not ready: ${health.state}`);
+    }
+    if (typeof driver.readVoyagerProfile !== 'function') {
+      throw new Error(`${driverName} driver does not support Voyager profile reads`);
+    }
+    const artifact = await driver.readVoyagerProfile({
+      fullName,
+      salesNavigatorUrl,
+      profileUrl: publicProfileUrl || salesNavigatorUrl,
+      publicProfileUrl,
+    });
+    const artifactPath = writeVoyagerProfileProbeArtifact(artifact);
+    logger.info(`Voyager readable: ${artifact.voyagerReadable ? 'yes' : 'no'}`);
+    logger.info(`Identity: public=${artifact.profileIdentity?.publicIdentifier || 'none'} | urn=${artifact.profileIdentity?.profileUrn || 'none'}`);
+    logger.info(`Fields: headline=${artifact.fieldsFound?.headline ? 'yes' : 'no'} | about=${artifact.fieldsFound?.about ? 'yes' : 'no'} | experience=${artifact.fieldsFound?.experience ? 'yes' : 'no'} | skills=${artifact.fieldsFound?.skills ? 'yes' : 'no'} | company=${artifact.fieldsFound?.currentCompany ? 'yes' : 'no'}`);
+    if (artifact.signals) {
+      logger.info(`Signals: stack=${artifact.signals.stackSignals.length} | observability=${artifact.signals.observabilitySignals.length} | pitch=${artifact.signals.pitchStrategy}`);
+    }
+    if (artifact.error) {
+      logger.warn(`Voyager probe error: ${artifact.error.code} | ${artifact.error.message}`);
+    }
+    logger.info(`Artifact: ${artifactPath}`);
+    if (getBoolean(values, 'json')) {
+      process.stdout.write(`${JSON.stringify({ ...artifact, artifactPath }, null, 2)}\n`);
+    }
+  } finally {
+    await driver.close().catch(() => {});
+  }
+}
+
 async function handleResolveEnterpriseEntities(values, logger) {
   if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-mutations')) {
     throw new Error('resolve-enterprise-entities is read-only and refuses live mutation flags');
@@ -613,6 +682,22 @@ function writeSalesNavApiProbeArtifact(artifact) {
     .slice(0, 80) || 'account';
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const artifactPath = resolveProjectPath('runtime', 'artifacts', 'sales-nav-api-probes', `${timestamp}-${safeName}.json`);
+  writeJson(artifactPath, artifact);
+  return artifactPath;
+}
+
+function writeVoyagerProfileProbeArtifact(artifact) {
+  const safeName = String(
+    artifact?.candidate?.fullName
+    || artifact?.profileIdentity?.publicIdentifier
+    || 'profile'
+  )
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'profile';
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const artifactPath = resolveProjectPath('runtime', 'artifacts', 'voyager-profile-probes', `${timestamp}-${safeName}.json`);
   writeJson(artifactPath, artifact);
   return artifactPath;
 }
@@ -2150,6 +2235,12 @@ async function handleAccountCoverage(values, logger) {
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const apiReadPrefetch = getBoolean(values, 'api-read-prefetch');
   const apiReadPrefetchLeadCount = Number(getString(values, 'api-prefetch-lead-count') || 100);
+  const deepProfilePass = getBoolean(values, 'deep-profile-pass');
+  const profileReadMethod = getString(values, 'profile-read-method') || 'ui';
+  const deepProfileLimit = Number(getString(values, 'deep-profile-limit') || 20);
+  const forceDeepProfilePass = getBoolean(values, 'force-deep-profile-pass');
+  const strictVoyagerPromotion = values['strict-voyager-promotion'] === false ? false : true;
+  const reportVoyagerIdentityGaps = values['report-voyager-identity-gaps'] === false ? false : true;
   const interSweepDelayMs = Number(getString(values, 'inter-sweep-delay-ms') || 0);
   const coverageConfig = loadAccountCoverageConfig(getString(values, 'coverage-config') || null);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
@@ -2185,6 +2276,12 @@ async function handleAccountCoverage(values, logger) {
       reuseSweepCache,
       apiReadPrefetch,
       apiReadPrefetchLeadCount,
+      deepProfilePass,
+      profileReadMethod,
+      deepProfileLimit,
+      forceDeepProfilePass,
+      strictVoyagerPromotion,
+      reportVoyagerIdentityGaps,
       interSweepDelayMs,
       runId: 'account-coverage',
       logger: {
@@ -2208,7 +2305,13 @@ async function handleAccountCoverage(values, logger) {
     logger.info(`Research mode: ${result.researchMode || researchMode}`);
     logger.info(`Speed profile: ${result.speedProfile}`);
     if (result.apiReadPrefetch) {
-      logger.info(`API read prefetch: ${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status} | leads=${result.apiReadPrefetch.leadCandidateCount} | ui_sweeps_skipped=${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'}`);
+      logger.info(`API read prefetch: ${result.apiReadPrefetch.companyResolution?.status || result.apiReadPrefetch.status} | leads=${result.apiReadPrefetch.leadCandidateCount} | ui_sweeps_skipped=${result.apiReadPrefetch.uiSweepsSkipped ? 'yes' : 'no'} | ui_rescue_pass=${result.apiReadPrefetch.uiRescuePass ? 'yes' : 'no'}`);
+    }
+    if (result.apiRescuePass) {
+      logger.info(`UI rescue pass: ${result.apiRescuePass.status} | rescued=${result.apiRescuePass.candidateCount || 0}`);
+    }
+    if (result.deepProfilePass?.requested) {
+      logger.info(`Deep profile pass: method=${result.deepProfilePass.method} | reviewed=${result.deepProfilePass.reviewedCount || 0} | promoted=${result.deepProfilePass.promotedCount || 0} | blocked=${result.deepProfilePass.promotionBlockedCount || 0} | identity_missing=${result.deepProfilePass.identityMissingCount || 0} | skipped=${result.deepProfilePass.skippedCount || 0} | failed=${result.deepProfilePass.failedCount || 0}`);
     }
     if (interSweepDelayMs > 0) {
       logger.info(`Inter-sweep delay: ${interSweepDelayMs}ms`);
@@ -3368,6 +3471,108 @@ async function handleAutoresearchSpeedEval(values, logger) {
   console.log(renderAutoresearchSpeedEvaluationMarkdown(evaluation));
 }
 
+async function handleAutoresearchVoyager(values, logger) {
+  if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects') || getBoolean(values, 'allow-mutations')) {
+    throw new Error('autoresearch-voyager is read-only and refuses live-save, live-connect, background connects, or mutations');
+  }
+
+  const accounts = parseAccountInput(values);
+  const deepProfileLimit = Number(getString(values, 'deep-profile-limit') || 20);
+  const goldDir = getString(values, 'gold-dir');
+  const runExperiments = getBoolean(values, 'run-experiments');
+  let baselineArtifacts = [];
+  let voyagerArtifacts = [];
+
+  if (runExperiments) {
+    if (accounts.length === 0) {
+      throw new Error('autoresearch-voyager --run-experiments requires --accounts="Account A, Account B"');
+    }
+    const driverName = getString(values, 'driver') || 'playwright';
+    const coverageConfig = loadAccountCoverageConfig(getString(values, 'coverage-config') || resolveProjectPath('config', 'account-coverage', 'default.json'));
+    const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+    const priorityModel = loadPriorityModel(getString(values, 'priority-model') || null);
+    const driver = createDriver(driverName, {
+      ...buildDriverOptions(values, { dryRun: true }, {
+        sessionMode: 'persistent',
+        headless: false,
+      }),
+      allowMutations: false,
+      dryRun: true,
+    });
+
+    try {
+      await driver.openSession({
+        runId: 'autoresearch-voyager',
+        territoryId: 'autoresearch-voyager',
+        dryRun: true,
+        weeklyCap: 140,
+      });
+      const health = await driver.checkSessionHealth();
+      if (!health.authenticated && !health.ok) {
+        throw new Error(`LinkedIn session is not authenticated (${health.state || 'unknown'})`);
+      }
+
+      const experimentResults = await runVoyagerAutoresearchExperiments({
+        accounts,
+        deepProfileLimit,
+        runCoverage: async ({
+          accountName,
+          apiReadPrefetch,
+          deepProfilePass,
+          profileReadMethod,
+          deepProfileLimit: runDeepProfileLimit,
+          experimentArm,
+        }) => {
+          logger.info(`Voyager autoresearch ${experimentArm}: ${accountName}`);
+          return runAccountCoverageWorkflow({
+            driver,
+            accountName,
+            coverageConfig,
+            icpConfig,
+            priorityModel,
+            apiReadPrefetch,
+            deepProfilePass,
+            profileReadMethod,
+            deepProfileLimit: runDeepProfileLimit,
+            runId: `autoresearch-voyager-${experimentArm}`,
+          });
+        },
+      });
+      baselineArtifacts = experimentResults.baselineArtifacts;
+      voyagerArtifacts = experimentResults.voyagerArtifacts;
+    } finally {
+      await driver.close().catch(() => {});
+    }
+  } else {
+    const baselinePath = getString(values, 'baseline');
+    const candidatePath = getString(values, 'candidate');
+    if (baselinePath && candidatePath) {
+      baselineArtifacts = [loadCoverageArtifact(baselinePath)];
+      voyagerArtifacts = [loadCoverageArtifact(candidatePath)];
+    }
+  }
+
+  const goldRows = readGoldListFixtures(goldDir, { accounts });
+  const evaluation = buildVoyagerAutoresearchEvaluation({
+    accounts,
+    baselineArtifacts,
+    voyagerArtifacts,
+    goldRows,
+    deepProfileLimit,
+  });
+  const outputPath = getString(values, 'output') || null;
+  const written = writeVoyagerAutoresearchEvaluation(evaluation, outputPath);
+
+  logger.info(`Voyager autoresearch decision: ${evaluation.decision}`);
+  logger.info(`Artifact: ${written.artifactPath}`);
+  logger.info(`Report: ${written.reportPath}`);
+  console.log(renderVoyagerAutoresearchMarkdown({
+    ...evaluation,
+    artifactPath: written.artifactPath,
+    reportPath: written.reportPath,
+  }));
+}
+
 async function handleParallelAccountResearch(values, logger) {
   if (getBoolean(values, 'live-save') || getBoolean(values, 'live-connect') || getBoolean(values, 'allow-background-connects')) {
     throw new Error('parallel-account-research is dry-safe only and refuses live-save, live-connect, or background connects');
@@ -3542,6 +3747,13 @@ async function handleRunAccountBatch(repository, values, logger) {
   const adaptiveSweepPruning = getBoolean(values, 'adaptive-sweep-pruning');
   const apiReadPrefetch = getBoolean(values, 'api-read-prefetch');
   const apiReadPrefetchLeadCount = Number(getString(values, 'api-prefetch-lead-count') || 100);
+  const deepProfilePass = getBoolean(values, 'deep-profile-pass');
+  const profileReadMethod = getString(values, 'profile-read-method') || 'ui';
+  const deepProfileLimit = Number(getString(values, 'deep-profile-limit') || 20);
+  const forceDeepProfilePass = getBoolean(values, 'force-deep-profile-pass');
+  const strictVoyagerPromotion = values['strict-voyager-promotion'] === false ? false : true;
+  const reportVoyagerIdentityGaps = values['report-voyager-identity-gaps'] === false ? false : true;
+  const scaleupSelectionExpanded = getBoolean(values, 'scaleup-selection-expanded');
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
   if ((liveSave || liveConnect) && researchConcurrency > 1) {
     throw new Error('research-concurrency > 1 is only allowed for read-only research; live-save/live-connect stay serial');
@@ -3608,6 +3820,12 @@ async function handleRunAccountBatch(repository, values, logger) {
         reuseSweepCache,
         apiReadPrefetch,
         apiReadPrefetchLeadCount,
+        deepProfilePass,
+        profileReadMethod,
+        deepProfileLimit,
+        forceDeepProfilePass,
+        strictVoyagerPromotion,
+        reportVoyagerIdentityGaps,
         runId: 'run-account-batch',
         logger: {
           info(message) {
@@ -3622,6 +3840,7 @@ async function handleRunAccountBatch(repository, values, logger) {
       const coverageArtifactPath = writeAccountCoverageArtifact(accountName, coverageRun.result);
       const selectionOptions = {
         reportOnlyOutOfNetwork: getBoolean(values, 'reportOnlyOutOfNetwork', 'report-only-out-of-network'),
+        scaleupSelectionExpanded,
       };
       const annotatedCoverageCandidates = annotateCoverageCandidatesForListSelection(coverageRun.result, selectionOptions);
       const listCandidates = applyGeoFocusToCandidates(
@@ -3651,6 +3870,18 @@ async function handleRunAccountBatch(repository, values, logger) {
         .filter((candidate) => candidate.manualReviewSuggested || candidate.listSelectionReason === 'relative_rank_manual_review')
         .slice(0, 10)
         .map((candidate) => toSdrReportCandidate(candidate, 'review_before_save'));
+      const rescuedCoverageCandidates = annotatedCoverageCandidates
+        .filter(isApiRescuedCandidate);
+      const apiRescuePass = coverageRun.result.apiRescuePass
+        ? {
+          ...coverageRun.result.apiRescuePass,
+          candidateCount: rescuedCoverageCandidates.length,
+          selectedCount: rescuedCoverageCandidates.filter((candidate) => candidate.selectedForList).length,
+          examples: rescuedCoverageCandidates
+            .slice(0, 10)
+            .map((candidate) => toSdrReportCandidate(candidate, candidate.selectedForList ? 'selected_after_ui_rescue' : 'review_rescued_candidate')),
+        }
+        : null;
       const saveResults = [];
       const connectResults = [];
 
@@ -3832,6 +4063,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         candidateCount: coverageRun.result.candidateCount,
         resolutionStatus: coverageRun.result.resolutionStatus || null,
         apiReadPrefetch: coverageRun.result.apiReadPrefetch || null,
+        apiRescuePass,
         companyScope: coverageRun.result.companyScope || null,
         relativeRankFallbackApplied: annotatedCoverageCandidates.some((candidate) => candidate.relativeRankFallbackApplied),
         attemptedSweepsCount: coverageRun.templates.length,
@@ -3910,6 +4142,9 @@ async function handleSdrResearch(repository, values, logger) {
     liveSave: getBoolean(batchValues, 'liveSave', 'live-save'),
     researchMode: getString(batchValues, 'research-mode') || 'persona-led',
     speedProfile: getString(batchValues, 'speed-profile') || 'balanced',
+    deepProfilePass: getBoolean(batchValues, 'deep-profile-pass'),
+    profileReadMethod: getString(batchValues, 'profile-read-method') || 'ui',
+    scaleupSelectionExpanded: getBoolean(batchValues, 'scaleup-selection-expanded'),
   }).trim());
   await handleRunAccountBatch(repository, batchValues, logger);
 }
@@ -3994,6 +4229,12 @@ function buildCandidateReportKey(candidate = {}) {
 function incrementReasonCount(counts, reason) {
   const key = reason || 'not_selected';
   counts[key] = (counts[key] || 0) + 1;
+}
+
+function isApiRescuedCandidate(candidate = {}) {
+  const sweeps = new Set(candidate.sweeps || []);
+  return !sweeps.has('api-broad-pool')
+    && (sweeps.has('broad-crawl') || sweeps.has('sweep-api-rescue-personas'));
 }
 
 function toSdrReportCandidate(candidate, nextAction = 'review_strong_not_saved') {
@@ -4435,10 +4676,11 @@ Usage:
   node src/cli.js print-first-run-onboarding [--json]
   node src/cli.js check-driver-session [--driver=playwright|browser-harness|hybrid] [--session-mode=storage-state|persistent]
   node src/cli.js test-sales-nav-api --account-name="Acme" [--list-name="Existing Test List"] [--driver=playwright] [--max-candidates=25]
+  node src/cli.js test-voyager-profile --sales-nav-lead-url="https://www.linkedin.com/sales/lead/..." [--public-profile-url="https://www.linkedin.com/in/..."] [--driver=playwright]
   node src/cli.js resolve-enterprise-entities --account-name="Acme" [--driver=playwright] [--max-companies=10] [--lead-sample-count=10]
   node src/cli.js bootstrap-session [--driver=playwright] [--wait-minutes=10]
   node src/cli.js test-account-search --driver=playwright|browser-harness|hybrid --account-name="Acme" [--account-list="Territory List"] [--keywords="site reliability,observability"]
-  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--api-read-prefetch] [--inter-sweep-delay-ms=2000]
+  node src/cli.js account-coverage --driver=hybrid --account-name="Acme" [--research-mode=persona-led|exhaustive|keyword] [--speed-profile=balanced] [--reuse-sweep-cache] [--adaptive-sweep-pruning] [--api-read-prefetch] [--deep-profile-pass --profile-read-method=voyager|ui --deep-profile-limit=20] [--strict-voyager-promotion] [--report-voyager-identity-gaps] [--inter-sweep-delay-ms=2000]
   node src/cli.js resolve-company --account-name="Acme"
   node src/cli.js print-company-resolution [--account-name="Acme"]
   node src/cli.js retry-company-resolution-failures [--limit=3]
@@ -4472,8 +4714,9 @@ Usage:
   node src/cli.js print-autoresearch-gate [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
+  node src/cli.js autoresearch-voyager --accounts="Account A, Account B" --gold-dir=fixtures/gold-lists [--run-experiments] [--baseline=baseline.json --candidate=voyager.json] [--deep-profile-limit=20]
   node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
-  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--api-read-prefetch] [--live-save]
+  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--api-read-prefetch] [--deep-profile-pass --profile-read-method=voyager] [--scaleup-selection-expanded] [--live-save]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect] [--allow-unverified-connect-continue]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect [--allow-unverified-connect-continue]

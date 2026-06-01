@@ -58,6 +58,18 @@ An opt-in read-only path that uses the logged-in browser session to fetch Sales 
 **API List Readback**
 The read-only list verification path that reads Sales Navigator list membership by stable lead identity before and after Live-save. API List Readback may skip already-present leads and verify final membership; it must not create lists, add leads, remove leads, connect, or message.
 
+**Voyager Deep Profile Pass**
+An opt-in read-only profile-quality layer that checks bounded profile signals for already-discovered top or borderline candidates. It can improve ranking and explanations, but it is not a primary discovery mechanism and must not trigger Live Mutation by itself.
+
+**Strict Voyager Promotion**
+The default policy that prevents unknown-pitch Voyager evidence from auto-promoting a candidate into direct observability. Candidates with `voyager_reviewed_but_pitch_unknown` require Manual Review.
+
+**Voyager Identity Gap**
+A state where a Sales Navigator candidate cannot be mapped to a readable Voyager profile identity. This is reported as `voyager_identity_missing` and should not consume deep-profile budget.
+
+**Scaleup Selection Expansion**
+An opt-in selection policy for smaller SaaS or scaleup accounts. It allows useful engineering-adjacent roles such as Engineering Manager, Engineering Director, Cloud Engineer, Data Platform Engineer, Staff Engineer AI, and VP Product & Data while keeping hard non-ICP exclusions.
+
 **Company Resolution Blocker**
 A state where an account/company target cannot be safely resolved or scoped. Live-save candidates from blocked accounts are not eligible until the blocker is cleared or explicitly reviewed.
 
@@ -120,6 +132,9 @@ A task that requires human-in-the-loop judgment, live external access, design ap
 
 - An **Operator** approves any **Live Mutation**.
 - **API Read Prefetch** and **API List Readback** are read-only helpers; they never grant **Live Mutation** permission.
+- The **Voyager Deep Profile Pass** improves quality for discovered candidates; it does not replace Account Research discovery sweeps.
+- **Strict Voyager Promotion** routes unknown-pitch profile evidence to **Manual Review** instead of **Safe-to-save Candidate**.
+- **Scaleup Selection Expansion** changes selection policy only when explicitly enabled and does not override hard exclusions.
 - The **Enterprise Entity Resolver** strengthens **Company Scope** for large related company sets before **Account Research** or **Live-save** eligibility.
 - **Autoresearch** produces **Runtime Artifacts**, a **Research Loop Plan**, evaluation metrics, and an **Execution Gate**.
 - A **Gate Report** and **Supervisor Runbook** render the **Execution Gate** without executing live actions.

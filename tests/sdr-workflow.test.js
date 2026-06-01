@@ -74,6 +74,21 @@ test('buildSdrResearchBatchValues preserves opt-in API read prefetch for guarded
   assert.equal(values['api-prefetch-lead-count'], '100');
 });
 
+test('buildSdrResearchBatchValues preserves opt-in Voyager deep profile flags', () => {
+  const values = buildSdrResearchBatchValues({
+    accounts: 'Example Analytics Co',
+    'deep-profile-pass': true,
+    'profile-read-method': 'voyager',
+    'deep-profile-limit': '12',
+    'scaleup-selection-expanded': true,
+  });
+
+  assert.equal(values['deep-profile-pass'], true);
+  assert.equal(values['profile-read-method'], 'voyager');
+  assert.equal(values['deep-profile-limit'], '12');
+  assert.equal(values['scaleup-selection-expanded'], true);
+});
+
 test('buildSdrResearchBatchValues refuses connect flags', () => {
   assert.throws(
     () => buildSdrResearchBatchValues({
@@ -94,4 +109,25 @@ test('renderSdrResearchIntro makes live-save and connect behavior explicit', () 
   assert.match(markdown, /Live save: `yes`/);
   assert.match(markdown, /Connects: `never in this command`/);
   assert.match(markdown, /create or update the Sales Navigator list/);
+});
+
+test('renderSdrResearchIntro explains when Voyager deep profile review is enabled', () => {
+  const markdown = renderSdrResearchIntro({
+    accountNames: ['Example Account A'],
+    listName: 'Polly DDS Score Accts',
+    deepProfilePass: true,
+    profileReadMethod: 'voyager',
+  });
+
+  assert.match(markdown, /Deep profile review: `voyager`/);
+});
+
+test('renderSdrResearchIntro explains scaleup selection expansion', () => {
+  const markdown = renderSdrResearchIntro({
+    accountNames: ['Skello'],
+    listName: 'Skello Research',
+    scaleupSelectionExpanded: true,
+  });
+
+  assert.match(markdown, /Scaleup selection expansion: `on`/);
 });

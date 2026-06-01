@@ -102,6 +102,19 @@ npm run sdr-research -- \
   --api-read-prefetch
 ```
 
+Optional deep profile quality pass:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Example Account A, Example Account B, Example Account C" \
+  --api-read-prefetch \
+  --deep-profile-pass \
+  --profile-read-method=voyager \
+  --deep-profile-limit=20
+```
+
+This reads bounded profile signals for the best and borderline candidates, then re-scores them. In plain terms: it can notice signals like Prometheus, Grafana, OpenTelemetry, Datadog, Kubernetes, SRE, or localized observability wording that did not fit in the Sales Navigator result row. It is read-only, opt-in, and does not save or connect anyone by itself.
+
 For large companies, the tool treats the account as a related company set. It checks IT, digital, systems, technology, and platform entities first, then the parent or main company, because useful observability contacts can live in either place. Same-name companies that are not clearly related still stop for review.
 
 Research and create/update one Sales Navigator list:
@@ -141,7 +154,7 @@ If install or LinkedIn login is missing, that is normal. The agent should help y
 npm run bootstrap-session -- --driver=playwright --wait-minutes=10
 ```
 
-See [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AGENTS.md), and [CLAUDE.md](CLAUDE.md) for startup guidance.
+See [SKILL.md](SKILL.md), [docs/first-run-onboarding.md](docs/first-run-onboarding.md), [AGENTS.md](AGENTS.md), and [CLAUDE.md](CLAUDE.md) for startup guidance.
 
 ## Common Workflows
 
@@ -176,7 +189,66 @@ npm run account-coverage -- \
   --api-read-prefetch
 ```
 
-The API prefetch only reads data from the logged-in browser. Real list saves still require `--live-save`.
+The API prefetch only reads data from the logged-in browser. In normal SDR runs it uses hybrid recall: it reads fast first, then still runs a small Sales Nav rescue check for obvious high-value personas such as Product Owner Engineering, Product Owner DevOps, IT-Architekt, Software-Architekt, Principal Architect, Senior Software Engineer, and Head of Engineering. Real list saves still require `--live-save`.
+
+### Experimental Read-Only Voyager Profile Probe
+
+Use this to test whether the logged-in browser can read bounded LinkedIn profile signals for one known lead. It is a diagnostics command only: no saves, no deletes, no connection requests, and no raw profile dump in the artifact.
+
+```bash
+npm run test-voyager-profile -- --sales-nav-lead-url="https://www.linkedin.com/sales/lead/..."
+```
+
+To use Voyager as an opt-in quality layer during account research:
+
+```bash
+npm run account-coverage -- \
+  --driver=playwright \
+  --account-name="Example Company" \
+  --api-read-prefetch \
+  --deep-profile-pass \
+  --profile-read-method=voyager \
+  --deep-profile-limit=20
+```
+
+Default research does not use Voyager. Keep it as a supervised quality booster until enough SDR test runs prove that it improves persona quality.
+
+Voyager is intentionally guarded. It is best for borderline candidates that were already found by Sales Navigator search; it is not the primary discovery engine. By default, unknown-pitch Voyager promotions stay in review instead of being auto-selected, and candidates without a readable Voyager identity are reported as identity gaps instead of consuming deep-profile budget.
+
+For smaller SaaS or scaleup accounts where strong engineering roles can otherwise look "adjacent", use:
+
+```bash
+npm run sdr-research -- \
+  --accounts="Example Scaleup" \
+  --api-read-prefetch \
+  --scaleup-selection-expanded
+```
+
+### Autoresearch Voyager Evaluation
+
+Use this when you want to test whether Voyager actually improves lead quality on benchmark accounts. It compares baseline research against Voyager-assisted research, checks optional gold/reference lead lists, and writes a recommendation report. It is read-only and never saves leads or sends connection requests.
+
+Offline comparison with existing artifacts:
+
+```bash
+npm run autoresearch:voyager -- \
+  --accounts="Example Company" \
+  --gold-dir=fixtures/gold-lists \
+  --baseline=runtime/artifacts/coverage/example-baseline.json \
+  --candidate=runtime/artifacts/coverage/example-voyager.json
+```
+
+Run fresh read-only experiments from the logged-in browser:
+
+```bash
+npm run autoresearch:voyager -- \
+  --accounts="Example Account A, Example Account B" \
+  --gold-dir=fixtures/gold-lists \
+  --run-experiments \
+  --deep-profile-limit=20
+```
+
+The report shows recall, selected recall, approximate false positives, promoted candidates, blocked unknown-pitch promotions, identity gaps, missed persona families, runtime delta, Voyager reviewed/skipped/failed counts, and a clear `recommend_voyager_policy`, `needs_more_evidence`, or `reject_or_tighten_policy` decision.
 
 For list creation and list updates, API usage is read-only by default. The app may use it to find the list, read existing members, skip duplicates, and verify the final result, but the actual lead save still happens through the guarded browser UI. Use `--skip-api-list-readback` only when debugging the fallback path.
 

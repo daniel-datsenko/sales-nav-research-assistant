@@ -66,7 +66,7 @@ function detectRoleFamily(candidate, icpConfig = {}) {
   if (/\b(chief information officer|chief technology officer|chief data officer|cio|cto|cdo|directeur technique|directrice technique|directeur des systemes d'information|directrice des systemes d'information|dsi|directeur informatique|directrice informatique|director tecnico|directora tecnica|director de tecnologia|directora de tecnologia|direttore tecnico|direttrice tecnica|direttore tecnologia|direttrice tecnologia)\b/.test(text)) return 'executive_engineering';
   if (/\b(mlops|aiops|dataops|ai platform|data platform|plateforme de donnees|plataforma de datos|datenplattform|data piattaforma|piattaforma dati)\b/.test(text)) return 'data';
   if (/microservices?.*(engineer|architect|developer)|(engineer|architect|developer).*microservices?/.test(text)) return 'platform_engineering';
-  if (/\b(system owner|it product owner|product owner it|responsable technique|responsable plateforme|responsable infrastructure|responsabile piattaforma|jefe de plataforma|leiter cloud|leiterin cloud|kompetenzzentrum|competency center|centre of excellence|center of excellence|ccoe|cloud governance|cloud practice)\b/.test(text)) return 'platform_engineering';
+  if (/\b(system owner|it product owner|product owner it|technical product owner|product owner (engineering|platform|devops|cloud|infrastructure|it)|product owner.*\b(engineering platform|devops|cloud|platform|infrastructure|it)\b|responsable technique|responsable plateforme|responsable infrastructure|responsabile piattaforma|jefe de plataforma|leiter cloud|leiterin cloud|kompetenzzentrum|competency center|centre of excellence|center of excellence|ccoe|cloud governance|cloud practice)\b/.test(text)) return 'platform_engineering';
   if (/site reliability|\bsre\b|observabilite|observability|osservabilita|monitoring|monitoraggio|monitoreo/.test(text)) return 'site_reliability';
   if (/security architect|security engineer|cyber security|cybersecurity|information security/.test(text)) return 'security';
   if (/data architect|data engineer|data engineering|data platform/.test(text)) return 'data';
@@ -74,6 +74,7 @@ function detectRoleFamily(candidate, icpConfig = {}) {
   if (/operations.*monitoring|monitoring.*operations/.test(text)) return 'platform_engineering';
   if (/head of (cloud|it|it ops|it operations|technology|platform)/.test(text)) return 'platform_engineering';
   if (/\bvp (of )?(technology|it|business it)\b|\bvice president (of )?(technology|it|business it)\b/.test(text)) return 'executive_engineering';
+  if (/\bprincipal architect\b/.test(title)) return 'platform_engineering';
   if (/architect|architecture|architecte|architekt|architetto|arquitecto/.test(text) && hasTechnicalAmbiguousQualifier(text)) return 'platform_engineering';
   if (/platform|plateforme|plattform|piattaforma|plataforma/.test(text) && hasTechnicalAmbiguousQualifier(text)) return 'platform_engineering';
   if (/devops|devsecops/.test(text)) return 'devops';

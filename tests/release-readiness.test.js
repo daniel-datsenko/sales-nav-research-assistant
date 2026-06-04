@@ -83,7 +83,10 @@ test('parallel-account-research CLI is dry-safe plan-only without executing brow
   assert.equal(payload.mode, 'dry-safe');
   assert.equal(payload.browserConcurrency, 1);
   assert.equal(payload.localConcurrency, 2);
+  assert.equal(payload.browserActivityProfile, 'hermes-balanced');
+  assert.equal(payload.browserActivity.recommendation, 'continue');
   assert.equal(payload.accounts[0].metrics.browserJobsExecuted, 0);
+  assert.equal(payload.accounts[0].safety.browserActivityProfile, 'hermes-balanced');
   assert.ok(payload.accounts[0].metrics.cacheMisses > 0);
   assert.equal(payload.accounts[0].browserResults.results.every((row) => row.reason === 'dry_safe_cli_plan_only'), true);
 });

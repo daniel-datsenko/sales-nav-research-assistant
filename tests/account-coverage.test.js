@@ -27,6 +27,7 @@ const {
   buildPersonaCoverageFollowUpPlan,
   summarizeCoverageBuckets,
 } = require('../src/core/account-coverage');
+const { createBrowserActivityGuard } = require('../src/core/browser-activity-guard');
 const { buildSweepCacheKey } = require('../src/core/sweep-cache');
 
 test('buildSweepTemplates includes broad crawl and configured sweeps', () => {
@@ -2263,4 +2264,48 @@ test('adaptive pruning clean run does not turn skipped sweeps into resolution bl
   assert.equal(run.sweepErrors.length, 0);
   assert.equal(run.result.sweepErrors?.length || 0, 0);
   assert.notEqual(run.result.resolutionStatus, 'needs_company_resolution');
+});
+
+test('runAccountCoverageWorkflow does not touch browser methods in incident browser activity profile', async () => {
+  const coverageConfig = {
+    version: 'incident-browser-guard',
+    broadCrawl: { enabled: true },
+    sweeps: [{ id: 'platform', keywords: ['platform'] }],
+  };
+  const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
+  const calls = [];
+  const driver = {
+    async openAccountSearch() {
+      calls.push('openAccountSearch');
+    },
+    async enumerateAccounts(accounts) {
+      calls.push('enumerateAccounts');
+      return accounts;
+    },
+    async openPeopleSearch() {
+      calls.push('openPeopleSearch');
+    },
+    async applySearchTemplate() {
+      calls.push('applySearchTemplate');
+    },
+    async scrollAndCollectCandidates() {
+      calls.push('scrollAndCollectCandidates');
+      return [];
+    },
+  };
+
+  const run = await runAccountCoverageWorkflow({
+    driver,
+    accountName: 'Incident Guard Account',
+    coverageConfig,
+    icpConfig,
+    priorityModel: null,
+    browserActivityGuard: createBrowserActivityGuard({ profile: 'incident' }),
+  });
+
+  assert.deepEqual(calls, []);
+  assert.equal(run.result.browserActivity.profile, 'incident');
+  assert.equal(run.result.browserActivity.browserJobsExecuted, 0);
+  assert.equal(run.result.browserActivity.recommendation, 'operator_review');
+  assert.equal(run.result.adaptivePruning.reason, 'planned_incident_mode');
 });

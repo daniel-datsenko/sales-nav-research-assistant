@@ -1266,6 +1266,7 @@ async function runAccountCoverageWorkflow({
   forceDeepProfilePass = false,
   strictVoyagerPromotion = true,
   reportVoyagerIdentityGaps = true,
+  browserActivityGuard = null,
   logger = null,
   now = Date.now,
 }) {
@@ -1318,9 +1319,25 @@ async function runAccountCoverageWorkflow({
   const rateLimitEvents = [];
   let cacheHits = 0;
   let cacheMisses = 0;
+  let accountScopingSkippedReason = null;
   await timePhase(timings, 'account_scoping', async () => {
-    await driver.openAccountSearch();
-    const resolvedAccounts = await driver.enumerateAccounts([account], { runId, accountKey: account.accountId }).catch(() => [account]);
+    const scoped = browserActivityGuard
+      ? await browserActivityGuard.runJob(`account_scoping:${account.accountId}`, async () => {
+        await driver.openAccountSearch();
+        return driver.enumerateAccounts([account], { runId, accountKey: account.accountId }).catch(() => [account]);
+      }, { jobType: 'account_scoping' })
+      : {
+        status: 'completed',
+        value: await (async () => {
+          await driver.openAccountSearch();
+          return driver.enumerateAccounts([account], { runId, accountKey: account.accountId }).catch(() => [account]);
+        })(),
+      };
+    if (scoped.status === 'skipped') {
+      accountScopingSkippedReason = scoped.reason;
+      return;
+    }
+    const resolvedAccounts = scoped.value;
     activeAccount = resolvedAccounts?.[0] || account;
   }, { now });
 
@@ -1461,6 +1478,12 @@ async function runAccountCoverageWorkflow({
       break;
     }
     const template = templatesToRun[templateIndex];
+    if (accountScopingSkippedReason) {
+      adaptivePruningTelemetry.skippedTemplates.push(...templatesToRun.slice(templateIndex).map((item) => item.id));
+      adaptivePruningTelemetry.triggered = true;
+      adaptivePruningTelemetry.reason = accountScopingSkippedReason;
+      break;
+    }
     if (logger && typeof logger.info === 'function') {
       logger.info(`Sweep ${templateIndex + 1}/${templatesToRun.length} started: ${template.id}${template.rescuePass ? ' (rescue)' : ''}`);
     }
@@ -1524,54 +1547,126 @@ async function runAccountCoverageWorkflow({
     }
 
     try {
-      await timePhase(timings, `sweep:${template.id}`, async () => {
-        await driver.openPeopleSearch(activeAccount, { runId, accountKey: activeAccount.accountId || account.accountId });
-        await driver.applySearchTemplate(template, { runId, accountKey: account.accountId });
-        const candidates = await driver.scrollAndCollectCandidates(activeAccount, template, {
-          runId,
-          accountKey: activeAccount.accountId || account.accountId,
-          seenCandidateKeys,
-          seenUrls: seenCandidateKeys,
-          logger,
-          rateLimitEvents,
-          duplicateShortCircuitThreshold: coverageConfig.duplicateShortCircuitThreshold ?? 0.8,
-          maxScrollSteps: template.maxScrollSteps ?? profileScrollSteps,
-        });
-        let uniqueNew = 0;
-        rawResults.push({
+      const guardedSweep = browserActivityGuard
+        ? await browserActivityGuard.runJob(`sweep:${activeAccount.accountId || account.accountId}:${template.id}`, async () =>
+          timePhase(timings, `sweep:${template.id}`, async () => {
+            await driver.openPeopleSearch(activeAccount, { runId, accountKey: activeAccount.accountId || account.accountId });
+            await driver.applySearchTemplate(template, { runId, accountKey: account.accountId });
+            const candidates = await driver.scrollAndCollectCandidates(activeAccount, template, {
+              runId,
+              accountKey: activeAccount.accountId || account.accountId,
+              seenCandidateKeys,
+              seenUrls: seenCandidateKeys,
+              logger,
+              rateLimitEvents,
+              duplicateShortCircuitThreshold: coverageConfig.duplicateShortCircuitThreshold ?? 0.8,
+              maxScrollSteps: template.maxScrollSteps ?? profileScrollSteps,
+            });
+            let uniqueNew = 0;
+            rawResults.push({
+              templateId: template.id,
+              keywords: template.keywords || [],
+              candidates,
+              cacheHit: false,
+            });
+            for (const candidate of candidates) {
+              const key = normalizeCandidateKey(candidate);
+              if (!seenCandidateKeys.has(key)) {
+                uniqueNew += 1;
+              }
+              seenCandidateKeys.add(key);
+            }
+            registerSweepAdds(uniqueNew, template.id);
+            if (logger && typeof logger.info === 'function') {
+              logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
+            }
+            if (reuseSweepCache) {
+              writeSweepCache(sweepCacheDir, cacheKey, {
+                accountName,
+                templateId: template.id,
+                keywords: template.keywords || [],
+                candidates,
+              });
+            }
+          }, {
+            now,
+            meta: {
+              templateId: template.id,
+              cacheHit: false,
+            },
+          }), { jobType: 'sweep' })
+        : {
+          status: 'completed',
+          value: await timePhase(timings, `sweep:${template.id}`, async () => {
+            await driver.openPeopleSearch(activeAccount, { runId, accountKey: activeAccount.accountId || account.accountId });
+            await driver.applySearchTemplate(template, { runId, accountKey: account.accountId });
+            const candidates = await driver.scrollAndCollectCandidates(activeAccount, template, {
+              runId,
+              accountKey: activeAccount.accountId || account.accountId,
+              seenCandidateKeys,
+              seenUrls: seenCandidateKeys,
+              logger,
+              rateLimitEvents,
+              duplicateShortCircuitThreshold: coverageConfig.duplicateShortCircuitThreshold ?? 0.8,
+              maxScrollSteps: template.maxScrollSteps ?? profileScrollSteps,
+            });
+            let uniqueNew = 0;
+            rawResults.push({
+              templateId: template.id,
+              keywords: template.keywords || [],
+              candidates,
+              cacheHit: false,
+            });
+            for (const candidate of candidates) {
+              const key = normalizeCandidateKey(candidate);
+              if (!seenCandidateKeys.has(key)) {
+                uniqueNew += 1;
+              }
+              seenCandidateKeys.add(key);
+            }
+            registerSweepAdds(uniqueNew, template.id);
+            if (logger && typeof logger.info === 'function') {
+              logger.info(`Sweep ${templateIndex + 1}/${templates.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
+            }
+            if (reuseSweepCache) {
+              writeSweepCache(sweepCacheDir, cacheKey, {
+                accountName,
+                templateId: template.id,
+                keywords: template.keywords || [],
+                candidates,
+              });
+            }
+          }, {
+            now,
+            meta: {
+              templateId: template.id,
+              cacheHit: false,
+            },
+          }),
+        };
+
+      if (guardedSweep.status === 'skipped') {
+        stopSweeps = true;
+        adaptivePruningTelemetry.skippedTemplates.push(template.id, ...templatesToRun.slice(templateIndex + 1).map((item) => item.id));
+        adaptivePruningTelemetry.triggered = true;
+        adaptivePruningTelemetry.reason = guardedSweep.reason;
+        timings.events.push({
+          phase: `sweep:${template.id}`,
           templateId: template.id,
-          keywords: template.keywords || [],
-          candidates,
+          durationMs: 0,
           cacheHit: false,
+          candidateCount: 0,
+          errorCategory: guardedSweep.reason,
         });
-        for (const candidate of candidates) {
-          const key = normalizeCandidateKey(candidate);
-          if (!seenCandidateKeys.has(key)) {
-            uniqueNew += 1;
-          }
-          seenCandidateKeys.add(key);
+        if (logger && typeof logger.warn === 'function') {
+          logger.warn(`Sweep ${template.id} skipped by browser activity guard: ${guardedSweep.reason}`);
         }
-        registerSweepAdds(uniqueNew, template.id);
-      if (logger && typeof logger.info === 'function') {
-        logger.info(`Sweep ${templateIndex + 1}/${templatesToRun.length} finished: ${template.id} | candidates=${candidates.length} | new=${uniqueNew}`);
       }
-        if (reuseSweepCache) {
-          writeSweepCache(sweepCacheDir, cacheKey, {
-            accountName,
-            templateId: template.id,
-            keywords: template.keywords || [],
-            candidates,
-          });
-        }
-      }, {
-        now,
-        meta: {
-          templateId: template.id,
-          cacheHit: false,
-        },
-      });
     } catch (error) {
       const errorCategory = classifySweepErrorCategory(error);
+      if (errorCategory === 'rate_limited' && browserActivityGuard && typeof browserActivityGuard.recordRateLimit === 'function') {
+        browserActivityGuard.recordRateLimit(`sweep:${activeAccount.accountId || account.accountId}:${template.id}`, error.message);
+      }
       sweepErrors.push({
         templateId: template.id,
         message: error.message,
@@ -1747,6 +1842,9 @@ async function runAccountCoverageWorkflow({
     researchMode: normalizedResearchMode,
   });
   finalResult.adaptivePruning = adaptivePruningTelemetry;
+  if (browserActivityGuard && typeof browserActivityGuard.summarize === 'function') {
+    finalResult.browserActivity = browserActivityGuard.summarize();
+  }
   const bucketSummary = summarizeCoverageBuckets(finalResult.candidates);
 
   return {

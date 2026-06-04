@@ -346,6 +346,10 @@ function renderBackgroundLoopReportMarkdown(artifact = {}) {
   lines.push(`- Deferred by cooldown: \`${metrics.deferredAccounts ?? artifact.deferredAccounts?.total ?? 0}\``);
   lines.push(`- Total candidates: \`${metrics.totalCandidates ?? 0}\``);
   lines.push(`- Total list candidates: \`${metrics.totalListCandidates ?? 0}\``);
+  if (artifact.browserActivity || metrics.browserJobsExecuted !== undefined) {
+    const activity = artifact.browserActivity || {};
+    lines.push(`- Browser activity: \`profile=${activity.profile || 'unknown'}; executed=${metrics.browserJobsExecuted ?? activity.browserJobsExecuted ?? 0}; skipped=${metrics.browserJobsSkipped ?? activity.browserJobsSkipped ?? 0}; delay_ms=${metrics.browserActivityDelayMs ?? activity.totalDelayMs ?? 0}; rate_limits=${metrics.rateLimitHitCount ?? activity.rateLimitHitCount ?? 0}; recommendation=${activity.recommendation || 'continue'}\``);
+  }
   lines.push('');
 
   if ((artifact.results || []).length > 0) {
@@ -665,6 +669,7 @@ async function executeBackgroundListMaintenanceLoop({
   variationRegistry = null,
   logger = null,
   accountTimeoutMs = 0,
+  browserActivityGuard = null,
   recoverDriverSession = null,
   runCoverageWorkflow = runAccountCoverageWorkflow,
   now = new Date(),
@@ -705,6 +710,7 @@ async function executeBackgroundListMaintenanceLoop({
           researchMode,
           speedProfile,
           reuseSweepCache,
+          browserActivityGuard,
           runId: 'background-list-maintenance',
           accountSource: account.source || 'territory',
           logger,
@@ -844,6 +850,7 @@ async function executeBackgroundListMaintenanceLoop({
       geoFocusApplied: Boolean(queueSpec?.geoFocus),
       productivity,
       liveSave,
+      browserActivity: coverageRun.result.browserActivity || null,
       connectsEnabled: Boolean(allowBackgroundConnects),
       saves,
     };
@@ -893,6 +900,7 @@ async function executeBackgroundListMaintenanceLoop({
       },
     ],
   };
+  const browserActivity = browserActivityGuard?.summarize ? browserActivityGuard.summarize() : null;
 
   return {
     accountsAttempted: batchAccounts.length,
@@ -910,7 +918,12 @@ async function executeBackgroundListMaintenanceLoop({
       deferredAccounts: deferredAccounts.total,
       totalCandidates: results.reduce((sum, result) => sum + Number(result.candidateCount || 0), 0),
       totalListCandidates: results.reduce((sum, result) => sum + Number(result.listCandidateCount || 0), 0),
+      browserJobsExecuted: Number(browserActivity?.browserJobsExecuted || 0),
+      browserJobsSkipped: Number(browserActivity?.browserJobsSkipped || 0),
+      browserActivityDelayMs: Number(browserActivity?.totalDelayMs || 0),
+      rateLimitHitCount: Number(browserActivity?.rateLimitHitCount || 0),
     },
+    browserActivity,
     deferredAccounts,
   };
 }

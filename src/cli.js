@@ -162,6 +162,7 @@ const {
   writeCompanyResolutionRetryCheckpoint,
 } = require('./core/company-resolution-retry');
 const { buildFirstRunChecklist, renderFirstRunOnboarding } = require('./core/first-run');
+const { createBrowserActivityGuard } = require('./core/browser-activity-guard');
 
 async function main() {
   const logger = createLogger('cli');
@@ -2245,6 +2246,7 @@ async function handleAccountCoverage(values, logger) {
   const coverageConfig = loadAccountCoverageConfig(getString(values, 'coverage-config') || null);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
   const priorityModel = loadPriorityModel();
+  const browserActivityGuard = buildBrowserActivityGuardFromValues(values);
 
   const driver = createDriver(driverName, buildDriverOptions(values, { dryRun: true }, {
     sessionMode: 'persistent',
@@ -2283,6 +2285,7 @@ async function handleAccountCoverage(values, logger) {
       strictVoyagerPromotion,
       reportVoyagerIdentityGaps,
       interSweepDelayMs,
+      browserActivityGuard,
       runId: 'account-coverage',
       logger: {
         info(message) {
@@ -2320,6 +2323,7 @@ async function handleAccountCoverage(values, logger) {
     if (result.rateLimit?.hitCount) {
       logger.warn(`Rate-limit hit ${result.rateLimit.hitCount}x during sweep - total backoff: ${result.rateLimit.totalBackoffMs || 0}ms`);
     }
+    logBrowserActivitySummary(logger, result.browserActivity, 'Browser activity');
     logger.info(`Unique candidates: ${result.candidateCount}`);
     logger.info(`Coverage artifact: ${artifactPath}`);
     logger.info(`Buckets: direct=${bucketSummary.direct_observability}, adjacent=${bucketSummary.technical_adjacent}, broad_it=${bucketSummary.broad_it_stakeholder}, noise=${bucketSummary.likely_noise}`);
@@ -2658,11 +2662,16 @@ async function handleDeepReviewCoverage(values, logger) {
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
   const priorityModelArtifact = loadPriorityModel();
   const coverageResult = readJson(artifactPath);
-  const selected = selectDeepReviewCandidates(coverageResult, reviewLimit);
+  const browserActivityGuard = buildBrowserActivityGuardFromValues(values);
+  const effectiveReviewLimit = Math.min(reviewLimit, browserActivityGuard.policy.maxDeepProfilePagesPerRun);
+  const selected = selectDeepReviewCandidates(coverageResult, effectiveReviewLimit);
 
   if (selected.length === 0) {
     logger.info('No deep-review candidates matched the current selection rules.');
     return;
+  }
+  if (effectiveReviewLimit < reviewLimit) {
+    logger.info(`Deep-review limit capped by browser activity profile ${browserActivityGuard.policy.profile}: ${effectiveReviewLimit}/${reviewLimit}`);
   }
 
   const driver = createDriver(driverName, buildDriverOptions(values, { dryRun: true }, {
@@ -2685,15 +2694,26 @@ async function handleDeepReviewCoverage(values, logger) {
 
     for (const candidate of selected) {
       try {
-        await driver.openCandidate(candidate, { runId: 'deep-review-coverage', accountKey: 'coverage' });
-        const evidence = await driver.captureEvidence({
-          ...candidate,
-          fromListPage: false,
-        }, {
-          runId: 'deep-review-coverage',
-          accountKey: 'coverage',
-          deepProfileReview: true,
-        });
+        const guarded = await browserActivityGuard.runJob(
+          `deep_profile:${candidate.salesNavigatorUrl || candidate.profileUrl || candidate.fullName}`,
+          async () => {
+            await driver.openCandidate(candidate, { runId: 'deep-review-coverage', accountKey: 'coverage' });
+            return driver.captureEvidence({
+              ...candidate,
+              fromListPage: false,
+            }, {
+              runId: 'deep-review-coverage',
+              accountKey: 'coverage',
+              deepProfileReview: true,
+            });
+          },
+          { jobType: 'deep_profile' },
+        );
+        if (guarded.status === 'skipped') {
+          logger.warn(`Deep-review stopped by browser activity guard: ${guarded.reason}`);
+          break;
+        }
+        const evidence = guarded.value;
 
         const rescored = scoreCandidate({
           ...candidate,
@@ -2732,6 +2752,7 @@ async function handleDeepReviewCoverage(values, logger) {
         });
       }
     }
+    logBrowserActivitySummary(logger, browserActivityGuard.summarize(), 'Deep-review browser activity');
   } finally {
     await driver.close().catch(() => {});
   }
@@ -3223,6 +3244,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
   const speedProfile = getString(values, 'speed-profile') || 'balanced';
   const researchMode = getString(values, 'research-mode') || 'persona-led';
   const reuseSweepCache = getBoolean(values, 'reuse-sweep-cache') || !liveSave;
+  const browserActivityGuard = buildBrowserActivityGuardFromValues(values);
   const researchConcurrency = Number(getString(values, 'research-concurrency') || 1);
   if (liveSave && researchConcurrency > 1) {
     throw new Error('research-concurrency > 1 is only allowed for read-only research; live-save stays serial');
@@ -3331,6 +3353,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
       variationRegistry,
       logger,
       accountTimeoutMs,
+      browserActivityGuard,
       recoverDriverSession: async () => {
         await driver.openSession({
           runId: 'background-list-maintenance',
@@ -3373,6 +3396,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
             : null,
       },
       metrics: loopResult.metrics,
+      browserActivity: loopResult.browserActivity,
       results: loopResult.results,
     };
     writeJson(loopArtifactPath, loopArtifact);
@@ -3385,6 +3409,7 @@ async function handleRunBackgroundTerritoryLoop(values, logger) {
     logger.info(`Accounts attempted: ${loopResult.accountsAttempted}`);
     logger.info(`Productive accounts: ${loopResult.metrics.productiveAccounts}`);
     logger.info(`Cached accounts: ${loopResult.metrics.cachedAccounts}`);
+    logBrowserActivitySummary(logger, loopResult.browserActivity, 'Background browser activity');
     loopResult.results.forEach((result, index) => {
       logger.info(`${index + 1}. ${result.accountName} | source=${result.source} | list=${result.listName} | candidates=${result.candidateCount} | list_candidates=${result.listCandidateCount} | productivity=${result.productivity.classification}${result.cacheUsed ? ' | cache=reused' : ''}${liveSave ? ` | saves=${result.saves.length}` : ''}`);
     });
@@ -3595,8 +3620,9 @@ async function handleParallelAccountResearch(values, logger) {
   const coverageConfig = loadAccountCoverageConfig(coverageConfigPath);
   const icpConfig = readJson(resolveProjectPath('config', 'icp', 'default-observability.json'));
   const priorityModel = loadPriorityModel();
+  const browserActivityGuard = buildBrowserActivityGuardFromValues(values);
 
-  logger.info(`parallel-account-research: browserConcurrency=1 (fixed), localConcurrency=${localConcurrency}, researchMode=${researchMode}, speedProfile=${speedProfile}, accounts=${names.length}`);
+  logger.info(`parallel-account-research: browserConcurrency=1 (fixed), localConcurrency=${localConcurrency}, researchMode=${researchMode}, speedProfile=${speedProfile}, browserActivityProfile=${browserActivityGuard.policy.profile}, accounts=${names.length}`);
 
   /** @type {Array<object>} */
   const accountArtifacts = [];
@@ -3629,9 +3655,10 @@ async function handleParallelAccountResearch(values, logger) {
           candidates: [],
           status: 'skipped',
           reason: 'dry_safe_cli_plan_only',
-        })),
+      })),
       rateLimitHitCount: 0,
       browserJobsExecuted: 0,
+      browserActivity: browserActivityGuard.summarize(),
     };
 
     /** @type {Array<{ templateId?: string, candidates?: Array<object>, cacheHit?: boolean }>} */
@@ -3688,6 +3715,8 @@ async function handleParallelAccountResearch(values, logger) {
     localConcurrency,
     researchMode,
     speedProfile,
+    browserActivityProfile: browserActivityGuard.policy.profile,
+    browserActivity: browserActivityGuard.summarize(),
     accountCount: names.length,
     accounts: accountArtifacts,
   }, null, 2));
@@ -3778,6 +3807,7 @@ async function handleRunAccountBatch(repository, values, logger) {
       label: 'run-account-batch live-connect',
     });
   }
+  const browserActivityGuard = buildBrowserActivityGuardFromValues(values);
 
   const batchSessionMode = getString(values, 'session-mode')
     || ((driverName === 'playwright' && (liveSave || liveConnect)) ? 'storage-state' : 'persistent');
@@ -3826,6 +3856,7 @@ async function handleRunAccountBatch(repository, values, logger) {
         forceDeepProfilePass,
         strictVoyagerPromotion,
         reportVoyagerIdentityGaps,
+        browserActivityGuard,
         runId: 'run-account-batch',
         logger: {
           info(message) {
@@ -4125,6 +4156,7 @@ async function handleRunAccountBatch(repository, values, logger) {
     logger.info(`Budget mode: ${budget.budgetMode}`);
     logger.info(`Tool share: ${budget.toolSharePercent}%`);
     logger.info(`Sent this run: ${sentThisRun}`);
+    logBrowserActivitySummary(logger, browserActivityGuard.summarize(), 'Batch browser activity');
     logger.info(`Artifact: ${artifactPath}`);
     logger.info(`Report: ${reportPath}`);
   } finally {
@@ -4715,8 +4747,9 @@ Usage:
   node src/cli.js print-autoresearch-supervisor [--artifact=runtime/artifacts/autoresearch/mvp-autoresearch.json]
   node src/cli.js autoresearch-speed-eval --baseline=runtime/artifacts/autoresearch/baseline.json --candidate=runtime/artifacts/autoresearch/candidate.json [--min-speedup-percent=25]
   node src/cli.js autoresearch-voyager --accounts="Account A, Account B" --gold-dir=fixtures/gold-lists [--run-experiments] [--baseline=baseline.json --candidate=voyager.json] [--deep-profile-limit=20]
-  node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
-  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--api-read-prefetch] [--deep-profile-pass --profile-read-method=voyager] [--scaleup-selection-expanded] [--live-save]
+  node src/cli.js autoresearch-voyager --accounts="Account A, Account B" --gold-dir=fixtures/gold-lists [--run-experiments] [--baseline=baseline.json --candidate=voyager.json] [--deep-profile-limit=20]
+  node src/cli.js parallel-account-research --accounts="Account A, Account B" [--research-mode=persona-led|exhaustive|keyword] [--local-concurrency=4] [--browser-activity-profile=local|hermes-balanced|incident] [--max-browser-jobs-per-run=30] [--min-browser-job-delay-ms=8000] [--rate-limit-cooldown-ms=1200000] [--coverage-config=config/account-coverage/default.json] [--run-id=my-run]
+  node src/cli.js sdr-research --accounts="Account A, Account B, Account C" [--list-name="SDR Research List"] [--driver=playwright] [--exhaustive] [--api-read-prefetch] [--deep-profile-pass --profile-read-method=voyager] [--scaleup-selection-expanded] [--browser-activity-profile=local|hermes-balanced|incident] [--max-browser-jobs-per-run=30] [--min-browser-job-delay-ms=8000] [--rate-limit-cooldown-ms=1200000] [--live-save]
   node src/cli.js run-account-batch --account-names="Account A, Account B, Account C" [--driver=playwright|hybrid] [--list-prefix="MVP"] [--consolidate-list-name="Research List"] [--list-name-template="Research {date} {start_time} ({accounts})"] [--adaptive-sweep-pruning] [--live-save] [--live-connect] [--allow-unverified-connect-continue]
   node src/cli.js pilot-live-save-batch --account-names="Account A,Account B" [--driver=playwright] [--list-prefix="Pilot"] [--max-list-saves-per-account=3]
   node src/cli.js pilot-connect-batch --account-names="Example Connect Eligible Account" [--driver=playwright] [--pilot-config=config/pilot/default.json] [--list-prefix="Pilot"] [--max-connects-per-account=1] --live-connect [--allow-unverified-connect-continue]
@@ -4816,6 +4849,26 @@ function parsePositiveIntegerOption(value, fallback, optionName) {
     throw new Error(`${optionName} must be a positive integer`);
   }
   return parsed;
+}
+
+function buildBrowserActivityGuardFromValues(values, overrides = {}) {
+  return createBrowserActivityGuard({
+    profile: getString(values, 'browser-activity-profile') || overrides.profile || 'hermes-balanced',
+    maxBrowserJobsPerRun: getString(values, 'max-browser-jobs-per-run') ?? overrides.maxBrowserJobsPerRun,
+    minDelayBetweenBrowserJobsMs: getString(values, 'min-browser-job-delay-ms') ?? overrides.minDelayBetweenBrowserJobsMs,
+    cooldownAfterRateLimitMs: getString(values, 'rate-limit-cooldown-ms') ?? overrides.cooldownAfterRateLimitMs,
+    maxDeepProfilePagesPerRun: overrides.maxDeepProfilePagesPerRun,
+  });
+}
+
+function logBrowserActivitySummary(logger, summary, label = 'Browser activity') {
+  if (!summary || !logger || typeof logger.info !== 'function') {
+    return;
+  }
+  logger.info(`${label}: profile=${summary.profile} | executed=${summary.browserJobsExecuted || 0} | skipped=${summary.browserJobsSkipped || 0} | delay_ms=${summary.totalDelayMs || 0} | rate_limits=${summary.rateLimitHitCount || 0} | recommendation=${summary.recommendation || 'continue'}`);
+  if (summary.stopReason && typeof logger.warn === 'function') {
+    logger.warn(`${label} stop reason: ${summary.stopReason}`);
+  }
 }
 
 function parseOptionalCandidateLimit(value) {

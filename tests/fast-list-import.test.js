@@ -786,6 +786,10 @@ test('saveFastListImport stops after rate-limit failure instead of burning remai
   assert.equal(result.nextAction, 'wait_10_min_and_retry_failed');
   assert.equal(result.failureBreakdown.rate_limit, 1);
   assert.equal(result.failureBreakdown.rate_limit_cooldown, 1);
+  assert.equal(result.browserActivity.profile, 'mutation-rate-limit-guard');
+  assert.equal(result.browserActivity.browserJobsExecuted, 2);
+  assert.equal(result.browserActivity.browserJobsSkipped, 1);
+  assert.equal(result.browserActivity.recommendation, 'switch_to_incident');
 });
 
 test('saveFastListImport aborts when the target list is missing and creation is disabled', async () => {

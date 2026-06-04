@@ -12,6 +12,7 @@ const {
 } = require('../src/core/research-pipeline');
 const { buildSweepTemplates, resolveSweepTemplateOptions } = require('../src/core/account-coverage');
 const { createBrowserWorkerLock } = require('../src/core/browser-worker-lock');
+const { createBrowserActivityGuard } = require('../src/core/browser-activity-guard');
 
 test('buildResearchQueue creates deterministic account jobs with dry-safe defaults', () => {
   const queue = buildResearchQueue({
@@ -352,6 +353,45 @@ test('executeBrowserSweepJobs stops on rate limit when stopOnRateLimit is true',
   assert.ok(skipped.length >= 1);
 });
 
+test('executeBrowserSweepJobs respects browser activity guard budget', async () => {
+  const plan = planResearchJobs({
+    queue: buildResearchQueue({
+      accounts: [{ accountId: 'a1', accountName: 'Acme' }],
+      runId: 'r',
+    }),
+    coverageConfig: {
+      broadCrawl: { enabled: true },
+      sweeps: [{ id: 's2', keywords: ['obs'] }],
+    },
+  });
+  let collectCount = 0;
+  const driver = {
+    async openPeopleSearch() {},
+    async applySearchTemplate() {},
+    async scrollAndCollectCandidates() {
+      collectCount += 1;
+      return [{ fullName: 'X', title: 'VP Platform Engineering' }];
+    },
+  };
+  const guard = createBrowserActivityGuard({
+    profile: 'hermes-balanced',
+    maxBrowserJobsPerRun: 1,
+    minDelayBetweenBrowserJobsMs: 0,
+  });
+  const out = await executeBrowserSweepJobs({
+    jobs: plan.jobs,
+    driver,
+    lock: createBrowserWorkerLock(),
+    runId: 'run1',
+    browserActivityGuard: guard,
+  });
+
+  assert.equal(collectCount, 1);
+  assert.equal(out.browserJobsExecuted, 1);
+  assert.equal(out.browserActivity.browserJobsSkipped, 1);
+  assert.ok(out.results.some((row) => row.reason === 'skipped_browser_budget_exhausted'));
+});
+
 test('scoreResearchCandidates dedupes and matches consolidate ordering across concurrency', async () => {
   const icpConfig = {
     titleExcludeKeywords: ['buildings'],
@@ -439,6 +479,14 @@ test('buildResearchPipelineArtifact includes browserConcurrency and metrics', ()
     results: [],
     rateLimitHitCount: 0,
     browserJobsExecuted: 0,
+    browserActivity: {
+      profile: 'hermes-balanced',
+      browserJobsExecuted: 0,
+      browserJobsSkipped: 2,
+      rateLimitHitCount: 0,
+      totalDelayMs: 120,
+      recommendation: 'wait_and_retry',
+    },
   };
   const scoringResults = {
     metrics: {
@@ -466,6 +514,8 @@ test('buildResearchPipelineArtifact includes browserConcurrency and metrics', ()
   assert.equal(art.metrics.cacheMisses, 0);
   assert.equal(art.metrics.browserJobsSkippedByCache, 1);
   assert.equal(art.metrics.browserJobsExecuted, 0);
+  assert.equal(art.metrics.browserJobsSkipped, 2);
+  assert.equal(art.metrics.browserActivityDelayMs, 120);
   assert.equal(art.metrics.totalMs, 100000);
   assert.equal(art.metrics.selectedForList, 3);
   assert.equal(art.metrics.manualReviewCount, 1);
@@ -473,4 +523,6 @@ test('buildResearchPipelineArtifact includes browserConcurrency and metrics', ()
   assert.equal(art.safety.liveSaveAllowed, false);
   assert.equal(art.safety.liveConnectAllowed, false);
   assert.equal(art.safety.browserWorkerLock, 'held_serially');
+  assert.equal(art.safety.browserActivityProfile, 'hermes-balanced');
+  assert.equal(art.safety.browserActivityRecommendation, 'wait_and_retry');
 });

@@ -9,6 +9,7 @@ const {
 const { scoreCandidate } = require('./scoring');
 const { scoreCandidateWithPriorityModel } = require('./priority-score');
 const { buildCoverageSummary } = require('./coverage');
+const { createBrowserActivityGuard } = require('./browser-activity-guard');
 
 function slugFromDisplayName(value) {
   const slug = String(value || '')
@@ -201,6 +202,7 @@ async function attachSweepCacheState({ jobs = [], readCache } = {}) {
  *   lock: { runExclusive: (jobId: string, fn: () => Promise<unknown>) => Promise<unknown> },
  *   runId?: string | null,
  *   stopOnRateLimit?: boolean,
+ *   browserActivityGuard?: ReturnType<typeof createBrowserActivityGuard> | null,
  * }} params
  */
 async function executeBrowserSweepJobs({
@@ -209,6 +211,7 @@ async function executeBrowserSweepJobs({
   lock,
   runId,
   stopOnRateLimit = true,
+  browserActivityGuard = null,
 } = {}) {
   if (!driver || !lock) {
     throw new Error('executeBrowserSweepJobs requires driver and lock');
@@ -222,6 +225,10 @@ async function executeBrowserSweepJobs({
   const results = [];
   let rateLimitHitCount = 0;
   let stopped = false;
+  const guard = browserActivityGuard || createBrowserActivityGuard({
+    profile: 'local',
+    minDelayBetweenBrowserJobsMs: 0,
+  });
 
   for (const job of browserJobs) {
     if (stopped) {
@@ -238,7 +245,7 @@ async function executeBrowserSweepJobs({
     }
 
     try {
-      const sweepCandidates = await lock.runExclusive(String(job.id), async () => {
+      const guarded = await guard.runJob(String(job.id), () => lock.runExclusive(String(job.id), async () => {
         const account = {
           accountKey: job.accountKey,
           accountName: job.accountName,
@@ -266,7 +273,25 @@ async function executeBrowserSweepJobs({
         await driver.applySearchTemplate(template, context);
         const collected = await driver.scrollAndCollectCandidates(account, template, context);
         return Array.isArray(collected) ? collected : [];
-      });
+      }), { jobType: 'sweep' });
+
+      if (guarded.status === 'skipped') {
+        results.push({
+          jobId: job.id,
+          templateId: job.templateId,
+          accountKey: job.accountKey,
+          cacheHit: false,
+          candidates: [],
+          status: 'skipped',
+          reason: guarded.reason,
+        });
+        if (['skipped_browser_budget_exhausted', 'planned_incident_mode', 'skipped_rate_limit_cooldown'].includes(guarded.reason)) {
+          stopped = true;
+        }
+        continue;
+      }
+
+      const sweepCandidates = guarded.value;
 
       results.push({
         jobId: job.id,
@@ -281,6 +306,7 @@ async function executeBrowserSweepJobs({
       const isRateLimited = category === 'rate_limited';
       if (isRateLimited) {
         rateLimitHitCount += 1;
+        guard.recordRateLimit(String(job.id), err?.message || err);
       }
       results.push({
         jobId: job.id,
@@ -303,6 +329,7 @@ async function executeBrowserSweepJobs({
     results,
     rateLimitHitCount,
     browserJobsExecuted: results.filter((r) => r.status === 'completed').length,
+    browserActivity: guard.summarize(),
   };
 }
 
@@ -499,9 +526,13 @@ function buildResearchPipelineArtifact({
 
   const browser = browserResults || {};
   const br = browser.results || [];
+  const browserActivity = browser.browserActivity || null;
   const rateLimitHitCount = Number(browser.rateLimitHitCount || 0);
   const browserJobsExecuted = Number(
     browser.browserJobsExecuted ?? br.filter((r) => r.status === 'completed').length,
+  );
+  const browserJobsSkipped = Number(
+    browserActivity?.browserJobsSkipped ?? br.filter((r) => r.status === 'skipped').length,
   );
 
   const scoring = scoringResults || {};
@@ -519,12 +550,14 @@ function buildResearchPipelineArtifact({
     cacheHits,
     cacheMisses,
     browserJobsExecuted,
+    browserJobsSkipped,
     browserJobsSkippedByCache: cacheHits,
     candidatesRaw: Number(sm.candidatesRaw ?? 0),
     candidatesUnique: Number(sm.candidatesUnique ?? 0),
     selectedForList: Number(sm.selectedForList ?? 0),
     manualReviewCount: Number(sm.manualReviewCount ?? 0),
     rateLimitHitCount,
+    browserActivityDelayMs: Number(browserActivity?.totalDelayMs || 0),
     duplicateWarningRate: Number(sm.duplicateWarningRate ?? 0),
   };
 
@@ -551,7 +584,10 @@ function buildResearchPipelineArtifact({
       liveConnectAllowed: false,
       browserWorkerLock: 'held_serially',
       companyScopeRequired: true,
+      browserActivityProfile: browserActivity?.profile || null,
+      browserActivityRecommendation: browserActivity?.recommendation || null,
     },
+    browserActivity,
     lockTelemetry: lockTelemetry ?? null,
     accounts: [],
     queue,

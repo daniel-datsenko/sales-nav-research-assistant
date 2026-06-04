@@ -1839,6 +1839,16 @@ function buildFastListImportResult(payload) {
     needsFollowUp: failed + unresolved + manualReview + unverified + mutationReviewExcluded + rateLimitSkipped,
     attemptedAdds: results.filter((row) => Number(row.attempt || 0) > 0).length,
   };
+  const nextAction = deriveFastListImportNextAction({ failed, unresolved, manualReview, unverified, mutationReviewExcluded, rateLimitSkipped, failureBreakdown });
+  const browserActivity = {
+    profile: 'mutation-rate-limit-guard',
+    browserJobsExecuted: listImportSummary.attemptedAdds,
+    browserJobsSkipped: rateLimitSkipped,
+    rateLimitHitCount: failureBreakdown.rate_limit || 0,
+    totalDelayMs: 0,
+    stopReason: failureBreakdown.rate_limit || rateLimitSkipped ? 'skipped_rate_limit_cooldown' : null,
+    recommendation: failureBreakdown.rate_limit || rateLimitSkipped ? 'switch_to_incident' : 'continue',
+  };
   return {
     ...payload,
     status: failed || unresolved || manualReview || unverified || mutationReviewExcluded || rateLimitSkipped ? 'completed_with_followup' : 'completed',
@@ -1854,7 +1864,8 @@ function buildFastListImportResult(payload) {
     mutationReviewExcluded,
     failureBreakdown,
     listImportSummary,
-    nextAction: deriveFastListImportNextAction({ failed, unresolved, manualReview, unverified, mutationReviewExcluded, rateLimitSkipped, failureBreakdown }),
+    browserActivity,
+    nextAction,
   };
 }
 
@@ -2122,6 +2133,9 @@ function renderFastListImportMarkdown(artifact) {
     lines.push(`- Already in list: \`${artifact.alreadySaved ?? 0}\``);
     lines.push(`- Snapshot preflight skips: \`${artifact.snapshotSkipped ?? 0}\``);
     lines.push(`- Rate-limit cooldown skips: \`${artifact.rateLimitSkipped ?? 0}\``);
+    if (artifact.browserActivity) {
+      lines.push(`- Browser activity: \`profile=${artifact.browserActivity.profile}; executed=${artifact.browserActivity.browserJobsExecuted || 0}; skipped=${artifact.browserActivity.browserJobsSkipped || 0}; rate_limits=${artifact.browserActivity.rateLimitHitCount || 0}; recommendation=${artifact.browserActivity.recommendation || 'continue'}\``);
+    }
     lines.push(`- Failed: \`${artifact.failed ?? 0}\``);
     lines.push(`- Next action: \`${artifact.nextAction || 'no_action'}\``);
     if (artifact.failureBreakdown && Object.keys(artifact.failureBreakdown).length > 0) {

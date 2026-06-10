@@ -86,9 +86,9 @@ function buildLeadListSnapshotFromArtifact(artifact, { listName = null, artifact
         fullName,
       }),
       rowText: [fullName, row.title, row.accountName, row.status, row.note].filter(Boolean).join(' | '),
-      invitationSent: /already_sent|invitation sent|connection sent|sent/i.test(statusText),
+      invitationSent: /\balready_sent\b|invitation sent|connection sent|\bsent\b/i.test(statusText),
       connectionSent: /already_connected|connected|vernetzt/i.test(statusText),
-      noActivity: !/already_sent|already_connected|sent|connected/i.test(statusText),
+      noActivity: !/\balready_sent\b|already_connected|\bsent\b|connected/i.test(statusText),
       artifactSource: artifactPath,
     });
     seen.add(key);

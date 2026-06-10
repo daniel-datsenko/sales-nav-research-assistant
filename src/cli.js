@@ -953,7 +953,7 @@ async function handleFastListImport(values, logger) {
       const mutationReview = buildMutationReviewArtifact({
         command: 'fast-list-import',
         importPlan,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
       });
       const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
       logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
@@ -965,7 +965,7 @@ async function handleFastListImport(values, logger) {
         allowListCreate: getBoolean(values, 'allow-list-create'),
         maxRetries,
         runId,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
         readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
@@ -1046,7 +1046,7 @@ async function handleRetryFailedFastListImport(values, logger) {
       const mutationReview = buildMutationReviewArtifact({
         command: 'retry-failed-fast-list-import',
         importPlan,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
       });
       const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
       logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
@@ -1058,7 +1058,7 @@ async function handleRetryFailedFastListImport(values, logger) {
         allowListCreate: getBoolean(values, 'allow-list-create'),
         maxRetries,
         runId,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
         readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
@@ -1146,7 +1146,7 @@ async function handleImportCoverage(values, logger) {
       const mutationReview = buildMutationReviewArtifact({
         command: 'import-coverage',
         importPlan,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
       });
       const mutationReviewPaths = writeMutationReviewArtifact(mutationReview);
       logger.info(`Mutation review artifact: ${mutationReviewPaths.artifactPath}`);
@@ -1158,7 +1158,7 @@ async function handleImportCoverage(values, logger) {
         allowListCreate: getBoolean(values, 'allow-list-create'),
         maxRetries,
         runId,
-        existingLeadUrls: existingSnapshot?.rows?.map((row) => row.salesNavigatorUrl) || [],
+        existingLeadUrls: getAuthoritativePreflightLeadUrls(existingSnapshot),
         readLeadListSnapshot: (targetListName) => readLeadListSnapshotStrict(driver, targetListName || importPlan.listName),
         onProgress(row) {
           logger.info(`${row.status} | ${row.accountName || 'Unknown account'} | ${row.fullName || 'Unknown lead'}${row.attempt ? ` | attempt=${row.attempt}` : ''}`);
@@ -1608,6 +1608,13 @@ async function readLeadListSnapshot(driver, listName) {
     }
     throw error;
   }
+}
+
+function getAuthoritativePreflightLeadUrls(snapshot = null) {
+  if (!snapshot || snapshot.source === 'artifact_fallback') {
+    return [];
+  }
+  return (snapshot.rows || []).map((row) => row.salesNavigatorUrl).filter(Boolean);
 }
 
 async function readLeadListPreflightSnapshot(driver, listName, logger, fallbackSnapshot = null) {

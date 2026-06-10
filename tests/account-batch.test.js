@@ -307,14 +307,14 @@ test('renderAccountBatchReportMarkdown supports smoke-style artifacts with direc
         listName: 'Example Connect Eligible Account Coverage',
         fullName: 'Philipp Weidinger',
         title: 'Team Lead Data Architecture & Visualization',
-        status: 'saved',
+        status: 'save_clicked_unverified',
         selectionMode: 'existing_list',
       },
     ],
   });
 
-  assert.match(markdown, /Save success: `1`/);
-  assert.match(markdown, /Philipp Weidinger: `saved` - Team Lead Data Architecture & Visualization \| existing_list/);
+  assert.match(markdown, /Save success: `0`/);
+  assert.match(markdown, /Philipp Weidinger: `save_clicked_unverified` - Team Lead Data Architecture & Visualization \| existing_list/);
 });
 
 

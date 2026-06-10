@@ -171,7 +171,7 @@ function summarizeBatchResult(result) {
   const saveResults = result.saveResults
     || (result.status ? [{ fullName: result.fullName || 'Unknown lead', status: result.status, note: result.note || null }] : []);
   const connectResults = result.connectResults || [];
-  const successSaveStatuses = new Set(['saved', 'already_saved', 'results_row_fallback_saved', 'saved_and_verified', 'already_saved_verified']);
+  const successSaveStatuses = new Set(['saved_and_verified', 'already_saved_verified']);
   const failedSaveStatuses = new Set(['failed', 'failed_runtime', 'failed_rate_limit', 'failed_network', 'failed_ui_state', 'missing_after_save', 'wrong_identity_detected']);
   return {
     saveAttemptCount: saveResults.length,
